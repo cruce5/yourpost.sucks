@@ -1,0 +1,2904 @@
+/* yourpost.sucks: analysis engine
+   Rule-based. Deterministic. Unsympathetic.
+   No dependencies. Runs identically in node and the browser. */
+
+(function (root) {
+  'use strict';
+
+  /* ------------------------------------------------------------------ *
+   * helpers
+   * ------------------------------------------------------------------ */
+
+  var EMOJI_RE = /(\p{Extended_Pictographic}️?(?:‍\p{Extended_Pictographic}️?)*)/gu;
+  var EMOJI_SKIP = /^[\u00a9\u00ae\u2122\u2139\u203c\u2049\u3030\u2b1b\u2b1c]$/;
+
+  // An emoji that is part of somebody ELSE'S display name, quoted
+  // mid-sentence ("the comment 🏴‍☠️ Bill Yost left on it"), is not decoration
+  // the author added; LinkedIn puts it there when you mention the person.
+  // Shape: something before it on the same line, the emoji, then a Title
+  // Case first and last name. A line-opening "🚀 Big News" does not match,
+  // and that one really is the author's own decoration.
+  var NAME_EMOJI_RE = /(?<=\S[ \t])\p{Extended_Pictographic}\uFE0F?(?:\u200D\p{Extended_Pictographic}\uFE0F?)*[ \t]?(?=[A-Z][a-z]+ [A-Z][a-z]+)/gu;
+
+  // The same courtesy for the AUTHOR'S own name. People put an emoji in their
+  // LinkedIn display name and sign posts with it ("I'm [flag] Bill"). That is
+  // a name, not decoration, and it is never counted: not by the emoji rules,
+  // not against the "no emoji" credit, not anywhere. Four more shapes:
+  //   intro     I'm / I am / this is / name is / call me, then emoji, then Name
+  //   between   First [emoji] Last
+  //   sign-off  a line opening with -- or a dash or ~, then emoji, then Name
+  //   trailing  a sign-off line that is just a name, then the emoji
+  // A line-opening decoration ("[rocket] Big News") still matches none of them.
+  var EMO_SRC = '\\p{Extended_Pictographic}\\uFE0F?(?:\\u200D\\p{Extended_Pictographic}\\uFE0F?)*';
+  var SIGN_SRC = '^[ \\t]*(?:--|\\u2014|\\u2013|-|~)[ \\t]*';
+  var NAME_EMOJI_RES = [
+    NAME_EMOJI_RE,
+    new RegExp("(?<=(?:\\b[Ii]['\\u2019]m|\\b[Ii] am|\\b[Tt]his is|\\b[Nn]ame is|\\b[Cc]all me)[ \\t])" + EMO_SRC + '[ \\t]?(?=[A-Z][a-z]+)', 'gu'),
+    new RegExp('(?<=\\b[A-Z][a-z]+[ \\t])' + EMO_SRC + '[ \\t]?(?=[A-Z][a-z]+\\b)', 'gu'),
+    new RegExp('(?<=' + SIGN_SRC + ')' + EMO_SRC + '[ \\t]?(?=[A-Z][a-z]+)', 'gmu'),
+    new RegExp('(?<=' + SIGN_SRC + '[A-Z][a-z]+(?:[ \\t][A-Z][a-z]+)?[ \\t]?)' + EMO_SRC + '(?=[ \\t]*$)', 'gmu')
+  ];
+
+  function hashCode(s) {
+    var h = 2166136261;
+    for (var i = 0; i < s.length; i++) {
+      h ^= s.charCodeAt(i);
+      h = (h * 16777619) >>> 0;
+    }
+    return h >>> 0;
+  }
+
+  // deterministic pick: same post always gets the same phrasing
+  function pick(arr, seed, salt) {
+    if (!arr || !arr.length) return '';
+    var h = (seed ^ hashCode(String(salt))) >>> 0;
+    return arr[h % arr.length];
+  }
+
+  function esc(s) {
+    return String(s).replace(/[&<>"]/g, function (c) {
+      return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c];
+    });
+  }
+
+  // roast guards: "2+|" needs the rule to have fired twice,
+  // "has:<phrase>|" needs that exact phrase to be in the post,
+  // "if:<var><op><number>|" (op is >=, <= or ==) compares one of the rule's
+  // own vars, so a roast that says "{t} people tagged" can require t>=3 and
+  // never render as "0 people tagged".
+  // A roast must never assert something the post does not contain.
+  var GUARD_IF_RE = /^(\w+)(>=|<=|==)(-?\d+(?:\.\d+)?)$/;
+  function eligible(list, n, ctx, vars) {
+    var out = [], plain = [];
+    for (var i = 0; i < list.length; i++) {
+      var r = list[i], ok = true, body = r;
+      var g = r.indexOf('|');
+      if (g > 0) {
+        var guard = r.slice(0, g);
+        if (guard === '2+') { ok = n >= 2; body = r.slice(g + 1); }
+        else if (guard.indexOf('has:') === 0) {
+          ok = ctx.lower.indexOf(guard.slice(4)) >= 0;
+          body = r.slice(g + 1);
+        } else if (guard.indexOf('if:') === 0) {
+          var gm = GUARD_IF_RE.exec(guard.slice(3));
+          if (gm) {
+            var lhs = Number(vars && vars[gm[1]]), rhs = Number(gm[3]);
+            ok = gm[2] === '>=' ? lhs >= rhs : gm[2] === '<=' ? lhs <= rhs : lhs === rhs;
+            body = r.slice(g + 1);
+          }
+        }
+      }
+      plain.push(body);
+      if (ok) out.push(body);
+    }
+    return out.length ? out : plain;
+  }
+
+  function fill(tpl, vars) {
+    var out = String(tpl).replace(/\{(\w+)\}/g, function (m, k) {
+      return vars[k] === undefined ? m : String(vars[k]);
+    });
+    // A quoted phrase that already ends in sentence punctuation, dropped
+    // into a template that closes the quote with a period ("{p}."), used to
+    // render as "Thoughts?." One terminal mark is enough.
+    return out.replace(/([.!?])\."/g, '$1"');
+  }
+
+  /* ------------------------------------------------------------------ *
+   * text normalisation
+   *
+   * The scorer must see the same text the reader sees, and two pastes that
+   * differ only in invisible ways (CRLF vs LF, doubled spaces, soft hyphens,
+   * curly vs straight quotes, a Cyrillic "о" dropped into an English word)
+   * must get the same score, the same roasts and the same brutal take.
+   * Otherwise every phrase rule can be defeated by a character the author
+   * cannot see, and the deterministic seed changes with the line endings.
+   * cleanPaste() applies this so the client displays the normalised text,
+   * and analyze() applies it again defensively so highlights always line up.
+   * ------------------------------------------------------------------ */
+
+  // U+200D is the Zero Width Joiner: stray, it is copy debris, but between two
+  // pictographs it is what holds a single emoji together (🏴‍☠️, 🧑‍💻, 👨‍👩‍👧).
+  // Stripping it there splits every joined emoji into its parts, so one pirate
+  // flag counts as two emoji and no name-emoji exclusion can match the pieces.
+  var STRAY_ZWJ_RE = /(?<!\p{Extended_Pictographic}️?)‍|‍(?!\p{Extended_Pictographic})/gu;
+
+  // Cyrillic letters whose glyphs are indistinguishable from Latin ones. Only
+  // folded inside a word that is otherwise ASCII letters: a real Cyrillic word
+  // ("Москва") is left alone, and so is a lookalike standing on its own.
+  var CYR_LOOKALIKE = { 'а': 'a', 'е': 'e', 'о': 'o', 'р': 'p', 'с': 'c', 'х': 'x', 'у': 'y',
+                        'А': 'A', 'Е': 'E', 'О': 'O', 'Р': 'P', 'С': 'C', 'Х': 'X', 'У': 'Y' };
+  var CYR_CHARS = 'аеорсхуАЕОРСХУ';
+  var CYR_CHAR_RE = new RegExp('[' + CYR_CHARS + ']', 'g');
+  var MIXED_WORD_RE = new RegExp('(?<!\\p{L})[A-Za-z' + CYR_CHARS + ']+(?!\\p{L})', 'gu');
+
+  function normalizeText(text) {
+    var t = String(text == null ? '' : text);
+    t = t.normalize('NFKC');
+    t = t.replace(/[­​‌⁠﻿]/g, '')
+         .replace(STRAY_ZWJ_RE, '')
+         .replace(/\r\n?/g, '\n')
+         .replace(/[‘’‚‛]/g, "'")
+         .replace(/[“”„‟]/g, '"')
+         .replace(MIXED_WORD_RE, function (w) {
+           if (!/[A-Za-z]/.test(w)) return w;
+           CYR_CHAR_RE.lastIndex = 0;
+           if (!CYR_CHAR_RE.test(w)) return w;
+           return w.replace(CYR_CHAR_RE, function (c) { return CYR_LOOKALIKE[c]; });
+         })
+         // runs of spaces and tabs collapse to one space; newlines are kept
+         // because line structure is score-relevant (broetry, orphan lines)
+         .replace(/[ \t]+/g, ' ');
+    return t;
+  }
+
+  function clamp(n, lo, hi) { return Math.max(lo, Math.min(hi, n)); }
+
+  // Find the exact-case substring in the original post that a rule matched.
+  // Roast vars are sometimes the lower-cased canonical phrase from a rule's
+  // own word list ("excited to announce"), not what the author actually
+  // typed ("Excited to Announce!!"). This recovers the real substring so the
+  // client can highlight it in place, without ever inventing text that is
+  // not literally present in the post.
+  function locate(ctx, phrase) {
+    if (!phrase) return null;
+    var needle = String(phrase).toLowerCase();
+    var idx = ctx.lower.indexOf(needle);
+    if (idx < 0) return null;
+    return ctx.raw.slice(idx, idx + needle.length);
+  }
+
+  function times(n) { return n === 1 ? 'once' : n === 2 ? 'twice' : n + ' times'; }
+  function plur(n, one, many) { return n === 1 ? one : many; }
+
+  // every occurrence of a literal phrase, with the offsets it occupies,
+  // word-boundary aware at the edges
+  function phraseMatches(lower, phrase) {
+    var p = String(phrase).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    var pre = /^\w/.test(phrase) ? '\\b' : '';
+    var post = /\w$/.test(phrase) ? '\\b' : '';
+    var re = new RegExp(pre + p + post, 'g');
+    var out = [], m;
+    while ((m = re.exec(lower)) !== null) {
+      out.push({ start: m.index, end: m.index + m[0].length });
+      if (m[0].length === 0) re.lastIndex++;
+    }
+    return out;
+  }
+
+  // count occurrences of a literal phrase, word-boundary aware at the edges
+  function countPhrase(lower, phrase) {
+    return phraseMatches(lower, phrase).length;
+  }
+
+  // One occurrence, one count. Several phrase lists hold a phrase and its own
+  // prefix ('thrilled to' and 'thrilled to announce', 'grateful' and 'humbled
+  // and grateful'), and summing the per-entry counts scored a single
+  // "Thrilled to announce" as two: it moved the number, and it unlocked the
+  // "2+" roast variant, which then asserted a repetition the post does not
+  // contain. Offsets decide instead. Every entry's matches are pooled, the
+  // ones that touch the same stretch of text are merged, and the count is
+  // the number of separate stretches, so one piece of writing is one
+  // occurrence no matter how many entries recognise it. The stretch is
+  // credited to the longest entry that matched it (list order breaks a tie),
+  // which is the phrase the roast should quote; an entry that matched
+  // nothing of its own drops out. Short entries keep the occurrences they
+  // find alone, so "thrilled to join us" is still caught on its own.
+  function distinctOccurrences(hits) {
+    var all = [], i, r;
+    for (i = 0; i < hits.length; i++) {
+      for (r = 0; r < hits[i].ranges.length; r++) {
+        all.push({ i: i, start: hits[i].ranges[r].start, end: hits[i].ranges[r].end });
+      }
+    }
+    all.sort(function (a, b) { return a.start - b.start || b.end - a.end || a.i - b.i; });
+    var counts = [];
+    for (i = 0; i < hits.length; i++) counts.push(0);
+    var k = 0;
+    while (k < all.length) {
+      var end = all[k].end, owner = all[k], j = k + 1;
+      while (j < all.length && all[j].start < end) {
+        if (all[j].end > end) end = all[j].end;
+        var mine = all[j].end - all[j].start, held = owner.end - owner.start;
+        if (mine > held || (mine === held && all[j].i < owner.i)) owner = all[j];
+        j++;
+      }
+      counts[owner.i]++;
+      k = j;
+    }
+    var out = [];
+    for (i = 0; i < hits.length; i++) {
+      if (counts[i] > 0) out.push({ phrase: hits[i].phrase, n: counts[i] });
+    }
+    return out;
+  }
+
+  // LinkedIn dialect vs ordinary English: the same word is a sin in an
+  // announcement and a normal word inside a story. Only count the phrase when
+  // the sentence around it is actually doing announcement work.
+  var ANNOUNCE_CONTEXT = /\b(join(ing|ed)?|start(ing|ed)?|announc|excited|thrilled|proud|delighted|role|position|title|company|team|career|promot|hired|onboard|day one|first day|new job|next step|opportunity|chapter of my|officially)\b/;
+
+  function inAnnouncementSentence(ctx, phrase) {
+    for (var i = 0; i < ctx.sentences.length; i++) {
+      var low = ctx.sentences[i].toLowerCase();
+      if (low.indexOf(phrase) < 0) continue;
+      if (ANNOUNCE_CONTEXT.test(low.replace(phrase, ' '))) return true;
+    }
+    return false;
+  }
+
+  // A cliché phrase sitting inside its own negation is not the cliché. It is
+  // someone naming it in order to reject it. "Not humbled and honored to
+  // announce anything" should read as neither a humblebrag nor an
+  // announcement. Look a short window back from the match, within the same
+  // sentence, for a negation cue.
+  var NEGATION_RE = /\b(not|never|no|none|nothing|without|stop being)\b|n't\b/;
+
+  function isNegatedInSentence(ctx, phrase) {
+    for (var i = 0; i < ctx.sentences.length; i++) {
+      var low = ctx.sentences[i].toLowerCase();
+      var idx = low.indexOf(phrase);
+      if (idx < 0) continue;
+      var start = Math.max(0, idx - 40);
+      if (NEGATION_RE.test(low.slice(start, idx))) return true;
+    }
+    return false;
+  }
+
+  // Test hook. The phrase lists are literals inside the rules, so a check that
+  // wants to see every list a counting rule actually used has no other way in.
+  // Off by default: one comparison per call while it is on, nothing when it is
+  // off. collectPhraseLists(true) starts recording, collectPhraseLists(false)
+  // stops and hands back the lists seen since.
+  var LIST_LOG = null;
+  function logList(list) {
+    if (!LIST_LOG) return;
+    var key = list.join('|');
+    if (!LIST_LOG[key]) LIST_LOG[key] = list.slice();
+  }
+  function collectPhraseLists(on) {
+    if (on) { LIST_LOG = {}; return []; }
+    var out = [];
+    for (var k in LIST_LOG) out.push(LIST_LOG[k]);
+    LIST_LOG = null;
+    return out;
+  }
+
+  function anyPhraseNotNegated(ctx, list) {
+    logList(list);
+    var hits = [];
+    for (var i = 0; i < list.length; i++) {
+      var ranges = phraseMatches(ctx.lower, list[i]);
+      if (ranges.length && !isNegatedInSentence(ctx, list[i])) hits.push({ phrase: list[i], ranges: ranges });
+    }
+    return distinctOccurrences(hits);
+  }
+
+  // A number cited only to set up an assumption that gets knocked down right
+  // after ("You'd be fair to assume there's some expensive setup... $1,000s
+  // in Claude tokens... There isn't.") is not a flex. It is the opposite:
+  // the writer names the expensive-sounding number specifically to refute
+  // it. This is the same idea as isNegatedInSentence() above, but the
+  // negation here is a whole short sentence away, not a nearby word, so it
+  // needs its own two-part check: an explicit "you'd assume/think" setup at
+  // or before the number's sentence, AND a short, standalone negation
+  // ("There isn't.", "It doesn't.") as the very next sentence.
+  var ASSUME_SETUP_RE = /\b(you'?d be fair to assume|you'?d assume|you might assume|you'?d think|you might think|people assume|you'?d expect|you might expect)\b/i;
+  var SHORT_NEGATION_SENTENCE_RE = /^(there|it|i|that|we|nope)\b.{0,20}\b(isn'?t|wasn'?t|is not|was not|aren'?t|weren'?t|doesn'?t|didn'?t|don'?t|do not|does not|did not)\b/i;
+
+  function isNumberRefuted(ctx, matchText) {
+    var sentIdx = -1;
+    for (var i = 0; i < ctx.sentences.length; i++) {
+      if (ctx.sentences[i].indexOf(matchText) >= 0) { sentIdx = i; break; }
+    }
+    if (sentIdx < 0) return false;
+    var primedBefore = false;
+    for (var j = 0; j <= sentIdx; j++) {
+      if (ASSUME_SETUP_RE.test(ctx.sentences[j])) { primedBefore = true; break; }
+    }
+    if (!primedBefore) return false;
+    var next = (ctx.sentences[sentIdx + 1] || '').trim();
+    var wc = (next.match(/\S+/g) || []).length;
+    return wc > 0 && wc <= 6 && SHORT_NEGATION_SENTENCE_RE.test(next);
+  }
+
+  function anyPhraseAnnounceOnly(ctx, list) {
+    logList(list);
+    var hits = [];
+    for (var i = 0; i < list.length; i++) {
+      var ranges = phraseMatches(ctx.lower, list[i]);
+      if (ranges.length && inAnnouncementSentence(ctx, list[i])) hits.push({ phrase: list[i], ranges: ranges });
+    }
+    return distinctOccurrences(hits);
+  }
+
+  function anyPhrase(ctx, list) {
+    logList(list);
+    var hits = [];
+    for (var i = 0; i < list.length; i++) {
+      var ranges = phraseMatches(ctx.lower, list[i]);
+      if (ranges.length) hits.push({ phrase: list[i], ranges: ranges });
+    }
+    return distinctOccurrences(hits);
+  }
+
+  function totalOf(found) {
+    var t = 0;
+    for (var i = 0; i < found.length; i++) t += found[i].n;
+    return t;
+  }
+
+  // pull the sentence a phrase lives in, trimmed for quoting
+  function sentenceWith(ctx, phrase) {
+    var lower = ctx.lower;
+    var idx = lower.indexOf(phrase);
+    if (idx < 0) return '';
+    var s = ctx.sentences.find(function (sn) {
+      return sn.toLowerCase().indexOf(phrase) >= 0;
+    });
+    if (!s) return '';
+    s = s.trim();
+    if (s.length > 120) s = s.slice(0, 117).trim() + '...';
+    return s;
+  }
+
+  // A line is code-shaped when it opens with a SQL clause, opens with a
+  // Python/JS statement keyword, contains an arrow function, or ends in a
+  // semicolon. English lines do none of these.
+  var CODE_LINE_RE = /^(?:SELECT|FROM|WHERE|GROUP BY|ORDER BY|HAVING|LIMIT|WITH|(?:LEFT|RIGHT|INNER|FULL|OUTER|CROSS)?\s*JOIN|INSERT INTO|UPDATE|DELETE FROM|CREATE (?:TABLE|VIEW)|ALTER TABLE|DROP TABLE|UNION)\b|^(?:def|class)\s+\w+.*[:(]|^return\s+\S|^(?:const|let|var)\s+\w+\s*=|^import\s+\S|^from\s+\S+\s+import\b|^(?:if|elif|else|while|for|try|except|finally)\b.*[:{]\s*$|^print\(|=>|;\s*$|^[{}]\s*$/;
+
+  function buildContext(text) {
+    var raw = String(text || '');
+    var lower = raw.toLowerCase();
+
+    // See NAME_EMOJI_RE: a quoted person's name-emoji is not the author's
+    // emoji, so it is excluded from the count (and from every emoji rule and
+    // the "no emoji" credit that read it) before scanning.
+    // Every name-emoji shape is blanked before the scan, and remembered, so
+    // the Worker can stop the model suggesting anyone remove part of their name.
+    var nameEmoji = [];
+    var emojiSource = raw;
+    NAME_EMOJI_RES.forEach(function (re) {
+      emojiSource = emojiSource.replace(re, function (hit) { nameEmoji.push(hit.trim()); return ' '; });
+    });
+    var emojis = [];
+    var m;
+    EMOJI_RE.lastIndex = 0;
+    while ((m = EMOJI_RE.exec(emojiSource)) !== null) {
+      var e = m[1];
+      // Copyright and trademark signs, info marks and the black and white
+      // squares people build progress bars from all match the emoji pattern
+      // and none of them is decoration. This guard went missing once: a second
+      // copy of the declaration was sitting on this line in its place, so
+      // "Acme\u00ae" was being told its emoji was doing a verb's job.
+      if (EMOJI_SKIP.test(e)) continue;
+      emojis.push(e);
+    }
+
+    var stripped = raw.replace(EMOJI_RE, ' ');
+    // Anchored on the first character on purpose. The old form let the
+    // engine try every position of a long run of dots or dashes as a
+    // possible token start, which was quadratic: 4,000 dots took seconds.
+    var words = stripped.match(/[A-Za-z0-9][A-Za-z0-9'’#@$%.-]*/g) || [];
+    // A blank line ends a sentence even without terminal punctuation. A
+    // paragraph that ends in an emoji or trails off used to merge with the
+    // next one, and the next paragraph's first word ("But") was then counted
+    // as a proper noun for not being sentence-initial. That phantom noun was
+    // a third of one real post's "concrete references".
+    var sentences = raw
+      .replace(/\n\s*\n/g, ' . ')
+      .replace(/\n+/g, ' ')
+      .split(/(?<=[.!?])\s+|(?<=[.!?])$/)
+      .map(function (s) { return s.replace(/^\.\s*/, ''); })
+      .map(function (s) { return s.trim(); })
+      .filter(Boolean);
+    if (!sentences.length && raw.trim()) sentences = [raw.trim()];
+
+    var lines = raw.split(/\n/).map(function (l) { return l.trim(); });
+    var nonEmptyLines = lines.filter(Boolean);
+
+    // Code pasted into a post (a SQL snippet, a few lines of Python) is not
+    // prose. Its uppercase keywords are not shouting, its short lines are not
+    // broetry, and a lone "return x" is not a dramatic pause. Two or more
+    // code-shaped lines mark those lines as code; the layout rules read
+    // proseLines instead of nonEmptyLines, and allCaps is scanned on the
+    // prose only. One code-shaped line is ignored: a single "SELECT" in an
+    // otherwise normal post is more likely a word than a query.
+    var codeLines = nonEmptyLines.filter(function (l) { return CODE_LINE_RE.test(l); });
+    var isCode = {};
+    if (codeLines.length >= 2) for (var cl = 0; cl < codeLines.length; cl++) isCode[codeLines[cl]] = true;
+    var proseLines = nonEmptyLines.filter(function (l) { return !isCode[l]; });
+    var strippedProse = codeLines.length >= 2 ? proseLines.join('\n').replace(EMOJI_RE, ' ') : stripped;
+    // a "paragraph" = a run of text separated by a blank line OR a hard newline
+    var paras = raw.split(/\n\s*\n/).map(function (p) { return p.trim(); }).filter(Boolean);
+
+    var hashtags = raw.match(/(^|\s)#[A-Za-z][\w]{1,}/g) || [];
+    var mentions = raw.match(/(^|\s)@[A-Za-z][\w.'-]{1,}/g) || [];
+    var urls = raw.match(/https?:\/\/\S+|www\.\S+/g) || [];
+    var numbers = (stripped.match(/\b\d[\d,.]*(%|k|m|x)?\b/gi) || [])
+      .concat(stripped.match(/\b(one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve|twenty|thirty|forty|fifty|hundred|thousand|million)\b/gi) || []);
+    var emdashes = (raw.match(/—/g) || []).length;
+
+    // proper nouns: capitalised words that aren't sentence-initial and aren't "I"
+    var propers = [];
+    for (var i = 0; i < sentences.length; i++) {
+      var clean = sentences[i].replace(/[@#][A-Za-z][\w.'-]*/g, ' ');
+      var toks = clean.match(/[A-Za-z][A-Za-z'’.-]*/g) || [];
+      for (var j = 1; j < toks.length; j++) {
+        var tk = toks[j].replace(/[.,;:!?'’]+$/, '');
+        if (!tk) continue;
+        // "I'm"/"I've" are not proper nouns, and neither is a SHOUTED word.
+        // Both were inflating the "concrete references" count, which gates
+        // no-specifics and too-short-empty. Two posts in the same class got
+        // opposite verdicts purely because one contained an apostrophe.
+        if (/^I['’]/.test(tk)) continue;
+        if (/^[A-Z]+$/.test(tk) && tk.length > 1) continue;
+        if (/^[A-Z]/.test(tk) && tk !== 'I' && tk.length > 1) propers.push(tk);
+      }
+    }
+
+    var ACRONYMS = /^(CEO|CTO|CFO|COO|CIO|CDO|CHRO|SQL|API|AI|ML|HR|KPI|OKR|ROI|SAAS|B2B|B2C|USA|USD|UK|EU|IPO|VP|PM|UX|UI|LLM|GPT|ETL|ELT|BI|CTE|DBT|AWS|GCP|CSV|PDF|NBA|NFL|MLB|PHD|MBA|TLDR|TL|DR|OKRS|KPIS|NPS|CSAT|ARR|MRR|QBR|EOD|EOY|WFH|PTO|RTO|IRL|FYI|ASAP|LOL|OK|AMA|IPA|SVP|EVP|OOO)$/i;
+
+    // Acronyms that name a thing (MRI, SQL, NPS, an employer's ticker) are
+    // concrete references. Chat shorthand and interjections are not.
+    var CHATTER = /^(OK|LOL|LMAO|OMG|TBH|IMO|IMHO|FYI|ASAP|IRL|AMA|IDK|BTW|FWIW|SMH|NBD|TL|DR|TLDR|WTF|PS|AM|PM|OOO|RN|TY|YW|BRB|DM|DMS)$/;
+    var acronyms = [];
+    var acrToks = stripped.match(/\b[A-Z][A-Z0-9]{1,4}\b/g) || [];
+    for (var ax = 0; ax < acrToks.length; ax++) {
+      var atk = acrToks[ax];
+      if (atk === 'I' || CHATTER.test(atk) || /^\d+$/.test(atk)) continue;
+      acronyms.push(atk);
+    }
+    // a lone acronym is fine; shouting is a long word or two caps words in a row
+    var allCaps = [];
+    var capRun = strippedProse.match(/\b[A-Z]{2,}(?:[ ,]+[A-Z]{2,})+\b/g) || [];
+    for (var ac = 0; ac < capRun.length; ac++) allCaps.push(capRun[ac]);
+    var capLong = (strippedProse.match(/\b[A-Z]{5,}\b/g) || []).filter(function (w) { return !ACRONYMS.test(w); });
+    for (var al = 0; al < capLong.length; al++) {
+      // skip a long caps word already counted inside a multi-word caps run
+      var dup = false;
+      for (var ar = 0; ar < allCaps.length; ar++) if (allCaps[ar].indexOf(capLong[al]) >= 0) { dup = true; break; }
+      if (!dup) allCaps.push(capLong[al]);
+    }
+
+    var wc = words.length;
+
+    // dialogue carries a story as much as past-tense verbs do
+    var reportedSpeech = (raw.match(/^\s*[-–—]\s*\S/gm) || []).length +
+                         (raw.match(/[""][^""]{10,}[""]/g) || []).length;
+    // a told story behaves differently from a broadcast. count the past-tense spine.
+    var pastVerbs = (lower.match(/\b(was|were|had|went|took|got|gotten|said|told|called|wore|moved|found|knew|walked|sat|drove|asked|realized|realised|learned|learnt|started|left|came|saw|made|thought|picked|showed|wrote|read|worked|quit|hired|typed|opened|closed|turned|kept|spent|ran|flew|built|broke|forgot|remembered|decided|noticed|answered|waited|arrived)\b/g) || []).length;
+
+    return {
+      raw: raw,
+      lower: lower,
+      words: words,
+      wc: wc,
+      sentences: sentences,
+      lines: lines,
+      nonEmptyLines: nonEmptyLines,
+      proseLines: proseLines,
+      codeLines: codeLines.length >= 2 ? codeLines.length : 0,
+      paras: paras,
+      emojis: emojis,
+      emojiCount: emojis.length,
+      nameEmoji: nameEmoji,
+      hashtags: hashtags.map(function (h) { return h.trim(); }),
+      mentions: mentions.map(function (h) { return h.trim(); }),
+      urls: urls,
+      numbers: numbers,
+      propers: propers,
+      acronyms: acronyms,
+      // What the "no specifics" family of checks counts: numbers, proper
+      // nouns, acronyms that name things, and quoted speech (a line someone
+      // said is as concrete as a name). One definition, used everywhere the
+      // engine asks "is anything in here checkable", so the checks cannot
+      // drift apart the way the old inline sums had started to.
+      specifics: numbers.length + propers.length + acronyms.length + reportedSpeech,
+      allCaps: allCaps,
+      emdashes: emdashes,
+      avgSentence: sentences.length ? wc / sentences.length : 0,
+      pastVerbs: pastVerbs + reportedSpeech,
+      seed: hashCode(raw.trim().toLowerCase())
+    };
+  }
+
+  /* ------------------------------------------------------------------ *
+   * the rule library
+   *
+   * pen keys: auth (authenticity damage), clar (clarity damage),
+   *           cring, bait, brag: all 0..10 scale contributions
+   * ------------------------------------------------------------------ */
+
+  var RULES = [];
+  function rule(def) { RULES.push(def); }
+
+  /* --- 1. the announcement industrial complex --------------------- */
+
+  var ANNOUNCE = [
+    'excited to announce', 'thrilled to announce', 'proud to announce',
+    'pleased to announce', 'happy to announce', 'delighted to announce',
+    'excited to share', 'thrilled to share', 'proud to share',
+    'excited to say', 'excited to start', 'excited to join',
+    'i am excited', "i'm excited", 'beyond excited', 'so excited',
+    'thrilled to', 'delighted to share'
+  ];
+
+  rule({
+    id: 'announce',
+    label: 'Excited to announce',
+    dim: 'auth',
+    test: function (ctx) {
+      var f = anyPhraseNotNegated(ctx, ANNOUNCE);
+      if (!f.length) return null;
+      var n = totalOf(f);
+      return {
+        n: n,
+        vars: { n: n, p: f[0].phrase, times: times(n) },
+        pen: { auth: clamp(1.8 + (n - 1) * 0.8, 0, 4), cring: clamp(0.9 + (n - 1) * 0.6, 0, 2.5), clar: 0.9 }
+      };
+    },
+    roasts: [
+      'You opened with "{p}." So did roughly four hundred thousand other people this week. The differentiation strategy could use another pass.',
+      '"{p}" is not information. It is a loading screen for information.',
+      '"{p}" has been used so many times it has stopped meaning excitement and started meaning "a form was submitted."',
+      '2+|The post announces its own excitement {times}. Excitement that requires repetition is not excitement, it is staffing.'
+    ]
+  });
+
+  rule({
+    id: 'cantwait',
+    label: 'Excited and also cannot wait',
+    dim: 'auth',
+    test: function (ctx) {
+      var hasExcite = anyPhraseNotNegated(ctx, ANNOUNCE).length > 0 || countPhrase(ctx.lower, 'excited') > 0;
+      var f = anyPhrase(ctx, ["can't wait", 'cannot wait', 'can not wait', 'cant wait']);
+      if (!hasExcite || !f.length) return null;
+      return { n: 1, vars: {}, pen: { auth: 1.2, cring: 0.8 } };
+    },
+    roasts: [
+      'You are excited to announce it and you also cannot wait to begin it. Pick one tense and commit to it.',
+      'Excited AND unable to wait. That is two units of anticipation for one job change.',
+      'Two tenses of the same news. Anticipation is doing the content\'s job.'
+    ]
+  });
+
+  rule({
+    id: 'newchapter',
+    label: 'New chapter language',
+    dim: 'auth',
+    test: function (ctx) {
+      // 'moved to Denver for a new adventure' is a sentence. 'excited for this
+      // new adventure' is a genre. Only the second one is the sin.
+      var f = anyPhraseAnnounceOnly(ctx, [
+        'new chapter', 'next chapter', 'exciting new chapter', 'new adventure',
+        'next adventure', 'new journey', 'this journey', 'my journey',
+        'incredible journey', 'amazing journey', 'new era', 'new season'
+      ]);
+      if (!f.length) return null;
+      var n = totalOf(f);
+      return { n: n, vars: { n: n, p: f[0].phrase, times: times(n) }, pen: { auth: clamp(1.4 + (n - 1) * 0.7, 0, 3.2), cring: 0.8, clar: 0.5 } };
+    },
+    roasts: [
+      'You called it a "{p}." A journey requires, at absolute minimum, a body of water. This one has a start date and a badge.',
+      '2+|"{p}" appears here {times}. Books have chapters. Employment has start dates.',
+      'The word "journey" is doing load-bearing work in a paragraph about accepting a salary.',
+      '"{p}" is the phrase people reach for when the actual thing that happened is too small to describe plainly.'
+    ]
+  });
+
+  rule({
+    id: 'officially',
+    label: 'Officially',
+    dim: 'auth',
+    test: function (ctx) {
+      var f = anyPhrase(ctx, ['officially', "it's official", 'it is official', 'made it official']);
+      if (!f.length) return null;
+      return { n: totalOf(f), vars: {}, pen: { auth: 0.9, cring: 0.5 } };
+    },
+    roasts: [
+      '"Officially." As opposed to the unofficial version of this you were running quietly.',
+      'The word "officially" adds nothing except the implication that someone stamped something.',
+      '"Officially" is a small word that is trying to make the announcement feel like a ceremony.'
+    ]
+  });
+
+  rule({
+    id: 'bignews',
+    label: 'Buried lede',
+    dim: 'clar',
+    test: function (ctx) {
+      var f = anyPhrase(ctx, ['some news', 'big news', 'some exciting news', 'personal news',
+        'an update', 'a little update', 'life update', 'some updates']);
+      if (!f.length) return null;
+      return { n: totalOf(f), vars: { p: f[0].phrase }, pen: { clar: 2.2, bait: 1.4 } };
+    },
+    roasts: [
+      'You lead with "{p}" instead of the news. That is a teaser trailer for a job title.',
+      '"{p}." The news is right there. You could have just put it first. You chose suspense.',
+      'Withholding the actual information to manufacture a scroll-stop is a technique. It is not a good one.'
+    ]
+  });
+
+  /* --- 2. gratitude spam ------------------------------------------ */
+
+  rule({
+    id: 'gratitude',
+    label: 'Gratitude spam',
+    dim: 'auth',
+    test: function (ctx) {
+      var f = anyPhrase(ctx, ['grateful', 'gratitude', 'thankful', 'so thankful',
+        'blessed', 'humbled and grateful', 'forever grateful', 'eternally grateful']);
+      if (!f.length) return null;
+      var n = totalOf(f);
+      return { n: n, vars: { n: n, p: f[0].phrase, times: times(n) }, pen: { auth: clamp(1.1 * n, 0, 3.4), cring: clamp(0.7 * n, 0, 2.4), brag: clamp(0.7 * n, 0, 2.2) } };
+    },
+    roasts: [
+      '2+|The gratitude vocabulary appears {times}. At a certain density gratitude stops reading as gratitude and starts reading as inventory.',
+      'Everyone on this platform is grateful for everything, always, without exception. It has stopped carrying signal.',
+      '"{p}" is the default emotional setting of LinkedIn. Using it is not a choice, it is compliance.',
+      'The gratitude here is aimed at an audience rather than at a person, which is the tell.'
+    ]
+  });
+
+  rule({
+    id: 'thanks-count',
+    label: 'Thank-you distribution list',
+    dim: 'auth',
+    test: function (ctx) {
+      // 'thank you' and 'thank ' matched the same occurrences, so a post that
+      // thanked one person by name reported six thanked parties, and the roast
+      // then described a tag list that did not exist.
+      var n = (ctx.lower.match(/\bthank(?:s|\syou)?\b/g) || []).length +
+        countPhrase(ctx.lower, 'shout out') + countPhrase(ctx.lower, 'shoutout');
+      var tagged = ctx.mentions.length;
+      if (n < 2 && tagged < 3) return null;
+      return {
+        n: Math.max(n, tagged),
+        vars: { n: n, t: tagged },
+        pen: { auth: clamp(0.6 * n + 0.35 * tagged, 0, 3.2), bait: clamp(0.4 * tagged, 0, 2.2) }
+      };
+    },
+    roasts: [
+      'if:t>=3|{t} people tagged. Past a certain count a tag stops being a thank-you and starts being a distribution strategy.',
+      'if:n>=2|You thanked {n} distinct parties. This is an announcement, not an acceptance speech, and nobody is playing you off.',
+      'if:t>=3|The tagging is doing double duty here: it is gratitude, and it is also reach. Everyone can see the second one.',
+      'if:t>=3|A thank-you that reaches {t} inboxes at once is a mailing list wearing a thank-you costume.'
+    ]
+  });
+
+  rule({
+    id: 'believed',
+    label: 'Everyone who believed in me',
+    dim: 'auth',
+    test: function (ctx) {
+      var f = anyPhrase(ctx, ['believed in me', 'believe in me', "couldn't have done it without",
+        'could not have done it without', 'took a chance on me', 'saw something in me',
+        'everyone who supported', 'my support system']);
+      if (!f.length) return null;
+      return { n: totalOf(f), vars: { p: f[0].phrase }, pen: { auth: 1.4, brag: 2.5, cring: 0.9 } };
+    },
+    roasts: [
+      '"{p}" implies a second, unnamed group who did not. That group is the actual subject of this post.',
+      'The thanks-to-everyone-who-believed formulation is structurally a brag with a bow on it.',
+      '"{p}" is doing the work of an underdog narrative in a post about getting hired.'
+    ]
+  });
+
+  /* --- 3. emoji ---------------------------------------------------- */
+
+  rule({
+    id: 'emoji-volume',
+    label: 'Emoji abuse',
+    dim: 'cring',
+    test: function (ctx) {
+      var n = ctx.emojiCount;
+      // One emoji is not a finding. The advice for this very check says "add
+      // at most one where the sentence genuinely cannot carry the tone", so
+      // firing on exactly one contradicted it, and the roasts could not stay
+      // honest either: a lone pirate flag in a sign-off ("I'm [flag] Bill") was
+      // told it was "doing load-bearing work that a verb should be doing",
+      // in a name slot, where no verb goes. A single emoji still costs the
+      // "no emoji" credit, which is true and is penalty enough.
+      if (n < 2) return null;
+      var per100 = ctx.wc ? (n / ctx.wc) * 100 : n * 100;
+      var sev = n <= 3 ? 1.3 : n <= 6 ? 2.9 : n <= 12 ? 4.6 : 6.0;
+      if (per100 > 12) sev += 1.2;
+      var uniq = [];
+      for (var i = 0; i < ctx.emojis.length; i++) if (uniq.indexOf(ctx.emojis[i]) < 0) uniq.push(ctx.emojis[i]);
+      return {
+        n: n,
+        vars: {
+          n: n, w: ctx.wc, list: uniq.slice(0, 6).join(' '),
+          rate: ctx.wc ? Math.max(1, Math.round(ctx.wc / n)) : 1,
+          e: ctx.emojis[0] || ''
+        },
+        pen: { cring: clamp(sev, 0, 6.4), auth: clamp(sev * 0.3, 0, 1.8) }
+      };
+    },
+    roasts: [
+      '{n} emoji across {w} words. Roughly one every {rate} words, a rate normally reserved for group texts about brunch.',
+      '{n} emoji. The text was already carrying the meaning. This is a second, louder copy of the meaning.',
+      'Emoji inventory: {list}. None of these change what the sentence says.',
+      'You deployed {n} emoji in {w} words. The {e} in particular is doing load-bearing work that a verb should be doing.'
+    ]
+  });
+
+  rule({
+    id: 'emoji-repeat',
+    label: 'Repeated emoji',
+    dim: 'cring',
+    test: function (ctx) {
+      var counts = {};
+      for (var i = 0; i < ctx.emojis.length; i++) counts[ctx.emojis[i]] = (counts[ctx.emojis[i]] || 0) + 1;
+      var worst = null, wn = 0;
+      for (var k in counts) if (counts[k] > wn) { wn = counts[k]; worst = k; }
+      if (wn < 2) return null;
+      // consecutive repeats are worse
+      var consecutive = /(\p{Extended_Pictographic}️?)\s*\1/u.test(ctx.raw);
+      return {
+        n: wn,
+        vars: { e: worst, n: wn, extra: wn - 1, isare: plur(wn - 1, 'is', 'are'), times: times(wn) },
+        pen: { cring: clamp(1.2 + (wn - 2) * 0.7 + (consecutive ? 0.8 : 0), 0, 3.4) }
+      };
+    },
+    roasts: [
+      '{n} of the same {e}. The first one was the message. Everything after it is volume.',
+      'The {e} appears {times}. Repeating an emoji is the punctuation equivalent of saying a word louder.',
+      '{e}{e} reads like celebrating a sports result, not a professional development.',
+      'Doubling the {e} does not double the sentiment. It halves the credibility.'
+    ]
+  });
+
+  rule({
+    id: 'emoji-bullets',
+    label: 'Emoji bullets',
+    dim: 'cring',
+    test: function (ctx) {
+      var n = 0, sample = '';
+      for (var i = 0; i < ctx.nonEmptyLines.length; i++) {
+        var l = ctx.nonEmptyLines[i];
+        if (/^(\p{Extended_Pictographic}️?|[✅✔️☑️➡️👉▶️🔹🔸💡⚡️🔥⭐️✨])/u.test(l)) {
+          n++; if (!sample) sample = l.slice(0, 40);
+        }
+      }
+      if (n < 2) return null;
+      return { n: n, vars: { n: n, s: sample }, pen: { cring: clamp(1.0 + n * 0.45, 0, 3.6), auth: 0.7 } };
+    },
+    roasts: [
+      '{n} lines begin with an emoji used as a bullet point. This is a status report cosplaying as a personality.',
+      'Emoji bullets ({n} of them). Somewhere a designer invented the actual bullet point and you have chosen violence.',
+      '{n} emoji-led lines. The checkmark does not make the claim true, it just makes it look like a slide.'
+    ]
+  });
+
+  /* --- 4. humble brag ---------------------------------------------- */
+
+  rule({
+    id: 'humbled',
+    label: 'Humbled',
+    dim: 'brag',
+    test: function (ctx) {
+      var f = anyPhraseNotNegated(ctx, ['humbled', 'humbling', 'so humbled', 'truly humbled', 'humbly']);
+      if (!f.length) return null;
+      return { n: totalOf(f), vars: {}, pen: { brag: 2.8, auth: 1.5, cring: 1.0 } };
+    },
+    roasts: [
+      '"Humbled" is doing a great deal of work in this post and none of it is humility.',
+      'has:humbled|Nobody has ever been humbled by good news. The word you are looking for is "pleased," and it is free.',
+      '"Humbled" is the single most reliable indicator on this platform that a brag is inbound within two lines.'
+    ]
+  });
+
+  rule({
+    id: 'honored',
+    label: 'Honored / recognized',
+    dim: 'brag',
+    test: function (ctx) {
+      var f = anyPhraseNotNegated(ctx, ['honored to', 'honoured to', 'privileged to', 'proud to be named',
+        'named to', 'recognized as', 'recognised as', 'top voice',
+        'made the list', 'named one of', 'featured in', 'selected as', 'selected for']);
+      // only a brag if the author is the subject. "Her painting won an award"
+      // is somebody else's news
+      if (!/\b(i|i'm|i am|i've|my|we|our)\b[^.!?]{0,60}\b(honou?red|privileged|named|recognis|recogniz|award|selected|featured)/i.test(ctx.raw)) return null;
+      if (!f.length) return null;
+      var n = totalOf(f);
+      return { n: n, vars: { p: f[0].phrase, n: n }, pen: { brag: clamp(1.8 + (n - 1) * 0.7, 0, 3.8), auth: 0.8 } };
+    },
+    roasts: [
+      '"{p}." The achievement is real and the framing is a press release you wrote about yourself.',
+      'The recognition is announced in the passive voice so the announcing does not look like announcing. It does.',
+      'You found a way to report your own accolade as though it were news that reached you. Nicely done, structurally.'
+    ]
+  });
+
+  rule({
+    id: 'impact',
+    label: 'Make an impact',
+    dim: 'brag',
+    test: function (ctx) {
+      // "she is going to do big things" is about a child, not a brag
+      if (!/\b(i|i'm|i am|we|we're|my|our)\b/i.test(ctx.raw)) return null;
+      var f = anyPhrase(ctx, ['make an impact', 'making an impact', 'make a difference',
+        'move the needle', 'drive impact', 'meaningful impact', 'real impact',
+        'change the game', 'change lives', 'build something special',
+        'do great things', 'big things', 'amazing things']);
+      if (!f.length) return null;
+      return { n: totalOf(f), vars: { p: f[0].phrase }, pen: { brag: 2.5, clar: 1.8, auth: 1.0 } };
+    },
+    roasts: [
+      '"{p}" is what people write when the job description has not been finalised yet.',
+      '"{p}" describes zero observable actions. It is ambition with the nouns removed.',
+      'Impact on what. Measured how. Against what baseline. The post declines to say, which is convenient.',
+      '"{p}" is the corporate equivalent of saying you are going to be good at things.'
+    ]
+  });
+
+  rule({
+    id: 'dreamjob',
+    label: 'Dream job',
+    dim: 'brag',
+    test: function (ctx) {
+      var f = anyPhrase(ctx, ['dream job', 'dream company', 'dream role', 'dream team',
+        'always wanted to work', 'lifelong dream', 'bucket list']);
+      if (!f.length) return null;
+      return { n: totalOf(f), vars: { p: f[0].phrase }, pen: { brag: 1.9, auth: 1.2 } };
+    },
+    roasts: [
+      '"{p}" sets a public ceiling you will have to quietly walk back in roughly eighteen months.',
+      'Calling it a dream job in writing is a hostage note to your future self.',
+      '"{p}" is a lovely sentiment and a genuinely risky thing to timestamp.'
+    ]
+  });
+
+  rule({
+    id: 'rejection-arc',
+    label: 'Rejection-to-triumph arc',
+    dim: 'brag',
+    test: function (ctx) {
+      var adversity = anyPhrase(ctx, ['rejected', 'rejection', 'told me no', 'said no',
+        'laid off', 'let go', 'passed over', 'turned down',
+        'doubters', 'nobody believed', 'no one believed',
+        'hit rock bottom', 'rock bottom', 'lowest point',
+        '0 offers', 'zero offers']);
+      var triumph = anyPhrase(ctx, ['today i', 'now i', 'fast forward', 'years later',
+        'and now', 'today, i', 'proud to say', 'here i am', 'never gave up']);
+      if (!adversity.length || !triumph.length) return null;
+      return { n: 1, vars: { a: adversity[0].phrase }, pen: { brag: 2.6, auth: 1.8, bait: 1.4 } };
+    },
+    roasts: [
+      'The rejection-to-triumph arc, delivered on schedule. The adversity is load-bearing: without it this is just a job update.',
+      'Setback in act one, vindication in act three. It is a good structure. It is also the most-used structure on this website.',
+      'The hardship is doing narrative labour here. "{a}" exists in this post so the ending has somewhere to land.'
+    ]
+  });
+
+  rule({
+    id: 'numeric-flex',
+    label: 'Numeric flex',
+    dim: 'brag',
+    test: function (ctx) {
+      // The currency symbol must touch the digits ("$5M", "R$38"), and a
+      // k/m/million suffix must be a whole token. "R$ 38 mil" used to be
+      // captured as "$ 38 m": a Portuguese thousand sliced into an English
+      // million, and quoted back to the author as a figure they never wrote.
+      var f = ctx.raw.match(/(?:R\$|\$|£|€)\d[\d,.]*(?:\s?(?:k|m|b|bn|million|billion)(?=$|\s|[.,;:!?)]))?|\b\d[\d,.]*\s?(k|m)\s?(arr|mrr|followers|subscribers|users|downloads|applicants|impressions)\b|\b\d{2,3}\s?%\s?(growth|increase|lift|more)\b|\b\d[\d,.]*\s?(figure|figures)\b/gi);
+      if (!f) return null;
+      f = f.filter(function (v) { return !isNumberRefuted(ctx, v.trim()); });
+      if (!f.length) return null;
+      // A number sitting next to a comparison ("up from 4", "vs last year",
+      // "from 12 to 40", a percentage, "per user") has its denominator. The
+      // "no denominator in sight" roasts are only eligible when there is none.
+      var cmp = /\b(up from|down from|vs\.?|versus|compared|per|out of)\b|\bfrom\s+\S+\s+to\s+\S+|%/i.test(ctx.raw) ? 1 : 0;
+      return { n: f.length, vars: { n: f.length, v: f[0].trim(), cmp: cmp }, pen: { brag: clamp(1.4 + f.length * 0.6, 0, 3.4) } };
+    },
+    roasts: [
+      'The figure "{v}" is in here and it is not context, it is a scoreboard.',
+      '2+|{n} quantified achievements with no denominator anywhere in sight. Big numerator energy.',
+      'if:cmp==0|"{v}" is a number offered without a baseline, a comparison, or a time window. As analytics goes this is decorative.'
+    ]
+  });
+
+  rule({
+    id: 'casually',
+    label: 'Casual mention',
+    dim: 'brag',
+    test: function (ctx) {
+      // 'wound through the interview process somehow' is self-deprecation, not a
+      // humble brag. Bare adverbs are ordinary English and were removed.
+      var f = anyPhrase(ctx, ['not to brag', "don't mean to brag", 'no big deal',
+        'humble brag', 'little did i know',
+        'i never expected', 'never expected this',
+        'i don\'t usually post', 'i rarely post', 'not something i usually share',
+        'i don\'t normally share']);
+      if (!f.length) return null;
+      return { n: totalOf(f), vars: { p: f[0].phrase }, pen: { brag: 2.2, auth: 1.4 } };
+    },
+    roasts: [
+      '"{p}" is a disclaimer attached to the exact thing the disclaimer claims not to be doing.',
+      'Preceding a brag with a note about how this is not a brag does not neutralise the brag. It highlights it.',
+      '"{p}." The pre-emptive modesty is louder than the accomplishment.',
+      'has:usually post|"I don\'t usually post about this" is said by people posting about this, which is the only population that says it.'
+    ]
+  });
+
+  /* --- 5. engagement bait ------------------------------------------ */
+
+  // The ask vocabulary lives here, once, because three things read it: the
+  // two bait rules that penalise it, and the pos-nobait credit that praises
+  // its absence. A phrase added to one list and not the other produced a
+  // roast and a compliment about the same sentence.
+  var ASK_COMMENT = ['comment below', 'drop a comment', 'let me know in the comments',
+    'comment "', 'type yes', 'comment yes', 'drop a', 'sound off', 'i\'ll go first',
+    'who should be', 'who should we', 'any suggestions', 'suggestions welcome',
+    'tag someone', 'tag a friend', 'who else', 'raise your hand', 'am i the only one',
+    'thoughts?', 'agree?', 'am i wrong', 'change my mind', 'who\'s with me',
+    'what do you think', 'let me know what you think'];
+  var ASK_FOLLOW = ['follow me for more', 'hit follow', 'follow for more',
+    'repost this', 'share this with', 'share if you agree', 'like and share',
+    'save this post', 'bookmark this', 'save this for later', 'ring the bell',
+    'connect with me', 'send me a dm', 'dm me', 'link in comments',
+    'link in the comments', 'more in the comments',
+    // modern consult/pitch CTAs. 2020s LinkedIn self-promotion mostly
+    // isn't "subscribe" or "tune in" anymore, it's a booking link
+    'book a call', 'book a demo', 'book a free', 'book time', 'grab some time',
+    'grab time', '1:1 time', 'let\'s connect', 'schedule a call', 'calendly'];
+  // Looser forms that are too broad to penalise ("repost" can be a noun) but
+  // are still enough to disqualify the "no ask anywhere" compliment.
+  var ASK_ANY = ASK_COMMENT.concat(ASK_FOLLOW, ['follow me', 'repost', 'save this']);
+
+  rule({
+    id: 'ask-comment',
+    label: 'Comment bait',
+    dim: 'bait',
+    test: function (ctx) {
+      var f = anyPhrase(ctx, ASK_COMMENT);
+      if (!f.length) return null;
+      var n = totalOf(f);
+      return { n: n, vars: { n: n, p: f[0].phrase }, pen: { bait: clamp(2.4 + (n - 1) * 1.1, 0, 6.0), auth: clamp(0.8 * n, 0, 2.2) } };
+    },
+    roasts: [
+      'You closed with "{p}." The engagement equivalent of leaving the car unlocked and hoping.',
+      '"{p}" is an explicit ask for comments dressed as curiosity. The algorithm knows. So does everyone reading.',
+      'has:i\'ll go first|"I\'ll go first" is only said by people who went first because nobody was going second.',
+      '2+|{n} separate prompts for engagement in one post. This is not a conversation, it is a toll booth.'
+    ]
+  });
+
+  rule({
+    id: 'ask-follow',
+    label: 'Follow / repost bait',
+    dim: 'bait',
+    test: function (ctx) {
+      var f = anyPhrase(ctx, ASK_FOLLOW);
+      if (!f.length) return null;
+      var n = totalOf(f);
+      return { n: n, vars: { n: n, p: f[0].phrase }, pen: { bait: clamp(2.6 + (n - 1) * 1.2, 0, 6.2), auth: 1.0 } };
+    },
+    roasts: [
+      '"{p}." The ask is right there in the open. Points for honesty, everything else deducted.',
+      'has:save this|"Save this post" assumes a person who returns to saved LinkedIn posts. That person does not exist. The folder is a graveyard.',
+      'has:link in comment|"Link in comments" means you know the platform punishes links, which means you are optimising for a machine and hoping humans tag along.',
+      '2+|{n} calls to action. At this density the post is not content, it is a checkout page.'
+    ]
+  });
+
+  rule({
+    id: 'sink-in',
+    label: 'Manufactured profundity',
+    dim: 'bait',
+    test: function (ctx) {
+      var f = anyPhrase(ctx, ['let that sink in', 'read that again', 'read it again',
+        'sit with that', 'think about that', 'let me repeat that', 'say it louder',
+        'this is not a drill', 'i\'ll say what nobody', 'nobody talks about this',
+        'nobody tells you', 'no one tells you', 'here\'s the thing', 'here is the thing']);
+      // "Hot take:" opening a line is the device. "from a hot take, a thought
+      // leadership piece, and even a joke" mid-sentence is someone naming the
+      // genre, not performing it. These three only count as an opener: the
+      // start of the post, a line, or a sentence.
+      var openers = ctx.lower.match(/(?:^|[.!?]\s+|\n\s*)(?:unpopular opinion|hot take|controversial opinion)\b/g) || [];
+      for (var oi = 0; oi < openers.length; oi++) {
+        f.push({ phrase: openers[oi].replace(/^[^a-z]*/, ''), n: 1 });
+      }
+      if (!f.length) return null;
+      var n = totalOf(f);
+      return { n: n, vars: { p: f[0].phrase, n: n }, pen: { bait: clamp(2.0 + (n - 1) * 1.0, 0, 5.0), cring: 1.5, auth: 0.9 } };
+    },
+    roasts: [
+      'has:let that sink in|"Let that sink in" is the tell. If it needed to sink in, it would have sunk unassisted.',
+      'has:read that again|"Read that again." I did. It did not improve.',
+      'has:unpopular opinion|"Unpopular opinion," followed by an opinion every single person reading already holds. That is the popular opinion. That is what popular means.',
+      '"{p}" instructs the reader how to feel about a sentence that has not earned a feeling yet.',
+      'has:here\'s the thing|"Here\'s the thing" promises a thing. The thing does not arrive.'
+    ]
+  });
+
+  rule({
+    id: 'listicle',
+    label: 'Numbered lessons',
+    dim: 'bait',
+    test: function (ctx) {
+      var m = ctx.raw.match(/\b(\d+)\s+(lessons?|things?|ways?|reasons?|mistakes?|rules?|truths?|habits?|takeaways?|steps?)\b/i);
+      if (!m) return null;
+      return { n: 1, vars: { k: m[1], t: m[2].toLowerCase() }, pen: { bait: 1.8, auth: 1.3, cring: 0.8 } };
+    },
+    roasts: [
+      '"{k} {t}." It is always three, five, or seven. It is never four, because four would require an actual fourth {t}.',
+      'The numbered-{t} format is a container, and containers are chosen before there is anything to put in them.',
+      'has:i learned|"{k} {t} I learned" is the house style of an entire genre of post that nobody has ever finished reading.'
+    ]
+  });
+
+  rule({
+    id: 'question-close',
+    label: 'Closing question',
+    dim: 'bait',
+    test: function (ctx) {
+      var last = ctx.nonEmptyLines[ctx.nonEmptyLines.length - 1] || '';
+      if (!/\?\s*$/.test(last)) return null;
+      if (last.length > 140) return null;
+      return { n: 1, vars: { q: last.slice(0, 90) }, pen: { bait: 1.6 } };
+    },
+    roasts: [
+      'The post ends on a question, "{q}", which is a request for comments wearing an inquiry.',
+      'Closing question detected. It is a polite ask, but it is still an ask.',
+      'You ended with a question mark. The post did not need one; the comment count did.'
+    ]
+  });
+
+  rule({
+    id: 'hashtags',
+    label: 'Hashtag stuffing',
+    // Hashtags are decoration, not an ask. They used to be scored as bait,
+    // which meant a single #leadership floored the bait verdict into "one
+    // soft ask" while the post requested nothing of anybody.
+    dim: 'cring',
+    test: function (ctx) {
+      var n = ctx.hashtags.length;
+      if (n < 1) return null;
+      return {
+        n: n,
+        vars: { n: n, list: ctx.hashtags.slice(0, 4).join(' '), hs: plur(n, 'hashtag', 'hashtags'), isare: plur(n, 'is', 'are'), att: plur(n, 'attempt', 'attempts') },
+        pen: { cring: clamp(0.5 + n * 0.55, 0, 3.6), bait: clamp(n * 0.2, 0, 1.2) }
+      };
+    },
+    roasts: [
+      '{n} {hs}. LinkedIn stopped meaningfully indexing those around the same time it stopped mattering.',
+      'Hashtags present: {list}. Nobody has ever clicked one of these. Not once, in the history of the platform.',
+      '{n} {hs} {isare} {n} {att} to be discovered by a system that discontinued the feature you are addressing.'
+    ]
+  });
+
+  /* --- 6. performative vulnerability -------------------------------- */
+
+  rule({
+    id: 'perf-vuln',
+    label: 'Performative vulnerability',
+    dim: 'auth',
+    test: function (ctx) {
+      var f = anyPhrase(ctx, ['being vulnerable', 'getting vulnerable',
+        'real talk', 'raw and unfiltered', 'unfiltered truth', 'being transparent',
+        'full transparency', 'transparency moment', 'i\'m going to be honest',
+        'let me be honest', 'honest moment', 'i\'ve never shared this',
+        'i have never shared this', 'this is hard to write', 'hardest thing i\'ve',
+        'not easy to share', 'deeply personal', 'i debated posting this',
+        'i wasn\'t going to post this', 'i almost didn\'t post this']);
+      if (!f.length) return null;
+      var n = totalOf(f);
+      return { n: n, vars: { p: f[0].phrase }, pen: { auth: clamp(2.0 + (n - 1) * 0.9, 0, 4.0), cring: 1.6 } };
+    },
+    roasts: [
+      'You announced in advance that you were about to be vulnerable. Vulnerability does not come with a table of contents.',
+      '"{p}." The openness is being framed before it is being demonstrated, which inverts the whole thing.',
+      'has:almost didn\'t post|"I almost didn\'t post this" is written exclusively by people who are posting this.',
+      'has:real talk|"Real talk" implies the rest of the feed is fake talk. Fair, honestly. But you are still in the feed.'
+    ]
+  });
+
+  rule({
+    id: 'silver-lining',
+    label: 'Rapid growth narrative',
+    dim: 'auth',
+    test: function (ctx) {
+      var bad = anyPhrase(ctx, ['laid off', 'let go', 'lost my job', 'restructuring',
+        'role was eliminated', 'position was eliminated', 'impacted by layoffs',
+        'part of the layoffs', 'burnout', 'burned out', 'burnt out']);
+      var spin = anyPhrase(ctx, ['silver lining', 'blessing in disguise', 'best thing that',
+        'grateful for the experience', 'everything happens for a reason',
+        'excited for what\'s next', 'excited for what is next', 'open to new opportunities',
+        'onwards and upwards', 'this is an opportunity', 'learned so much']);
+      if (!bad.length || !spin.length) return null;
+      return { n: 1, vars: { b: bad[0].phrase, s: spin[0].phrase }, pen: { auth: 2.2, cring: 1.2 } };
+    },
+    roasts: [
+      'Bad news in one paragraph and "{s}" in the next. The turnaround time on the growth narrative has become suspicious.',
+      'The pivot from "{b}" to redemption happens inside a single post. Real processing takes longer than a scroll.',
+      'You are allowed to just be annoyed about it. The mandatory optimism is a platform norm, not a feeling.'
+    ]
+  });
+
+  /* --- 7. career-pivot vocabulary ------------------------------------ */
+
+  rule({
+    id: 'pivot-lang',
+    label: 'Career pivot vocabulary',
+    dim: 'auth',
+    test: function (ctx) {
+      // 'my career pivoted because I wore jeans' is English. 'pivoting into
+      // product' is dialect. Match the construction, never the bare verb.
+      var f = anyPhrase(ctx, ['career pivot', 'the pivot', 'making a pivot', 'pivoting into',
+        'pivoting to', 'pivoted into', 'levelling up', 'leveling up',
+        'growth mindset', 'imposter syndrome', 'reinvention', 'reinventing myself',
+        'portfolio career', 'solopreneur', 'building in public',
+        'my north star', 'intentional about', 'lean in', 'show up authentically',
+        'bringing my whole self', 'my why', 'find your why', 'zone of genius',
+        'next season of', 'answering the call']);
+      if (!f.length) return null;
+      var n = totalOf(f);
+      return { n: n, vars: { n: n, p: f[0].phrase }, pen: { auth: clamp(1.0 * n, 0, 3.4), cring: clamp(0.6 * n, 0, 2.4) } };
+    },
+    roasts: [
+      '"{p}" is vocabulary from the career-content genre rather than from the thing that actually happened.',
+      '2+|{n} phrases here belong to LinkedIn dialect rather than English. "{p}" leads the pack.',
+      'has:imposter syndrome|"Imposter syndrome" mentioned in a post announcing a promotion. Both of those cannot be the headline.',
+      '"{p}" is a phrase that means something slightly different to every person reading it, which is another way of saying it means nothing.'
+    ]
+  });
+
+  /* --- 8. structural sins ------------------------------------------- */
+
+  rule({
+    id: 'broetry',
+    label: 'One line per paragraph',
+    dim: 'cring',
+    test: function (ctx) {
+      if (ctx.wc < 30) return null;
+      var lines = ctx.proseLines;
+      if (lines.length < 4) return null;
+      var shorties = lines.filter(function (l) {
+        return (l.match(/\S+/g) || []).length <= 8;
+      }).length;
+      var ratio = shorties / lines.length;
+      if (ratio < 0.55) return null;
+      // Ramps in over 30..40 words. A 29-word post and a 31-word post with
+      // the same layout used to sit on opposite sides of a 4-point cliff.
+      var ramp = clamp((ctx.wc - 30) / 10, 0, 1);
+      var avg = Math.round((ctx.wc / lines.length) * 10) / 10;
+      return {
+        n: lines.length,
+        vars: { n: lines.length, w: ctx.wc, avg: avg, pct: Math.round(ratio * 100) },
+        pen: { cring: clamp(1.6 + ratio * 2.6, 0, 4.0) * ramp, auth: 1.2 * ramp }
+      };
+    },
+    roasts: [
+      '{n} lines, {w} words, {avg} words per line. You did not write a post. You wrote a menu.',
+      '{pct}% of the lines are eight words or fewer. This layout was invented to defeat the "see more" button, and everyone can see that.',
+      'The one-sentence-per-line format converts a paragraph into a staircase. The reader still has to climb it.',
+      'Vertical whitespace is being used as a substitute for pacing. It is not one.'
+    ]
+  });
+
+  rule({
+    id: 'orphan-line',
+    label: 'Dramatic one-word line',
+    dim: 'cring',
+    test: function (ctx) {
+      var last = ctx.proseLines.length - 1;
+      var hits = ctx.proseLines.filter(function (l, i) {
+        var w = (l.match(/\S+/g) || []).length;
+        // the final line is an ending, not a dramatic pause
+        return i > 0 && i < last && w <= 2 && l.length > 1 && !/^[-•*\d]/.test(l);
+      });
+      if (!hits.length) return null;
+      return { n: hits.length, vars: { n: hits.length, s: hits[0].slice(0, 30) }, pen: { cring: clamp(1.0 + hits.length * 0.6, 0, 3.0) } };
+    },
+    roasts: [
+      '"{s}" is given its own line. It did not earn its own line.',
+      '2+|{n} lines consist of one or two words, deployed for emphasis. Emphasis is a function of content, not of margins.',
+      'A word alone on a line is asking the reader to pause. "{s}" is not worth the pause.'
+    ]
+  });
+
+  rule({
+    id: 'allcaps',
+    label: 'Shouting',
+    dim: 'cring',
+    test: function (ctx) {
+      if (!ctx.allCaps.length) return null;
+      return { n: ctx.allCaps.length, vars: { n: ctx.allCaps.length, s: ctx.allCaps[0], ws: plur(ctx.allCaps.length, 'One passage is', ctx.allCaps.length + ' passages are') }, pen: { cring: clamp(0.9 + ctx.allCaps.length * 0.5, 0, 2.6) } };
+    },
+    roasts: [
+      'You set "{s}" in all caps. Volume is not emphasis.',
+      '{ws} set in capitals. Capital letters do not make a claim more true, only more audible.',
+      '"{s}." The shouting is a load-bearing element, which suggests the sentence beneath it is not.'
+    ]
+  });
+
+  /* --- 9. AI-isms and stock phrasing --------------------------------- */
+
+  rule({
+    id: 'ai-isms',
+    label: 'Machine-assisted phrasing',
+    dim: 'auth',
+    test: function (ctx) {
+      var f = anyPhrase(ctx, ['delve', 'delved', 'delving', 'in today\'s fast-paced',
+        'in today\'s digital', 'in an ever-evolving', 'ever-evolving landscape',
+        'navigate the complexities', 'navigating the complexities', 'a testament to',
+        'underscores the importance', 'highlights the importance', 'it\'s worth noting',
+        'it is worth noting', 'furthermore', 'moreover', 'in conclusion',
+        'harness the power', 'unlock the potential', 'unleash', 'game-changer',
+        'game changer', 'seamlessly', 'robust', 'holistic', 'resonate', 'resonates',
+        'curated', 'elevate', 'transformative', 'paradigm', 'synergy', 'synergies',
+        'the intersection of', 'at its core', 'more than just', 'not just a', 'not just about']);
+      if (!f.length) return null;
+      var n = totalOf(f);
+      var names = f.slice(0, 3).map(function (x) { return '"' + x.phrase + '"'; }).join(', ');
+      return { n: n, vars: { n: n, list: names, p: f[0].phrase }, pen: { auth: clamp(0.9 * n, 0, 4.2), clar: clamp(0.4 * n, 0, 2.0) } };
+    },
+    roasts: [
+      '{list}: phrasing from the register of a language model that has read every white paper and lived through none of them.',
+      'has:delve|"Delve." Nobody has said "delve" out loud since 1974.',
+      '2+|{n} stock phrases of the kind that turn up in every third post on this platform. Leading offender: "{p}".',
+      '"{p}" is the kind of construction that arrives fully formed and slightly too smooth. It reads assembled, not written.'
+    ]
+  });
+
+  rule({
+    id: 'not-just',
+    label: 'It is not just X, it is Y',
+    dim: 'auth',
+    test: function (ctx) {
+      var m = ctx.raw.match(/(?:it'?s|this is|that'?s|we'?re|i'?m)\s+not\s+(?:just|only|merely)\s+([^.,;!?\n]{2,40})[.,;]?\s*(?:it'?s|this is|that'?s|we'?re|i'?m|—|-)\s*([^.,;!?\n]{2,40})/i);
+      if (!m) return null;
+      return { n: 1, vars: { a: m[1].trim(), b: m[2].trim() }, pen: { auth: 1.8, cring: 1.2 } };
+    },
+    roasts: [
+      '"It\'s not just {a}, it\'s {b}." It is, in fact, just {a}.',
+      'The not-just-X-it\'s-Y construction is the single most recognisable sentence shape in machine-generated prose. You used it once. Once is enough to notice.',
+      'Escalating from "{a}" to "{b}" in one clause is a rhetorical move, not an argument.'
+    ]
+  });
+
+  rule({
+    id: 'emdash',
+    label: 'Em-dash density',
+    dim: 'auth',
+    test: function (ctx) {
+      if (ctx.emdashes < 3) return null;
+      var per100 = ctx.wc ? (ctx.emdashes / ctx.wc) * 100 : 0;
+      if (per100 < 1.2) return null;
+      return { n: ctx.emdashes, vars: { n: ctx.emdashes, w: ctx.wc }, pen: { auth: clamp(0.8 + ctx.emdashes * 0.35, 0, 2.6) } };
+    },
+    roasts: [
+      '{n} em-dashes in {w} words. Either you hold unusually strong views about punctuation or something helped you write this.',
+      'Em-dash count: {n}. That is a specific rhythm, and it is not a human typing on a phone.',
+      '{n} em-dashes. In fairness, they are correctly used. That is part of the problem.'
+    ]
+  });
+
+  rule({
+    id: 'corporate',
+    label: 'Corporate filler',
+    dim: 'clar',
+    test: function (ctx) {
+      var f = anyPhrase(ctx, ['leverage', 'leveraging', 'stakeholder', 'stakeholders',
+        'best-in-class', 'best in class', 'value add', 'value-add', 'actionable insights',
+        'data-driven', 'data driven', 'at scale', 'north star', 'double down',
+        'learnings', 'ideate', 'bandwidth', 'low-hanging fruit', 'circle back',
+        'touch base', 'align on', 'alignment', 'moving forward', 'going forward',
+        'at the end of the day', 'operationalize', 'operationalise', 'ecosystem',
+        'the space', 'thought leadership', 'thought leader', 'best practices',
+        'end-to-end', 'cross-functional', 'strategic priorities', 'force multiplier']);
+      if (!f.length) return null;
+      var n = totalOf(f);
+      var names = f.slice(0, 3).map(function (x) { return '"' + x.phrase + '"'; }).join(', ');
+      return {
+        n: n,
+        vars: { n: n, list: names, p: f[0].phrase, pct: ctx.wc ? Math.round((n / ctx.wc) * 1000) / 10 : 0 },
+        pen: { clar: clamp(0.85 * n, 0, 4.0), auth: clamp(0.4 * n, 0, 2.2) }
+      };
+    },
+    roasts: [
+      '{list}: {n} pieces of vocabulary that survive only inside quarterly business reviews.',
+      'has:learnings|"Learnings." The word is "lessons." It has been "lessons" the entire time.',
+      'has:data-driven|"Data-driven" appears in a post containing no data. I checked. Twice.',
+      '{pct}% of the words here are corporate register. That is a meaningful share of a short document.',
+      '"{p}" is a word that exists so a sentence can be written without committing to anything.'
+    ]
+  });
+
+  /* --- 10. clarity --------------------------------------------------- */
+
+  rule({
+    id: 'no-specifics',
+    label: 'No specifics',
+    dim: 'clar',
+    test: function (ctx) {
+      if (ctx.wc < 45) return null;
+      var specifics = ctx.specifics;
+      if (specifics > 1) return null;
+      // A told story is grounded by what happened in it, not only by what it
+      // names. Six or more past-tense verbs in sixty-plus words is a story;
+      // the emptiness this check exists for has none of that.
+      if (ctx.pastVerbs >= 5 && ctx.wc >= 60) return null;
+      // Ramps in over 45..60 words so that word 45 is not a 5-point cliff.
+      // A 44-word post with no specifics is a caption; a 60-word one is a
+      // post that chose not to say anything. In between it is a gradient.
+      var ramp = clamp((ctx.wc - 44) / 16, 0, 1);
+      return { n: specifics, vars: { n: specifics }, pen: { clar: 3.2 * ramp, auth: 1.4 * ramp, brag: 0.6 * ramp } };
+    },
+    roasts: [
+      'Zero numbers and effectively no proper nouns. This post could be about anything, which is a polite way of saying it is about nothing.',
+      'Nothing here is checkable. No name, no figure, no date. It is a shape where information should be.',
+      'Not one specific detail survives the whole post. Specificity is what separates a story from a mood.'
+    ]
+  });
+
+  rule({
+    id: 'long-sentences',
+    label: 'Sentence length',
+    dim: 'clar',
+    test: function (ctx) {
+      if (ctx.wc < 40 || ctx.avgSentence < 26) return null;
+      return {
+        n: Math.round(ctx.avgSentence),
+        vars: { n: Math.round(ctx.avgSentence) },
+        pen: { clar: clamp((ctx.avgSentence - 24) * 0.22, 0, 3.0) }
+      };
+    },
+    roasts: [
+      'Average sentence: {n} words. The reader\'s attention span on this platform: considerably fewer.',
+      '{n} words per sentence. Somewhere in there is a point, and it is being escorted at length.',
+      'Sentences average {n} words. A comma is not a joint; it is a hinge, and these doors are heavy.'
+    ]
+  });
+
+  rule({
+    id: 'too-long',
+    label: 'Length',
+    dim: 'clar',
+    test: function (ctx) {
+      if (ctx.wc < 320) return null;
+      return { n: ctx.wc, vars: { n: ctx.wc, m: Math.ceil(ctx.wc / 220) }, pen: { clar: clamp((ctx.wc - 300) / 130, 0, 3.0) } };
+    },
+    roasts: [
+      '{n} words. That is a {m}-minute read placed inside a scrolling feed, which is a category error.',
+      '{n} words. The "see more" link is the most-clicked and least-followed element on this site.',
+      'At {n} words this stopped being a post somewhere around word 250 and became a document.'
+    ]
+  });
+
+  rule({
+    id: 'too-short-empty',
+    label: 'Says nothing',
+    dim: 'clar',
+    test: function (ctx) {
+      if (ctx.wc === 0 || ctx.wc >= 16) return null;
+      if (ctx.specifics > 0) return null;
+      // Full strength up to 12 words, ramping out over 12..16 so that a
+      // fifteenth word does not silently erase the finding.
+      var ramp = ctx.wc <= 12 ? 1 : clamp((16 - ctx.wc) / 4, 0, 1);
+      return { n: ctx.wc, vars: { n: ctx.wc }, pen: { clar: 2.4 * ramp, bait: 1.6 * ramp } };
+    },
+    roasts: [
+      '{n} words and not one of them is a noun anybody could act on. Brevity is a virtue attached to a point.',
+      'Short is good. Short and empty is a status update from 2009.',
+      'At {n} words this is a caption. The image had better be extraordinary.'
+    ]
+  });
+
+  rule({
+    id: 'vague-nouns',
+    label: 'Vague nouns',
+    dim: 'clar',
+    test: function (ctx) {
+      var f = anyPhrase(ctx, ['things', 'stuff', 'something special', 'so much more',
+        'a lot of', 'many people', 'some people', 'the right people', 'good people',
+        'the work', 'this work', 'what we do', 'what i do', 'this space']);
+      if (f.length < 2) return null;
+      var n = totalOf(f);
+      return { n: n, vars: { n: n, p: f[0].phrase }, pen: { clar: clamp(0.7 * n, 0, 2.8) } };
+    },
+    roasts: [
+      '2+|{n} placeholder nouns ("{p}" among them) standing in for the actual subject.',
+      'The post keeps gesturing at "{p}" without naming it. Gesturing is not describing.',
+      'Every vague noun here is a decision you deferred to the reader. They will not make it.'
+    ]
+  });
+
+  /* --- 10b. hollow posts ----------------------------------------------
+   *
+   * Three ways a post can have words and no content that none of the
+   * phrase rules can see: the same sentence over and over, a string of
+   * tokens that are not English words, and a post in a language the rules
+   * were never written for. Each of these used to pass every check and
+   * collect the "no emoji, no hashtags, trusting words to do the work"
+   * compliments on the way out.
+   * -------------------------------------------------------------------- */
+
+  // Roughly the 300 most common English words, plus contractions. Used only
+  // as a "does this look like English prose" gauge, never for scoring vocab.
+  var COMMON_WORDS = {};
+  ('the be to of and a in that have i it for not on with he as you do at this but his by from they we say her she or an will my one all would there their what so up out if about who get which go me when make can like time no just him know take people into year your good some could them see other than then now look only come its over think also back after use two how our work first well way even new want because any these give day most us is are was were been has had did does am being had having said says made went got took came saw knew thought found gave told became left felt kept began seemed put let asked worked started called tried needed wanted moved lived believed brought happened wrote sat stood lost paid met ran read spent grew opened walked won taught heard held ' +
+   'here where why while before again still last long great little own old right big high different small large next early young important few public bad same able more much many very too really never always often sometimes every each both another such through during without between under around against down off should might must shall may need going doing done thing things something anything nothing everything someone anyone everyone nobody man woman person life world hand part child eye place week case point number group problem fact home water room mother area money story month lot job word business issue side kind head house service friend father power hour game line end member law car city community name president team minute idea kid body information school question night point ' +
+   'yes okay ok hi hello thanks thank please sorry maybe actually probably literally honestly basically already almost enough quite rather pretty exactly ' +
+   "i'm i've i'll i'd it's that's there's here's what's who's don't doesn't didn't isn't aren't wasn't weren't can't couldn't won't wouldn't shouldn't haven't hasn't hadn't you're you've you'll they're they've we're we've let's").split(/\s+/).forEach(function (w) { COMMON_WORDS[w] = true; });
+
+  // Function words only: two in a row ("of the", "in a", "and it") is a
+  // structural signature of English prose that word salad never produces.
+  var FUNCTION_WORDS = {};
+  'the a an and or but of to in on at for with by from is are was were be been it this that these those i you we they he she my your our their as if not no so do does did have has had will would can could should than then there here what which who when where how all any some more most up out about into over after before just only very too also because while until'.split(' ').forEach(function (w) { FUNCTION_WORDS[w] = true; });
+
+  // English gauge. Words that Spanish, Portuguese, Italian, French or German
+  // also use as function words ("a", "me", "no", "so", "do", "as", "on",
+  // "has", "in", "an", "was", "will") are left out on purpose: they would
+  // let a Spanish or German post read as 4% English.
+  var ENGLISH_STOP = {};
+  'the and or but of to at for with by from is are were be it this that i you we they my your our if not have had would can what who when how all about out up just get got he she his her its there their them than then into over more one like time people know think make made new day work year way thing well also back go going want need see said say'.split(' ').forEach(function (w) { ENGLISH_STOP[w] = true; });
+
+  // Spanish, German, French, Portuguese, Italian function words. Words that
+  // are also English ("as", "do", "die") are excluded at count time so an
+  // English post can never accumulate foreign hits from its own stopwords.
+  var FOREIGN_STOP = {};
+  'el la los de que y es un una para con por der die das und ist nicht ein eine mit für auf le les des et est pour dans pas o os as do da em não com uma il di che non per sono'.split(' ').forEach(function (w) { FOREIGN_STOP[w] = true; });
+
+  // One pass per post, cached on the context, shared by gibberish and
+  // not-english so the two can never both fire on the same text.
+  function languageProfile(ctx) {
+    if (ctx._lang) return ctx._lang;
+    // Unicode-aware tokens here, because "não" and "für" are not ASCII and
+    // the main tokenizer would split them into fragments.
+    var toks = ctx.lower.match(/\p{L}[\p{L}'-]*/gu) || [];
+    var eng = 0, foreign = 0;
+    for (var i = 0; i < toks.length; i++) {
+      var t = toks[i].replace(/^'+|['-]+$/g, '');
+      if (ENGLISH_STOP[t]) eng++;
+      else if (FOREIGN_STOP[t]) foreign++;
+    }
+    var n = toks.length;
+    var notEnglish = n >= 8 && eng / n < 0.03 && foreign / n >= 0.08;
+    ctx._lang = { tokens: n, english: eng, foreign: foreign, notEnglish: notEnglish };
+    return ctx._lang;
+  }
+
+  function normSentence(s) {
+    return s.toLowerCase().replace(/[^\p{L}\p{N}\s]/gu, ' ').replace(/\s+/g, ' ').trim();
+  }
+
+  rule({
+    id: 'repetition',
+    label: 'Repetition',
+    dim: 'clar',
+    test: function (ctx) {
+      var sents = ctx.sentences;
+      if (sents.length < 3) return null;
+      var counts = {}, firstSeen = {};
+      for (var i = 0; i < sents.length; i++) {
+        var k = normSentence(sents[i]);
+        if (k.length < 2) continue;
+        counts[k] = (counts[k] || 0) + 1;
+        if (firstSeen[k] === undefined) firstSeen[k] = sents[i];
+      }
+      var keys = Object.keys(counts).sort(function (a, b) { return counts[b] - counts[a]; });
+      if (!keys.length) return null;
+      var top = counts[keys[0]];
+      // Either one sentence three times, or (in a post of four or more
+      // sentences) the repeated sentences alone make up most of the post.
+      // Only sentences that actually recur count toward that share: with
+      // four sentences the top three distinct ones are always 75% of it.
+      var repeated = 0, distinctRepeated = 0;
+      for (var j = 0; j < keys.length && j < 3; j++) {
+        if (counts[keys[j]] >= 2) { repeated += counts[keys[j]]; distinctRepeated++; }
+      }
+      var share = repeated / sents.length;
+      if (top < 3 && !(sents.length >= 4 && share > 0.6)) return null;
+      var quote = firstSeen[keys[0]].replace(/[.!?]+$/, '');
+      if (quote.length > 60) quote = quote.slice(0, 57).trim() + '...';
+      return {
+        n: top,
+        vars: { s: quote, n: top, times: times(top), r: repeated, t: sents.length, pct: Math.round(share * 100) },
+        pen: { clar: clamp(1.6 + (top - 2) * 0.6 + share * 1.2, 0, 3.8), auth: 0.8 }
+      };
+    },
+    roasts: [
+      'if:n>=3|"{s}" appears {times}. The first one carried the meaning. The others are the same sentence wearing a different position.',
+      'if:n>=3|The sentence "{s}" is in here {times}. Repeating a line does not make it truer, it makes it a chorus.',
+      '{r} of the {t} sentences are repeats of one another. The post is shorter than it looks, and it did not look long.',
+      'if:n>=2|"{s}" comes back {times}. Saying it again is not the same as saying more.'
+    ]
+  });
+
+  rule({
+    id: 'gibberish',
+    label: 'Word salad',
+    dim: 'clar',
+    test: function (ctx) {
+      if (ctx.wc < 12) return null;
+      if (languageProfile(ctx).notEnglish) return null;
+      var total = 0, unknown = 0;
+      for (var i = 0; i < ctx.words.length; i++) {
+        var w = ctx.words[i];
+        if (/^[#@]/.test(w) || /^(https?:|www\.)/i.test(w)) continue;
+        total++;
+        if (/^\d/.test(w)) continue;           // numbers are content
+        if (/^[A-Z]/.test(w)) continue;        // names and acronyms are content
+        var t = w.toLowerCase().replace(/[.'-]+$/, '');
+        if (!COMMON_WORDS[t]) unknown++;
+      }
+      if (!total) return null;
+      var share = unknown / total;
+      if (share <= 0.75) return null;
+      // Real prose, however jargon-heavy, has "of the" and "in a" in it.
+      // Salad does not. Any sentence with two function words in a row
+      // buys the post out of this rule.
+      for (var s = 0; s < ctx.sentences.length; s++) {
+        var toks = ctx.sentences[s].toLowerCase().match(/[a-z][a-z']*/g) || [];
+        for (var k = 1; k < toks.length; k++) {
+          if (FUNCTION_WORDS[toks[k - 1]] && FUNCTION_WORDS[toks[k]]) return null;
+        }
+      }
+      return {
+        n: unknown,
+        vars: { pct: Math.round(share * 100), n: unknown, t: total },
+        pen: { clar: 4.6, auth: 2.0 }
+      };
+    },
+    roasts: [
+      '{pct}% of these words are unrecognised, and the rest are not next to each other. Nothing was scored on meaning.',
+      'The words never add up to a sentence. This was scored as text rather than as a post, since it is not one yet.',
+      '{n} of {t} words are unfamiliar to every check I have. Either this is a vocabulary test or it is noise. It was not read as a post either way.'
+    ]
+  });
+
+  rule({
+    id: 'not-english',
+    label: 'Not in English',
+    dim: 'clar',
+    test: function (ctx) {
+      var lp = languageProfile(ctx);
+      if (!lp.notEnglish) return null;
+      // No penalty of its own: the post is not being marked down for its
+      // language, it is being marked unscored. analyze() reads this id and
+      // sets the overall to the floor with unscored: true.
+      return { n: 1, vars: {}, pen: { clar: 0 } };
+    },
+    roasts: [
+      'The checks are written for English. This is not English, so nothing was scored on content.',
+      'This post is not in English, and the rules are. It was not scored on what it says, because the tool cannot read what it says.',
+      'Every check this tool runs is a check on English phrasing. This is not English phrasing. No verdict was reached, and the score is a placeholder.'
+    ]
+  });
+
+  /* --- 11. craft failures ---------------------------------------------
+   *
+   * Everything above detects sins of COMMISSION: the decoration, the bait,
+   * the cliché. Measured against a corpus of one strong writer's posts, that
+   * caught nothing: his flops commit no sins, they simply have no reason to
+   * exist. These rules detect the sins of OMISSION that separated his 4,967
+   * engagement posts from his 40s.
+   * -------------------------------------------------------------------- */
+
+  rule({
+    id: 'promo-lede',
+    label: 'Logistics post',
+    dim: 'clar',
+    test: function (ctx) {
+      var first = (ctx.sentences[0] || '').toLowerCase();
+      if (!first) return null;
+      var logistics = /\b(is back|join us|tune in|catch us|catch the|find us on|register|sign up|don't miss|coming soon|live (?:at|on)|streaming|new episode|previous episodes|learn more|more on|available on|subscribe|this (?:week|tuesday|wednesday|thursday|friday)|tomorrow at|rsvp|we'd love for you|link below)\b/;
+      if (!logistics.test(ctx.lower)) return null;
+      // a human hook in the opening sentence buys it out of this
+      var opensWithBrand = /^[A-Z][\w'’-]*(\s+[A-Z][\w'’-]*){0,3}\s+(is|are|will|returns|comes)/.test(ctx.sentences[0] || '');
+      var early = logistics.test(first);
+      if (!opensWithBrand && !early) return null;
+      return {
+        n: 1, vars: { s: (ctx.sentences[0] || '').slice(0, 70) },
+        pen: { clar: 2.8, bait: 1.6, auth: 1.2 }
+      };
+    },
+    roasts: [
+      'This opens with logistics. "{s}" tells a stranger when something happens without ever telling them why it should happen to them.',
+      'The event name is the first thing in the post, which means the most interesting sentence available was a calendar entry.',
+      'Announcing that a thing is occurring is not the same as giving anyone a reason to attend it. The reason is missing.',
+      'This is a scheduling notice. Somewhere behind it is a person or an idea worth leading with, and it has been filed behind the date.'
+    ]
+  });
+
+  rule({
+    id: 'plug-signoff',
+    label: 'Plug sign-off',
+    dim: 'bait',
+    test: function (ctx) {
+      var lines = ctx.nonEmptyLines;
+      if (lines.length < 1) return null;
+      var tail = lines.slice(-2).join(' ');
+      if (!/^\s*(--|—|–|ps[.:]|p\.s\.)/i.test(lines[lines.length - 1]) &&
+          !/(^|\s)(--|—)\s/.test(tail)) return null;
+      if (!/\b(learn more|tune in|join us|tomorrow on|catch (?:us|the)|subscribe|available on|episode|new post|link in|more on)\b/i.test(tail)) return null;
+      // The span is the last line alone. It used to be the last two lines
+      // joined by a space and cut to 90 characters, which is not text the post
+      // contains once a blank line sat between them, and could start mid-word.
+      return { n: 1, vars: { s: lines[lines.length - 1].trim().slice(0, 160) }, pen: { bait: 2.2, auth: 1.0, clar: 0.8 } };
+    },
+    roasts: [
+      'The sign-off is a plug. A closing line should add a second idea; this one adds a schedule.',
+      'The last line advertises something. Whatever goodwill the post built gets spent in its final sentence.',
+      'A closer earns its place by reframing what came before. This one changes the subject to a product.'
+    ]
+  });
+
+  rule({
+    id: 'hedging',
+    label: 'Hedged claim',
+    dim: 'auth',
+    test: function (ctx) {
+      var f = anyPhrase(ctx, ['probably', 'i think maybe', 'sort of', 'kind of',
+        'we\'d love for you', 'we would love for you', 'we might', 'i guess',
+        'a bit of a', 'somewhat', 'if that makes sense', 'just my two cents',
+        'not sure if', 'i could be wrong but', 'hopefully']);
+      if (!f.length) return null;
+      var n = totalOf(f);
+      return { n: n, vars: { n: n, p: f[0].phrase }, pen: { auth: clamp(1.1 * n, 0, 3.0), clar: clamp(0.5 * n, 0, 1.6) } };
+    },
+    roasts: [
+      '"{p}." The claim is being walked back inside the same sentence that makes it.',
+      '{n} hedges. A hedge is a pre-emptive apology for having said something, and it makes the thing you said smaller.',
+      'The commitment is missing. "{p}" tells the reader you are not sure this was worth posting, and they will agree with you.',
+      'Confidence is most of the delivery here, and "{p}" spends it.'
+    ]
+  });
+
+  rule({
+    id: 'question-opener',
+    label: 'Question opener',
+    dim: 'bait',
+    test: function (ctx) {
+      var first = (ctx.sentences[0] || '').trim();
+      if (!/\?$/.test(first)) return null;
+      if (first.length > 130) return null;
+      // a very short post can BE the question (a caption over an image)
+      if (ctx.wc <= 12) return null;
+      return { n: 1, vars: { q: first.slice(0, 80) }, pen: { bait: 1.8, clar: 1.2, auth: 0.8 } };
+    },
+    roasts: [
+      'It opens on a question. "{q}" asks the reader to do the work of caring before you have given them anything to care about.',
+      'A rhetorical question as the first line is the most reliably weak opener available. A flat statement of the same idea outperforms it.',
+      'The opening question is a throat-clear. Delete it and start on whatever sentence comes second. That one is usually the real opening.'
+    ]
+  });
+
+  rule({
+    id: 'fragment',
+    label: 'Fragment',
+    dim: 'clar',
+    test: function (ctx) {
+      if (ctx.wc > 32) return null;
+      // unresolved pointer words: the post is leaning on something not present
+      var deixis = /\b(this|these|that|those|their|they|it)\b/i.test(ctx.raw);
+      if (!deixis) return null;
+      // a sign-off names the author and their show; that is not the post
+      // having a subject, so strip it before asking whether anything is named
+      var body = ctx.nonEmptyLines.filter(function (l) {
+        return !/^\s*(--|—|–|ps[.:]|p\.s\.)/i.test(l);
+      }).join('\n');
+      var bodyCtx = buildContext(body);
+      if (bodyCtx.specifics > 0) return null;
+      if (bodyCtx.wc < 3) return null;
+      return { n: 1, vars: {}, pen: { clar: 2.6, auth: 0.8 } };
+    },
+    roasts: [
+      'The post points at something ("this", "they") that is not in the post. Whatever it refers to is doing all the work and is not here.',
+      'Short is fine. This is not short, it is partial: it needs an image or a second half that never arrives.',
+      'A stranger reading this cannot recover what it is about. The referent lives outside the text.'
+    ]
+  });
+
+  /* ------------------------------------------------------------------ *
+   * positive signals: these pull the score DOWN
+   * ------------------------------------------------------------------ */
+
+  var POSITIVES = [
+    {
+      id: 'pos-specific',
+      test: function (ctx) {
+        if (ctx.wc < 15) return null;
+        var s = ctx.specifics;
+        if (s < 3) return null;
+        var note = pick([
+          'Specific detail present: {s} concrete references. Noted.',
+          '{s} concrete references in one post. Every one of them is checkable, which is the whole point.',
+          'Names, numbers, or both, {s} times over. The post is checkable, which is not nothing.'
+        ], ctx.seed, 'pos-specific');
+        return { credit: { clar: -1.4, auth: -0.8 }, note: fill(note, { s: s }) };
+      }
+    },
+    {
+      id: 'pos-clean',
+      test: function (ctx) {
+        if (ctx.emojiCount > 0 || ctx.hashtags.length > 0) return null;
+        if (ctx.wc < 12) return null;
+        var note = pick([
+          'No emoji, no hashtags. The post is trusting words to do the work.',
+          'Zero decoration. The sentences are carrying the whole load, unassisted.',
+          'No emoji, no hashtags, no visual scaffolding. Just written.'
+        ], ctx.seed, 'pos-clean');
+        return { credit: { cring: -1.0, bait: -0.6 }, note: note };
+      }
+    },
+    {
+      id: 'pos-selfdep',
+      test: function (ctx) {
+        var f = anyPhrase(ctx, ['i was wrong', 'i have no idea', 'i still don\'t know',
+          'i messed up', 'i screwed up', 'my fault', 'i don\'t know what',
+          'i am not good at', 'i\'m not good at', 'no idea what i', 'badly', 'embarrassing']);
+        if (!f.length) return null;
+        var note = pick([
+          'Self-deprecation detected. It is the one move here that cannot be faked upward.',
+          'You admitted to something. Nobody makes you do that here.',
+          'An actual flaw, stated plainly. That takes more nerve than the humblebrag it usually replaces.'
+        ], ctx.seed, 'pos-selfdep');
+        return { credit: { auth: -1.6, brag: -1.2 }, note: note };
+      }
+    },
+    {
+      id: 'pos-tight',
+      test: function (ctx) {
+        if (ctx.wc < 12 || ctx.wc > 70) return null;
+        if (ctx.avgSentence > 22) return null;
+        var note = pick([
+          'Short, with no throat-clearing. {w} words.',
+          '{w} words and not one of them is a warm-up.',
+          'Says the thing and stops. {w} words, no runway.'
+        ], ctx.seed, 'pos-tight');
+        return { credit: { clar: -0.9, bait: -0.3 }, note: fill(note, { w: ctx.wc }) };
+      }
+    },
+    {
+      id: 'pos-nobait',
+      test: function (ctx) {
+        // Same lists the ask-comment and ask-follow rules penalise, so this
+        // credit can never praise the absence of an ask those rules found.
+        var f = anyPhrase(ctx, ASK_ANY);
+        if (f.length) return null;
+        if (ctx.wc < 12) return null;
+        var note = pick([
+          'No call to action anywhere. You wrote something and then simply stopped. Extraordinary.',
+          'No ask at the end. The post ends because it was finished, not because it needed a hook.',
+          'Nothing is being requested of the reader. That alone puts this ahead of most of the feed.'
+        ], ctx.seed, 'pos-nobait');
+        return { credit: { bait: -0.9 }, note: note };
+      }
+    }
+  ];
+
+  /* ------------------------------------------------------------------ *
+   * category verdicts
+   * ------------------------------------------------------------------ */
+
+  var VERDICTS = {
+    authenticity: {
+      polarity: 'higher-better',
+      bands: [
+        [0, 2.5, [
+          'Reads like it was generated by a committee that has heard about humans',
+          'Nothing in here could only have been written by you',
+          'This is the platform\'s house style wearing your headshot'
+        ]],
+        [2.5, 4.5, [
+          'Describes roughly every post in this genre since 2019',
+          'A real person is in here somewhere, behind the vocabulary',
+          'Recognisably assembled from parts other people used first'
+        ]],
+        [4.5, 6.5, [
+          'Some of this is you. The rest is the register',
+          'Occasionally sounds like a person, then remembers where it is',
+          'Half-written, half-selected from the available phrases'
+        ]],
+        [6.5, 8.5, [
+          'Mostly sounds like a person who types their own sentences',
+          'Specific enough that a stranger could not have written it',
+          'The voice survives contact with the platform'
+        ]],
+        [8.5, 10.1, [
+          'This could only have been written by one person, which is the entire job',
+          'No detectable house style. Suspicious, in a good way',
+          'Fully human. Filing this under anomaly'
+        ]]
+      ]
+    },
+    clarity: {
+      polarity: 'higher-better',
+      bands: [
+        [0, 2.5, [
+          'I have read it three times and could not tell you what happened',
+          'Every noun is a placeholder for a noun',
+          'Information density approaching zero'
+        ]],
+        [2.5, 4.5, [
+          'Something occurred. Details are being withheld pending further scrolling',
+          'The point is in here, under the vocabulary',
+          'Legible in outline, vague in every particular'
+        ]],
+        [4.5, 6.5, [
+          'We get the gist, barely, and later than necessary',
+          'Understandable if you already knew the context',
+          'Clear enough, padded past the point of being clear'
+        ]],
+        [6.5, 8.5, [
+          'The thing is stated and it is stated early',
+          'A reader knows what happened by the end of line two',
+          'Direct. The sentences are carrying actual cargo'
+        ]],
+        [8.5, 10.1, [
+          'Unusually clear. Nothing is hiding behind a metaphor',
+          'Says the thing, then stops. Textbook',
+          'Every sentence earns its position'
+        ]]
+      ]
+    },
+    cringe: {
+      polarity: 'higher-worse',
+      bands: [
+        [0, 2.5, [
+          'Nothing here makes a stranger look away',
+          'Restrained. Nobody is performing',
+          'Clean. No decoration doing the work of substance'
+        ]],
+        [2.5, 4.5, [
+          'A couple of moments that would be worse out loud',
+          'Mild. The formatting is showing off slightly',
+          'Survivable, with two elements I would remove'
+        ]],
+        [4.5, 6.5, [
+          'Several choices here are audible from across the room',
+          'The presentation is louder than the content',
+          'Reads like it was designed rather than written'
+        ]],
+        [6.5, 8.5, [
+          'Physically uncomfortable in places',
+          'The decoration has fully overtaken the message',
+          'This would not survive being read aloud to a colleague'
+        ]],
+        [8.5, 10.1, [
+          'Genuinely difficult to read to the end without adjusting posture',
+          'Maximum performance, minimum content. A rare achievement',
+          'I would like to speak to whoever formatted this'
+        ]]
+      ]
+    },
+    bait: {
+      polarity: 'higher-worse',
+      bands: [
+        [0, 2.5, [
+          'No ask, no hook, no toll booth. Refreshing',
+          'You wrote something and did not demand a response for it',
+          'Zero engagement machinery detected'
+        ]],
+        [2.5, 4.5, [
+          'One soft ask. Not egregious',
+          'Slightly angled toward the comment section',
+          'A little bit of reach-seeking, mostly forgivable'
+        ]],
+        [4.5, 6.5, [
+          'The engagement architecture is visible from here',
+          'This is shaped to be commented on rather than read',
+          'The hook is doing more work than the content'
+        ]],
+        [6.5, 8.5, [
+          'Multiple explicit asks. The post is a funnel',
+          'Structurally optimised for a metric, not a reader',
+          'Every element is pointed at the comment box'
+        ]],
+        [8.5, 10.1, [
+          'This is not a post. It is a conversion event',
+          'Pure reach mechanics with a thin layer of text on top',
+          'The algorithm is the intended audience and it is not subtle'
+        ]]
+      ]
+    },
+    brag: {
+      polarity: 'higher-worse',
+      bands: [
+        [0, 2.5, [
+          'No flexing detected. Unusual',
+          'You reported a fact without decorating it',
+          'Nothing here is quietly asking to be admired'
+        ]],
+        [2.5, 4.5, [
+          'A light flex, mostly under control',
+          'Some self-promotion, honestly declared',
+          'Achievement present, packaging restrained'
+        ]],
+        [4.5, 6.5, [
+          'The modesty is a delivery mechanism',
+          'Brag detected, wrapped in something softer',
+          'The gratitude framing is a load-bearing wall for the boast'
+        ]],
+        [6.5, 8.5, [
+          'The humility is entirely structural at this point',
+          'Every hedge here makes the brag louder',
+          'This is a highlight reel with an apology stapled to it'
+        ]],
+        [8.5, 10.1, [
+          'Fully weaponised modesty. Textbook specimen',
+          'The brag is the post. The rest is upholstery',
+          'I would frame this and hang it in a museum of the form'
+        ]]
+      ]
+    }
+  };
+
+  function verdictFor(key, score, seed) {
+    var v = VERDICTS[key];
+    for (var i = 0; i < v.bands.length; i++) {
+      if (score >= v.bands[i][0] && score < v.bands[i][1]) {
+        return pick(v.bands[i][2], seed, key + i);
+      }
+    }
+    return pick(v.bands[v.bands.length - 1][2], seed, key);
+  }
+
+  /* ------------------------------------------------------------------ *
+   * the brutal take
+   * ------------------------------------------------------------------ */
+
+  var BRUTAL = {
+    low: [
+      'This is fine, and I want that on the record. Nothing here is desperate, which on this platform is an achievement.',
+      'Nothing here is embarrassing, which puts it comfortably ahead of the feed it is sitting in.',
+      'You wrote a thing and then stopped, without asking anybody for anything. That is rarer than it should be, and it is the entire reason this reads as credible.',
+      'This reads like a person told a colleague something true. The conventions are not being avoided in a showy way. They are simply absent.'
+    ],
+    lowNarrative: [
+      'This is a story, told in order, with the details left in. It belongs to the genre of things that actually happened, which the platform handles badly and people do not.',
+      'The concrete detail is doing all the work here. Nothing in this needed a hook, because a thing that genuinely happened does not require one.',
+      'You told it in sequence and let the ending stay small. Restraint at the end of a story is the hard part, and it is the part most posts skip.',
+      'A specific person doing a specific thing in a specific room. That is the whole trick, and most of the feed has forgotten it is available.'
+    ],
+    mid: [
+      'auth,clar,cring,bait,brag|Recognisable, competent, and completely absorbed into the background radiation of the feed. Readers register this as texture rather than as content.',
+      'auth|The bones are fine. The vocabulary is borrowed. Strip out the phrases that came pre-assembled and there is a real post in here trying to get out.',
+      'auth,clar,cring,bait,brag|This is what a post looks like when the format was chosen before the point was. Not offensive. Not memorable. Just present.',
+      'auth|Half of this you wrote and half of it the platform wrote for you. Readers cannot always tell you which half, but they can feel the seam.',
+      'clar|The point is in here somewhere and it has been padded on all sides. Cut the padding and you have a decent short post.',
+      'cring|The content is fine and the presentation is trying much harder than the content is. That gap is what people notice.',
+      'bait|It is a reasonable post with a hand out at the end. The hand is the part that lingers.',
+      'brag|A modest achievement wearing a slightly larger coat than it needs. Nothing fatal, just visible.'
+    ],
+    high: [
+      'auth|You sound like every announcement of this type from the past five years. Readers recognise the shape before the words.',
+      'cring,brag|This reads like you are trying to impress somebody\'s mother on behalf of LinkedIn. The performance is visible from the first line and it does not let up.',
+      'auth,clar,cring,bait,brag|Every individual choice here is defensible and the accumulation is exhausting. The post is wearing so much costume that the actual news is unrecoverable.',
+      'bait|The engagement machinery has fully overtaken the content. What is left is a shape people recognise, respond to reflexively, and forget within a scroll.',
+      'auth,clar|This is a template with your name typed into it. Somewhere underneath there is a fact worth knowing, and it has been very thoroughly upholstered.',
+      'clar|By the end of this I could not tell you what happened, who it happened to, or why the post exists. The words are all present and none of them are load-bearing.',
+      'brag|The accomplishment is real and it is buried under so much staged modesty that the reader has to excavate it. Nobody excavates.'
+    ],
+    extreme: [
+      'Not a post, a compliance artifact. Every convention present, correct, load-bearing. Nobody would say any of this out loud.',
+      'The checklist ran out before the post did. A full house of the form: the decoration, the ask, the modesty, the arc.',
+      'This was built to be reacted to rather than read, and it is going to succeed at exactly that. A reaction is not a memory.',
+      'At this density the individual sins stop mattering and the whole thing becomes a genre exercise. Impressive, in the way a perfectly assembled piece of flat-pack furniture is impressive.'
+    ]
+  };
+
+  // The four score bands. This is the contract with the client: keys and
+  // labels are matched by exact string there, so they do not change here
+  // without changing there.
+  function bandFor(overall) {
+    if (overall < 3.2) return { key: 'barely', label: 'barely sucks' };
+    if (overall < 5.6) return { key: 'normal', label: 'sucks a normal amount' };
+    if (overall < 8.0) return { key: 'lot', label: 'sucks a lot' };
+    return { key: 'completely', label: 'sucks completely' };
+  }
+
+  // worstDim/worstSuck: the single most damaged dimension and its 0..10 suck
+  // score. A post that is one sin, saturated, can still average out to a
+  // "normal" overall; the brutal take must then speak to the sin rather than
+  // calling the post fine. When the worst dimension is at 6.5 or above and
+  // the overall band is low or mid, the take is drawn from the "high" pool
+  // for that dimension. Never the "extreme" pool: those takes describe a
+  // full house of sins, and a single saturated one is not that.
+  function brutalTake(overall, seed, topRule, isNarrative, worstDim, worstSuck) {
+    var band = overall < 3.2 ? 'low' : overall < 5.6 ? 'mid' : overall < 8.0 ? 'high' : 'extreme';
+    var dim = topRule && topRule.dim ? topRule.dim : null;
+    if (worstSuck >= 6.5 && (band === 'low' || band === 'mid')) {
+      band = 'high';
+      dim = worstDim || dim;
+      isNarrative = false;
+    }
+    var pool = (band === 'low' && isNarrative) ? BRUTAL.lowNarrative : BRUTAL[band];
+    if (dim) {
+      var matched = [];
+      for (var i = 0; i < pool.length; i++) {
+        var bar = pool[i].indexOf('|');
+        if (bar < 0) { matched.push(pool[i]); continue; }
+        var tags = pool[i].slice(0, bar).split(',');
+        if (tags.indexOf(dim) >= 0) matched.push(pool[i].slice(bar + 1));
+      }
+      if (matched.length) pool = matched;
+    }
+    var out = pick(pool, seed, 'brutal' + band);
+    var b2 = out.indexOf('|');
+    if (b2 > -1 && b2 < 30 && /^[a-z,]+$/.test(out.slice(0, b2))) out = out.slice(b2 + 1);
+    return out;
+  }
+
+  /* ------------------------------------------------------------------ *
+   * advice
+   * ------------------------------------------------------------------ */
+
+  var ADVICE = {
+    'announce': 'Delete the first four words and start with the actual noun. "I\'m joining X as Y" outperforms any amount of announced excitement, because it contains information.',
+    'cantwait': 'Pick one: the thing happened, or the thing is about to happen. Two tenses of enthusiasm is one too many.',
+    'newchapter': 'Replace the chapter metaphor with the job title. Nobody was confused about whether time is passing.',
+    'officially': 'Delete "officially" and read the sentence back. It says the same thing, minus the implication that a ceremony took place and you were at it.',
+    'bignews': 'Move the news to line one. Suspense is a technique for fiction; in a feed it is just a delay before the scroll.',
+    'gratitude': 'One thank-you, one person, one specific thing. Distributed gratitude reads as a mailing list.',
+    'thanks-count': 'Cut the tag list to the two people who actually changed the outcome. Message everyone else privately, where it will mean more and cost you nothing.',
+    'believed': 'Name the one person, say the one thing they did. "Thanks to everyone who believed in me" thanks nobody.',
+    'emoji-volume': 'Remove every emoji, read it back, and add at most one where the sentence genuinely cannot carry the tone. You will not need to add one.',
+    'emoji-repeat': 'One is a gesture. Two is a mood. Delete the duplicate.',
+    'emoji-bullets': 'Swap the emoji bullets for a plain hyphen, or better, write it as sentences. The checkmarks are not making the claims more true.',
+    'humbled': 'Cut "humbled." If you want the humility to read, describe something that actually went badly on the way here.',
+    'honored': 'State the recognition flatly in one line, then spend the rest of the post on something the reader gets to keep.',
+    'impact': 'Name the first concrete thing you will do. If you do not know yet, say so.',
+    'dreamjob': 'Downgrade "dream job" to "job I wanted." You are writing a public record and future-you has to live in it.',
+    'rejection-arc': 'Cut the adversity setup or cut the triumph. Keeping both turns a real experience into a three-act structure, and readers can feel the architecture.',
+    'numeric-flex': 'Give the number a denominator. "Grew it 300%" means nothing; "grew it from 4 to 16" means something and is braver.',
+    'casually': 'Delete the disclaimer. If it is worth posting, post it. The pre-emptive modesty is the loudest thing in the paragraph.',
+    'ask-comment': 'Delete the closing question. If the post is interesting, people comment; if it is not, the question will not save it.',
+    'ask-follow': 'Remove the call to action entirely. Every ask you make lowers the value of the thing you are asking about.',
+    'sink-in': 'Cut the instruction to the reader. Let the sentence be as profound as it actually is, which will be a useful measurement.',
+    'listicle': 'Take the single best item on the list and make that the whole post. The other four were padding to reach a round number.',
+    'question-close': 'End on the statement instead. A period is more confident than a question mark and gets read the same number of times.',
+    'hashtags': 'Delete all of them. There is no version of this where they help.',
+    'perf-vuln': 'Cut the warm-up, name the thing: the company, the number, the moment.',
+    'silver-lining': 'Cut the redemption paragraph. The bad thing is allowed to be a bad thing for one post.',
+    'pivot-lang': 'Translate each of these phrases into what you literally did. "Pivoting into product" becomes "I took a product job." Shorter and true.',
+    'broetry': 'Join the lines into paragraphs. If the post cannot survive being one block of text, the problem is the sentences, not the spacing.',
+    'orphan-line': 'Put the orphaned word back in its sentence. It was doing fine there.',
+    'allcaps': 'Lower-case it. If the emphasis matters, put the word at the end of the sentence instead.',
+    'ai-isms': 'Read it aloud. Every phrase you would not say to a colleague in a hallway comes out. That is the whole edit.',
+    'not-just': 'Delete the second half of the construction. "It\'s not just X" is always followed by a claim the post does not support.',
+    'emdash': 'Convert half the em-dashes to full stops. Two clauses that can stand alone usually should.',
+    'corporate': 'Replace each term with the plain word underneath it. "Learnings" is "lessons." "Leverage" is "use." "Stakeholders" are "people."',
+    'no-specifics': 'Add one number and one proper noun. That single edit will do more than every other change on this list combined.',
+    'long-sentences': 'Find the longest sentence and cut it in half at the first comma. Repeat until nothing is over 25 words.',
+    'too-long': 'Cut to the strongest 150 words. Everything you remove was scaffolding for the part people were going to read anyway.',
+    'too-short-empty': 'Add the specific thing. One name, one number, one detail. Right now this is a gesture.',
+    'promo-lede': 'Delete the first sentence and open with the most interesting detail. The date goes at the bottom.',
+    'plug-signoff': 'Move the one useful fact up and cut the plug. The last line is what a reader keeps.',
+    'hedging': 'Cut every hedge and let the claim stand. If the claim cannot survive without the hedge, the claim is the problem, not the phrasing.',
+    'question-opener': 'Convert the opening question into the flat statement it implies. "Ever wonder why X?" becomes "X, and here is the number."',
+    'fragment': 'Say what it is about inside the post. If the text cannot survive the image being removed, the text is a caption and not yet a post.',
+    'unicode-bold': 'Delete the fake bold. Those characters are unsearchable, uncopyable, and unreadable to a screen reader.',
+    'vague-nouns': 'Replace each vague noun with the actual thing. If you cannot name it, that is the post you should be writing instead.',
+    'repetition': 'Keep the repeated sentence once, where it lands hardest. The reader already heard you.',
+    'gibberish': 'Write the sentence you meant. If this was a test of the tool, it passed; if it was a post, it has not started yet.',
+    'not-english': 'This tool only reads English. Nothing was scored, so there is nothing to fix.'
+  };
+
+  // Low score BUT something was flagged. Claiming "all clear" here would
+  // contradict the roast sitting directly above it.
+  var ADVICE_MINOR = [
+    'Nothing here is worth acting on. The findings above are noted, not urgent.',
+    'One or two things flagged, none of them load-bearing. Post it.',
+    'The checks turned something up. It is not enough to change anything over.',
+    'Minor findings only. You could fix them; nobody would notice either way.'
+  ];
+
+  var ADVICE_CLEAN = [
+    'Nothing to fix. Post it as written.',
+    'I have no notes. Ship it.',
+    'This does not need my help. Every check I have came back clean and I checked them all.',
+    'No changes. The post is already doing the thing the edits would have been aiming at.'
+  ];
+
+  /* ------------------------------------------------------------------ *
+   * attributed celebration
+   *
+   * A third category, alongside "narrative" and the sensitive bail-out:
+   * warmth aimed OUTWARD at a named person for a specific act. The gratitude
+   * rules exist to catch gratitude sprayed at an audience; when it is aimed at
+   * one named human for one named thing, the rule is firing on the point of
+   * the post rather than on a defect in it.
+   * ------------------------------------------------------------------ */
+
+  var DIFFUSE_RE = /\b(everyone who|all of you|my (?:whole )?network|the whole team|everyone at|believed in me|support system|each and every|too many to name)\b/i;
+
+  /* ------------------------------------------------------------------ *
+   * self-declared commercial offer
+   *
+   * A launch post, a paid cohort, an open program: the call to action IS
+   * the content, not manipulative garnish bolted onto something else. Every
+   * bait/CTA rule still runs and still fires here, exactly as written -
+   * this never suppresses a finding, only recognises that in this one
+   * genre the finding is load-bearing rather than a trick, and softens the
+   * penalty accordingly. Two independent bars have to clear before that
+   * softening applies: explicit "I am selling/launching something"
+   * language, AND a real number attached to the offer (a price, a cohort
+   * size, a session count) - the same kind of fact numeric-flex already
+   * treats as a checkable claim rather than decoration. A post that merely
+   * mentions a number, or merely uses launch-adjacent vocabulary, does not
+   * qualify; both have to be true at once, same discipline as
+   * isNumberRefuted() above.
+   * ------------------------------------------------------------------ */
+
+  var PITCH_LAUNCH_RE = /\b(launching|now (?:offering|open|enrolling|booking)|new (?:offering|program|cohort|course)|enrollment is open|now accepting (?:clients|applications)|spots? (?:are |is )?(?:open|available|limited)|accepting new clients|now booking|doors are open|now available for)\b/;
+  var PITCH_PRICE_RE = /\$\s?\d[\d,.]*\s?(k|m|b|million|billion)?|\b\d[\d,.]*\s?(k|m)\s?(arr|mrr|clients|students|spots|seats|sessions)\b/i;
+
+  function pitchCheck(ctx) {
+    return PITCH_LAUNCH_RE.test(ctx.lower) && PITCH_PRICE_RE.test(ctx.raw);
+  }
+
+  function sincereCheck(ctx) {
+    var raw = ctx.raw, lower = ctx.lower;
+
+    // gratitude addressed to a name: "Matthew, thank you"
+    var vocative = /(^|\n)\s*([A-Z][a-z]{2,})\s*[,!]\s*thank/m.test(raw);
+    // or a thank-token sitting next to a proper noun. "Grateful to <Name>"
+    // is the same gesture in different vocabulary and counts the same way.
+    var nearName = false;
+    // "thankful for my network" is not a thank-you to anyone, so the bare
+    // "thank" prefix is not enough: it has to be thank/thanks/thanked/thank
+    // you, or grateful/thankful TO somebody.
+    var ti = lower.search(/\bthank(?:s|ed| you)?\b|\b(?:grateful|thankful) to\b/);
+    if (ti >= 0) {
+      var win = raw.slice(Math.max(0, ti - 70), ti + 70).replace(/^[^\s]*\s/, '');
+      nearName = /(?:^|\s)[A-Z][a-z]{2,}/.test(win);
+    }
+    var named = vocative || nearName;
+
+    // A run of 3+ comma-separated Title-Case names ("Keirten, Theodore,
+    // Malahim, Roy, Jakov") is the strongest available signal that gratitude
+    // is aimed at specific individuals rather than a faceless crowd, much
+    // stronger than DIFFUSE_RE is a signal of the opposite, so it's used
+    // below to keep a genuinely diffuse-sounding line elsewhere in the same
+    // post from overriding it.
+    var namesIndividuallyCredited = /\b[A-Z][a-z]{2,}(,\s*[A-Z][a-z]{2,}){2,}/.test(raw);
+
+    // gratitude with an object: thanked FOR something. "Thank you for X" is
+    // one way people write this; naming several individuals in a row, or a
+    // "shoutout to <Name>", are equally specific and were previously missed.
+    // Deliberately NOT matched here: "grateful for <generic noun>" ("this
+    // opportunity", "this experience"). That phrasing is exactly as
+    // corporate-hollow as plain "thank you" and must not buy a free pass.
+    var specificAct = /\bthank(?:s|ed| you)?\b[^.!?]{0,50}\bfor\b\s+\w+/i.test(raw) ||
+                       namesIndividuallyCredited ||
+                       /\bshout ?-?out to\s+[A-Z][a-z]{2,}/i.test(raw) ||
+                       // "grateful to Marcus Alvarez for staying on the call":
+                       // a named person AND a named act. Plain "grateful for
+                       // this opportunity" still does not qualify.
+                       /\b[Gg]rateful to\s+[A-Z][a-z]{2,}[^.!?]{0,60}\bfor\b\s+\w+|\b[Tt]hankful to\s+[A-Z][a-z]{2,}[^.!?]{0,60}\bfor\b\s+\w+/.test(raw);
+    // a quoted testimonial attributed to someone
+    var quoted = /["“][^"”]{60,}["”]\s*[-–—]?\s*[A-Z][a-z]+/.test(raw);
+
+    // A post can individually credit several real people and still contain
+    // one generic closing line elsewhere ("...and to everyone who made this
+    // summer memorable: thank you!"). That shouldn't retroactively disqualify
+    // the specific gratitude already established. Only let a diffuse-sounding
+    // phrase win if the post isn't otherwise naming multiple real people.
+    var diffuse = (DIFFUSE_RE.test(raw) || ctx.mentions.length >= 3) && !namesIndividuallyCredited;
+
+    // no reciprocity machinery: this is not a reach play. Same ask lists
+    // the bait rules use, so sincerity and bait can never disagree about
+    // whether a request was made.
+    var asks = anyPhrase(ctx, ASK_ANY).length > 0;
+    var noReciprocity = ctx.hashtags.length === 0 && ctx.mentions.length < 3 && !asks;
+
+    // is somebody other than the author the subject?
+    var first = (lower.match(/\b(i|me|my|mine)\b/g) || []).length;
+    var firstDensity = ctx.wc ? (first / ctx.wc) * 100 : 0;
+    var thirdParty = firstDensity < 9 || quoted;
+
+    return named && (specificAct || quoted) && !diffuse && noReciprocity && thirdParty;
+  }
+
+  /* ------------------------------------------------------------------ *
+   * paste hygiene
+   *
+   * Copying a post out of LinkedIn does not give you the post. It gives you
+   * the post plus the interface around it, with the hashtags mangled and the
+   * bold text replaced by maths symbols. Clean it before scoring, and tell
+   * the user exactly what was removed rather than silently editing their text.
+   * ------------------------------------------------------------------ */
+
+  // Standalone lines that are LinkedIn's chrome, not the author's writing.
+  var CHROME_LINE = [
+    /^(like|comment|repost|send|share|follow|following|connect|message|save)$/i,
+    /^[\d,.]+\s*(reactions?|comments?|reposts?|likes?|impressions?|followers?|connections?)$/i,
+    /^(and )?[\d,.]+ others?$/i,
+    /^activate to view larger image,?$/i,
+    /^\d+(st|nd|rd|th)\+?$/i,
+    /^(edited|promoted|suggested|sponsored)$/i,
+    /^\d+\s*(h|d|w|mo|m|y|hours?|days?|weeks?|months?|years?)(\s*ago)?\s*(•\s*(edited|promoted))?\s*•?$/i,
+    /^•+$/,
+    /^see translation$/i,
+    /^view (profile|full post)$/i
+  ];
+
+  var TRUNCATED_RE = /(…|\.\.\.)\s*(see )?more\s*$/im;
+
+  // Mathematical Alphanumeric Symbols, the "fake bold" creators paste in.
+  var STYLED_RE = /[\u{1D400}-\u{1D7FF}]/gu;
+
+  function cleanPaste(raw) {
+    var text = String(raw == null ? '' : raw);
+    var notices = [];
+    var flags = { styled: 0, hashtagPrefix: 0, chrome: 0, truncated: false };
+
+    // 1. invisible characters and non-breaking spaces. U+200D is the Zero
+    //    Width Joiner: stray, it is LinkedIn copy debris like the others, but
+    //    between two pictographs it is what holds a single emoji together
+    //    (🏴‍☠️, 🧑‍💻, 👨‍👩‍👧). Stripping it there used to split every joined emoji
+    //    into its parts, so one pirate flag in a quoted name counted as two
+    //    emoji, and no name-emoji exclusion could ever match the pieces.
+    //    The stray-ZWJ logic is STRAY_ZWJ_RE, shared with normalizeText().
+    //    Soft hyphens (U+00AD) go with the rest of the invisibles.
+    var before = text.length;
+    text = text.replace(/[\u00AD\u200B\u200C\uFEFF\u2060]/g, '')
+               .replace(STRAY_ZWJ_RE, '')
+               .replace(/\u00A0/g, ' ');
+    if (text.length !== before) notices.push('Removed invisible characters that LinkedIn adds on copy.');
+
+    // 2. fake bold / italic. Flag BEFORE normalising, or the evidence is gone.
+    var styled = text.match(STYLED_RE);
+    if (styled) {
+      flags.styled = styled.length;
+      text = text.normalize('NFKC');
+      notices.push('Converted ' + styled.length + ' Unicode-styled characters back to plain text.');
+    }
+
+    // 2b. everything else the scorer normalises (NFKC, line endings, runs
+    //     of spaces, curly quotes, Cyrillic lookalikes), applied here so the
+    //     text shown to the user is byte-for-byte the text that gets scored
+    //     and every highlight span lands where it should.
+    var beforeNorm = text;
+    text = normalizeText(text);
+    if (text !== beforeNorm) notices.push('Normalized spacing, line breaks and quote marks.');
+
+    // 3. LinkedIn writes "hashtag#leadership" into the clipboard
+    var ht = text.match(/hashtag#/gi);
+    if (ht) {
+      flags.hashtagPrefix = ht.length;
+      text = text.replace(/hashtag#/gi, '#');
+      notices.push('Repaired ' + ht.length + ' mangled hashtag' + (ht.length === 1 ? '' : 's') + '.');
+    }
+
+    // 4. truncation: the post is not all here
+    if (TRUNCATED_RE.test(text)) {
+      flags.truncated = true;
+      text = text.replace(TRUNCATED_RE, '').replace(/\s+$/, '');
+      notices.push('This post looks truncated. The copy ended at "see more", so the analysis is of the visible part only.');
+    }
+
+    // 5. interface chrome on its own lines
+    var kept = [];
+    var lines = text.split('\n');
+    for (var i = 0; i < lines.length; i++) {
+      var t = lines[i].trim(), drop = false;
+      for (var j = 0; j < CHROME_LINE.length; j++) {
+        if (CHROME_LINE[j].test(t)) { drop = true; break; }
+      }
+      if (drop) flags.chrome++; else kept.push(lines[i]);
+    }
+    if (flags.chrome) {
+      notices.push('Dropped ' + flags.chrome + ' line' + (flags.chrome === 1 ? '' : 's') + ' of LinkedIn interface text.');
+    }
+
+    // 5b. The author header. A LinkedIn copy starts with the poster's name and
+    //     headline, which are not the post, and which would otherwise hand the
+    //     author free "concrete reference" credit for their own job title.
+    var head = [];
+    for (var k = 0; k < kept.length && k < 4; k++) head.push(kept[k].trim());
+    var nameLike = head[0] && /^[A-Z][\w'’.-]*(\s+[A-Z][\w'’.-]*){0,3}$/.test(head[0]) &&
+                   head[0].length < 42 && !/[.!?,:;]$/.test(head[0]);
+    if (nameLike && flags.chrome > 0) {
+      var drop = 1;
+      // a headline line usually follows: has a role separator and no sentence end
+      if (head[1] && /[@|·•]|\b(at|@)\b/.test(head[1]) && head[1].length < 90 && !/[.!?]$/.test(head[1])) drop = 2;
+      kept = kept.slice(drop);
+      notices.push('Dropped the author name' + (drop === 2 ? ' and headline' : '') + ' above the post.');
+    }
+    text = kept.join('\n');
+
+    // 6. trim runaway blank lines at the edges only. Interior spacing is
+    //    score-relevant (see the broetry rule) and must survive untouched.
+    text = text.replace(/^\s+|\s+$/g, '');
+
+    return { text: text, notices: notices, flags: flags, changed: text !== String(raw || '').trim() };
+  }
+
+  /* ------------------------------------------------------------------ *
+   * the bail-out
+   *
+   * Some posts are about a life, not about LinkedIn. The tool cannot tell
+   * the difference reliably enough to risk it, so it declines rather than
+   * guesses. This runs BEFORE any network call: it costs nothing and it
+   * works with the API switched off.
+   * ------------------------------------------------------------------ */
+
+  // Tier 1: a whole-word match anywhere declines the post. These words have
+  // no ordinary business meaning, so context cannot rescue them.
+  var SENSITIVE_T1 = [
+    // self-harm and crisis
+    'suicide', 'suicidal', 'self-harm', 'self harm', 'overdose', 'overdosed',
+    'took (?:his|her|their|my) own life', 'ended (?:his|her|their) (?:own )?life',
+    'mental health crisis', 'psychiatric hold',
+    // bereavement
+    'passed away', 'passed peacefully', 'rest in peace', 'in loving memory',
+    'in memory of', 'celebration of life', 'obituary', 'condolences',
+    // sexual violence and abuse
+    'sexual assault', 'sexually assaulted', 'raped', 'molested',
+    'domestic violence', 'abusive relationship', 'was abused',
+    // pregnancy and fertility loss
+    'miscarriage', 'miscarried', 'stillbirth', 'stillborn', 'lost our baby',
+    'lost the baby', 'born sleeping',
+    // acute medical crisis
+    'in the icu', 'life support', 'palliative', 'terminal illness',
+    'hospitalized', 'hospitalised',
+    // hate-motivated and identity-based violence (racial, religious, or
+    // otherwise): a post recounting or organizing against real atrocities
+    // like this is not roast material any more than a post about a death
+    // in the family is, even when it never uses bereavement language
+    'lynching', 'lynched', 'lynchings', 'hate crime', 'hate crimes',
+    'racially motivated', 'racial violence', 'racist violence',
+    'police brutality', 'killed by police', 'died in police custody',
+    'mass shooting', 'genocide', 'ethnic cleansing'
+  ];
+
+  // Idioms that contain a tier 1 word and mean nothing of the kind. Removed
+  // from the text before the tier 1 scan, and nothing else.
+  var SENSITIVE_T1_IDIOM = /\b(?:career|political|brand|commercial|social|professional|reputational) suicide\b|\boverdose (?:of|on) (?:buzzwords|jargon|acronyms|emoji|hashtags|caffeine|coffee|content|meetings|slides|optimism|nostalgia|information|data)\b/g;
+
+  // Tier 2: words that are grave in a personal frame and ordinary in a
+  // business one. They decline only with a first-person or family word in
+  // the same sentence, and only when that sentence is not one of the known
+  // non-personal frames below.
+  var SENSITIVE_T2 = [
+    'died', 'death', 'cancer', 'chemo', 'chemotherapy', 'stroke', 'hospice',
+    'funeral', 'remission', 'ivf', 'assault', 'assaulted', 'harassment',
+    'abuse', 'abused', 'grief', 'grieving', 'lost my', 'we lost', 'heart attack',
+    'diagnosed', 'diagnosis', 'terminal', 'surgery', 'pet scan', 'infertility',
+    'stalked', 'in the hospital', 'out of the hospital', 'hospital stay',
+    'rushed to the hospital', 'admitted to the hospital'
+  ];
+
+  var PERSONAL_CONTEXT_RE = /\b(?:i|i'm|i've|i'd|me|my|our|mom|mum|mother|dad|father|wife|husband|partner|son|daughter|brother|sister|grandmother|grandfather|grandma|grandpa|friend|colleague|she|he|her|his|i was|i am|i've been)\b/;
+
+  // Per-term frames in which the tier 2 word is plainly not about a person.
+  // Each is deliberately narrow: a frame has to name the business or idiom
+  // reading, not merely fail to name the personal one.
+  var SENSITIVE_T2_FRAME = {
+    'cancer': /\bcancer[- ](?:screening|research|detection|diagnostic|diagnostics|cent(?:er|re)|institute|society|foundation|startup|study|data|dataset|model|drug|charity|awareness|biology|cell|cells|treatment (?:company|startup|market))\b|\b(?:anti-?cancer|oncology)\b/,
+    'died': /\b(?:project|battery|laptop|phone|server|deal|startup|company|idea|thread|feature|product|app|website|site|market|trend|meeting|joke|plan|initiative|momentum|engine|car|business|brand|proposal|hype|internet|wifi|connection|signal|link|page|post|account|channel|conversation|dream|pitch|bill|campaign|format|genre|platform|dashboard|pipeline|query|process|model)\s+(?:has\s+|had\s+|just\s+|finally\s+|basically\s+|officially\s+|quietly\s+)?died\b|\bdied\s+(?:down|out|off|on the vine|in committee|laughing|a (?:slow|quiet|quick) death|with the)\b/,
+    'death': /\bdeath (?:by|spiral|march|knell|row|valley|star|grip|metal|of a thousand)\b|\bto death\b|\bthe death of (?:the|a|an)\b/,
+    'stroke': /\bstrokes? of (?:luck|genius|a pen|the pen|midnight|brilliance|inspiration|fortune)\b|\b(?:one|two|three|four|five|a|\d+) strokes? (?:off|under|over|ahead|behind|back|better|worse)\b|\bbroad strokes\b|\bstroke (?:play|rate|count)\b/,
+    'remission': /\bremission of (?:fees?|debts?|tax|taxes|sins|penalt(?:y|ies)|charges|tuition)\b|\bfee remission\b/,
+    'ivf': /\bivf (?:committee|clinic chain|industry|market|startup|company|sector|policy|coverage|benefits?|funding|legislation|bill|provider|providers)\b/,
+    'funeral': /\bfuneral (?:homes?|industry|directors?|business|insurance|chain|startup|market|costs?|planning)\b/,
+    'harassment': /\banti-?harassment\b|\bharassment (?:polic(?:y|ies)|training|prevention|laws?|compliance|module|course|reporting|hotline)\b/,
+    'grief': /\bgood grief\b/,
+    'heart attack': /\b(?:stock|stocks|market|markets|server|servers|dashboard|spreadsheet|deploy|pipeline|budget|database|cluster|chart|graph|index|price|prices|ticker|economy|team|inbox|slack|internet|cfo|finance team)\s+(?:had|having|nearly had|almost had|gave me|is having|just had)\s+a heart attack\b|\b(?:almost|nearly|practically|about) (?:had|gave \w+|gives me|give me) a heart attack\b/,
+    'assault': /\bassault on (?:the|our|your|my) (?:senses|eyes|ears|inbox|attention|budget|calendar)\b|\bassault (?:rifle|course|weapon)\b/,
+    'assaulted': /\bassaulted by (?:spreadsheets?|emails?|notifications?|ads?|meetings?|slack|pop-?ups?|dashboards?|acronyms|jargon|buzzwords|pings|pdfs?|data|numbers|charts?|noise|content|the algorithm|linkedin|banners?|marketing|tabs|invites|calendar)\b/,
+    'abuse': /\babuse of (?:power|process|the system|the platform|the api|privilege)\b|\b(?:api|platform|system|rate.?limit|substance|drug|alcohol|token|credit|resource|account|refund|promo|coupon) abuse\b|\babuse (?:detection|team|reports?|reporting|prevention|policy|filter)\b/,
+    'abused': /\babused (?:the|a|an|this|our|its|their|it|them) (?:system|platform|api|process|privilege|loophole|feature|metric|word|term)\b/,
+    'diagnosed': /\bdiagnos(?:ed|e|ing) (?:the|a|an|this|that|our|its|it|them|what|why|which|where)\b/,
+    'terminal': /\bterminal (?:window|command|session|emulator|velocity|value|output|app|tab|access|screen|node|prompt|ui|interface|commands?)\b|\b(?:airport|bus|train|ferry|payment|pos|card|bloomberg|shipping|container|cargo|the|a|my|your) terminal\b|\bterminals\b/,
+    'surgery': /\b(?:open-?heart|brain|plastic) surgery on (?:the|our|a|this) (?:codebase|schema|budget|org|process|deck|pipeline|database|roadmap)\b/,
+    // "lost my job" and "we lost the deal" are not bereavement. These two
+    // only count when the thing lost is a person (or a pet).
+    'lost my': /\blost my (?!(?:mom|mum|mother|dad|father|wife|husband|partner|son|daughter|brother|sister|grandmother|grandfather|grandma|grandpa|best friend|friend|baby|child|children|little one|uncle|aunt|cousin|nephew|niece|fiance|fiancee|boyfriend|girlfriend|dog|cat)\b)/,
+    'we lost': /\bwe lost (?!(?:my|our) (?:mom|mum|mother|dad|father|wife|husband|partner|son|daughter|brother|sister|grandmother|grandfather|grandma|grandpa|friend|baby|child|children|little one|uncle|aunt|cousin|nephew|niece|dog|cat)\b)/
+  };
+
+  function boundaryRe(term) {
+    var pre = /^\w/.test(term) ? '\\b' : '';
+    var post = /\w$/.test(term) ? '\\b' : '';
+    return new RegExp(pre + term + post);
+  }
+
+  function sensitiveCheck(ctx) {
+    var lower = ctx.lower.replace(SENSITIVE_T1_IDIOM, ' ');
+    for (var i = 0; i < SENSITIVE_T1.length; i++) {
+      if (boundaryRe(SENSITIVE_T1[i]).test(lower)) return SENSITIVE_T1[i];
+    }
+    for (var s = 0; s < ctx.sentences.length; s++) {
+      var sent = ctx.sentences[s].toLowerCase();
+      if (!PERSONAL_CONTEXT_RE.test(sent)) continue;
+      for (var j = 0; j < SENSITIVE_T2.length; j++) {
+        var term = SENSITIVE_T2[j];
+        if (!boundaryRe(term).test(sent)) continue;
+        var frame = SENSITIVE_T2_FRAME[term];
+        // The frame test looks at the sentence with the framed usage taken
+        // out: if the term is still present afterwards it is being used a
+        // second time, in a way the frame does not explain.
+        if (frame && frame.test(sent)) {
+          var rest = sent.replace(new RegExp(frame.source, 'g'), ' ');
+          if (!boundaryRe(term).test(rest)) continue;
+        }
+        return term;
+      }
+    }
+    return null;
+  }
+
+  var BAIL_MESSAGE =
+    'This looks like it\'s about something that actually happened to somebody. ' +
+    'The tool roasts the conventions of the platform, not the contents of a life, ' +
+    'and it can\'t tell the two apart reliably enough to take the chance. ' +
+    'Nothing was scored. Nothing was sent anywhere.';
+
+  /* ------------------------------------------------------------------ *
+   * main
+   * ------------------------------------------------------------------ */
+
+  function analyze(text, flags) {
+    // Identical to what cleanPaste() applied, so the text being scored is
+    // the text the client shows, and CRLF/LF, doubled spaces, soft hyphens
+    // and curly quotes cannot change the score or the seed. See normalizeText.
+    var ctx = buildContext(normalizeText(text));
+    var seed = ctx.seed;
+    flags = flags || {};
+
+    var flagged = sensitiveCheck(ctx);
+    if (flagged) {
+      return {
+        empty: false,
+        sensitive: true,
+        message: BAIL_MESSAGE,
+        stats: { words: ctx.wc, rulesFired: 0, rulesTotal: RULES.length }
+      };
+    }
+
+    var pen = { auth: 0, clar: 0, cring: 0, bait: 0, brag: 0 };
+    var findings = [];
+
+    // Tracks which dimensions had a genuine, non-trivial finding, independent
+    // of how much sincereCheck/satire/pitch/media softening discounted the
+    // number afterward. A discount can honestly make a dimension's score say
+    // "less bad than it looks"; it must never let the category text drift
+    // into the "nothing found here" band while a roast two lines above is
+    // quoting the very thing that fired. See the floor/ceiling applied to
+    // `scores` below, right before overall is computed from them, so the
+    // audit-able contribution math never disagrees with what's on screen.
+    var dimFired = { auth: false, clar: false, cring: false, bait: false, brag: false };
+
+    var isSincere = sincereCheck(ctx);
+    // Sincerity licenses warmth. It does not license cliché, engagement
+    // machinery, or fake bold. Those still fire at full strength.
+    var SINCERE_SUPPRESS = { gratitude: 1, 'thanks-count': 1, believed: 1 };
+    var SINCERE_SOFTEN = { allcaps: 0.35, 'orphan-line': 0.5, casually: 0.5, 'perf-vuln': 0.5 };
+
+    // `flags.satire` is never set by anything inside this file. It is an
+    // externally-supplied, pre-computed boolean (from an LLM tone classifier
+    // in the worker, when one is available and confident) that this function
+    // trusts exactly the way it trusts `flags.styled`. Its ONLY effect is to
+    // exclude a fixed, small set of literal cliché-phrase rules from firing.
+    // It can never add a rule, never touch a score directly, and defaults to
+    // false, so calling analyze(text) with no second argument (every existing
+    // caller, every offline/degraded path) is byte-for-byte unchanged. This
+    // is the same containment sincereCheck() already uses for negation: a
+    // cliché phrase performed self-aware-ironically is not evidence of the
+    // thing it normally is evidence of, the same way a negated one is not.
+    // Rules can catch the grammatical case, they cannot catch the tonal one,
+    // so tone detection is delegated rather than approximated with more regex.
+    var isSatire = !!flags.satire;
+    var TONE_SUPPRESS = { announce: 1, cantwait: 1, newchapter: 1, bignews: 1, humbled: 1, honored: 1, 'sink-in': 1 };
+    var toneEligible = false;
+
+    // A self-declared, priced offer: the CTA is the point, not a trick
+    // riding on top of unrelated content. See pitchCheck() above for the
+    // two-bar test. Softened, never suppressed - the finding still shows,
+    // it just stops being weighted as if it were sneaking something past
+    // the reader.
+    var isPitch = pitchCheck(ctx);
+    // Cut, not zeroed: a lone softened ask should still land in "one soft
+    // ask, not egregious" territory, not fall all the way into the "no ask
+    // detected" band and have the report claim there was no CTA at all when
+    // the roast two lines above is quoting it.
+    var PITCH_SOFTEN = { 'ask-comment': 0.65, 'ask-follow': 0.65, 'plug-signoff': 0.7 };
+
+    // `flags.hasMedia` is set by the client when the author says the post
+    // has an attached image, carousel, or video. This tool only ever sees
+    // the caption. A caption that leans entirely on a graphic for its
+    // specifics and its subject is not vague or empty by the standards
+    // that apply to a post that IS the whole message - it is doing its
+    // job, which is getting someone to look at the attachment. Suppressed
+    // outright for the two rules that assume "no text = no content"
+    // (too-short-empty, fragment); softened rather than suppressed for
+    // no-specifics, since a caption can still be lazy independent of
+    // whatever the image shows.
+    var hasMedia = !!flags.hasMedia;
+    var MEDIA_SUPPRESS = { 'too-short-empty': 1, fragment: 1 };
+    var MEDIA_SOFTEN = { 'no-specifics': 0.3 };
+
+    for (var i = 0; i < RULES.length; i++) {
+      var r = RULES[i];
+      var hit;
+      try { hit = r.test(ctx); } catch (e) { hit = null; }
+      if (!hit) continue;
+      if (TONE_SUPPRESS[r.id]) toneEligible = true;
+      if (isSincere && SINCERE_SUPPRESS[r.id]) continue;
+      if (isSatire && TONE_SUPPRESS[r.id]) continue;
+      if (hasMedia && MEDIA_SUPPRESS[r.id]) continue;
+      if (isSincere && SINCERE_SOFTEN[r.id]) {
+        var f = SINCERE_SOFTEN[r.id];
+        for (var sk in hit.pen) hit.pen[sk] *= f;
+      }
+      if (isPitch && PITCH_SOFTEN[r.id]) {
+        var pf = PITCH_SOFTEN[r.id];
+        for (var pk in hit.pen) hit.pen[pk] *= pf;
+      }
+      if (hasMedia && MEDIA_SOFTEN[r.id]) {
+        var mf = MEDIA_SOFTEN[r.id];
+        for (var mk in hit.pen) hit.pen[mk] *= mf;
+      }
+      // quoted phrases are shown as written, capitalised
+      if (hit.vars && hit.vars.p) hit.vars.p = String(hit.vars.p).charAt(0).toUpperCase() + String(hit.vars.p).slice(1);
+      for (var k in hit.pen) {
+        pen[k] = (pen[k] || 0) + hit.pen[k];
+        // A trivial residue (a heavily softened rule contributing a few
+        // hundredths of a point) does not count as "found" for the
+        // never-claim-zero guard below - only a contribution large enough
+        // that a reader would actually notice its absence does. A rule's
+        // own dimension counts at any visible size, because its roast is
+        // about that dimension; a side-penalty on another dimension has to
+        // be substantial before it can push that dimension's verdict off
+        // "nothing here" (one hashtag's 0.2 of bait is not an ask).
+        // Half a point either way: a ramped rule firing at a tenth of its
+        // strength (broetry at 31 words, no-specifics at 46) has barely found
+        // anything, and forcing the category up a whole band over it made a
+        // one-word difference swing the score by 0.7.
+        if (hit.pen[k] > 0.5) dimFired[k] = true;
+      }
+      var weight = 0;
+      for (var k2 in hit.pen) weight += hit.pen[k2];
+
+      // Spans of the post this rule actually matched, in the author's own
+      // casing, for inline highlighting. `s`/`q`/`e`/`v`/`a`/`b` are already
+      // exact substrings of ctx.raw (sliced or regex-captured from it
+      // directly); `p` is a rule's lower-cased canonical phrase and needs
+      // locate() to recover what the author actually typed. Never invented,
+      // never approximated. A span is included only when it is a literal
+      // match, so highlighting can never assert a phrase the post lacks.
+      var matches = [];
+      if (hit.vars) {
+        var mv = hit.vars;
+        if (mv.v) matches.push(String(mv.v));
+        if (mv.s) matches.push(String(mv.s));
+        if (mv.q) matches.push(String(mv.q));
+        if (mv.e) matches.push(String(mv.e));
+        if (mv.a) matches.push(String(mv.a));
+        if (mv.b) matches.push(String(mv.b));
+        if (mv.p) { var loc = locate(ctx, mv.p); if (loc) matches.push(loc); }
+      }
+      // de-dupe, drop anything under 2 chars (too noisy/common to highlight)
+      var seenM = {}, dedupedM = [];
+      for (var mi = 0; mi < matches.length; mi++) {
+        var mval = matches[mi];
+        if (mval.length < 2 || seenM[mval.toLowerCase()]) continue;
+        seenM[mval.toLowerCase()] = true;
+        dedupedM.push(mval);
+      }
+
+      findings.push({
+        id: r.id,
+        label: r.label,
+        dim: r.dim,
+        weight: weight,
+        n: hit.n,
+        text: fill(pick(eligible(r.roasts, hit.n, ctx, hit.vars), seed, r.id), hit.vars),
+        matches: dedupedM
+      });
+    }
+
+    // A post the tool could not read (not English), or that has words and
+    // no content (salad, the same sentence over and over), does not get
+    // complimented for its clarity or its restraint on the way out.
+    var hollow = findings.some(function (f) { return f.id === 'gibberish' || f.id === 'repetition' || f.id === 'not-english'; });
+    var unscored = findings.some(function (f) { return f.id === 'not-english'; });
+
+    // a told story, not a broadcast: past-tense spine + length + concrete detail
+    var isNarrative = ctx.pastVerbs >= 6 && ctx.wc >= 80 && ctx.specifics >= 4;
+
+    // Sins that are only visible in what was pasted, not in the cleaned text.
+    if (flags.styled > 0) {
+      var uPen = clamp(2.0 + flags.styled / 30, 0, 3.8);
+      pen.cring += uPen;
+      pen.auth += 1.2;
+      pen.clar += 0.6;
+      dimFired.cring = dimFired.auth = dimFired.clar = true;
+      findings.push({
+        id: 'unicode-bold', label: 'Fake bold', dim: 'cring', weight: uPen + 1.8, n: flags.styled,
+        text: fill(pick([
+          '{n} maths symbols pretending to be bold. A screen reader reads them one code point at a time.',
+          'The bold is not bold. It is {n} maths symbols wearing a costume, and it is unsearchable, uncopyable, and unreadable to assistive technology.',
+          'You typed {n} characters from the Unicode maths block to fake formatting LinkedIn does not offer. The platform is telling you something and you are arguing with it.'
+        ], seed, 'unicode'), { n: flags.styled })
+      });
+    }
+
+    var credits = [];
+    for (var p = 0; p < POSITIVES.length; p++) {
+      var c;
+      if (hollow) break;
+      // a post with this many violations does not get to collect compliments
+      if (findings.length >= 8 && POSITIVES[p].id !== 'pos-selfdep') continue;
+      try { c = POSITIVES[p].test(ctx); } catch (e2) { c = null; }
+      if (!c) continue;
+      for (var ck in c.credit) pen[ck] = (pen[ck] || 0) + c.credit[ck];
+      credits.push(c.note);
+    }
+
+    // base suckiness floor: nothing scores a perfect 0
+    var scores = {
+      authenticity: clamp(10 - (pen.auth + 1.2), 0.4, 9.6),
+      clarity: clamp(10 - (pen.clar + 1.5), 0.4, 9.6),
+      cringe: clamp(pen.cring + 0.9, 0.3, 9.9),
+      bait: clamp(pen.bait + 1.0, 0.2, 9.9),
+      brag: clamp(pen.brag + 0.9, 0.2, 9.9)
+    };
+
+    // A discount (sincereCheck, satire, the pitch/media context above, or
+    // just several small softenings stacking) can legitimately take a
+    // dimension's score most of the way to "nothing here" - it must never
+    // take it all the way there when a real finding still exists in that
+    // dimension. VERDICTS' own top/bottom bands are the ones that make a
+    // flat "nothing found" claim ("no ask, no hook", "fully human"), so this
+    // pushes the score one band clear of whichever edge would say that,
+    // applied here, before overall is computed from these same numbers, so
+    // the audit-able contribution math on screen never disagrees with the
+    // category text sitting next to it.
+    if (dimFired.auth) scores.authenticity = Math.min(scores.authenticity, 8.3);
+    if (dimFired.clar) scores.clarity = Math.min(scores.clarity, 8.3);
+    if (dimFired.cring) scores.cringe = Math.max(scores.cringe, 2.6);
+    if (dimFired.bait) scores.bait = Math.max(scores.bait, 2.6);
+    if (dimFired.brag) scores.brag = Math.max(scores.brag, 2.6);
+
+    // overall suckiness: invert the higher-is-better dimensions
+    var suckParts = [
+      (10 - scores.authenticity) * 0.26,
+      (10 - scores.clarity) * 0.20,
+      scores.cringe * 0.20,
+      scores.bait * 0.17,
+      scores.brag * 0.17
+    ];
+    var overall = suckParts.reduce(function (a, b) { return a + b; }, 0);
+    overall += Math.min(findings.length * 0.18, 2.2);
+
+    // Saturation. The weighted average lets a post that is 100% one sin
+    // (twelve hashtags and nothing else, a wall of engagement bait with
+    // clean prose around it) land in the low 3s because four of five
+    // dimensions are clean. A maxed-out dimension is not a rounding error,
+    // so when any dimension's suck score reaches 8.5 the overall is raised
+    // to at least 4.0, climbing 0.8 per further point of saturation:
+    //   overall = max(overall, 4.0 + (maxSuck - 8.5) * 0.8)
+    // which puts a fully saturated 9.9 at 5.1, squarely "sucks a normal
+    // amount" rather than "barely sucks".
+    var suckByDim = {
+      auth: 10 - scores.authenticity, clar: 10 - scores.clarity,
+      cring: scores.cringe, bait: scores.bait, brag: scores.brag
+    };
+    var worstDim = 'auth', worstSuck = -1;
+    for (var wd in suckByDim) if (suckByDim[wd] > worstSuck) { worstSuck = suckByDim[wd]; worstDim = wd; }
+    if (worstSuck >= 8.5) overall = Math.max(overall, 4.0 + (worstSuck - 8.5) * 0.8);
+
+    // Empty means empty: no words AND nothing fired. An emoji-only post has
+    // no words and two emoji findings, and its score is what those imply.
+    if (ctx.wc === 0 && !findings.length) overall = 0;
+    // A previous version spread low scores with a hash of the post text so that
+    // clean posts would not all tie. That made 80% of good posts a PSEUDORANDOM
+    // NUMBER. Against a labelled corpus the rank correlation with engagement was
+    // 0.044, the correlation of a hash function. Never reintroduce it: a score
+    // must be a deterministic function of the writing, ties included.
+    overall = clamp(overall, 0.2, 9.9);
+    // Not English: the rules never read it, so the number is the floor and
+    // the result says so. The client shows the not-english finding instead
+    // of a verdict.
+    if (unscored) overall = 0.2;
+
+    findings.sort(function (a, b) { return b.weight - a.weight; });
+    var top = findings.slice(0, 6);
+
+    // Every fired rule's highlightable spans, independent of which 6 made
+    // the roast list, for the client to mark up the post inline. Rules with
+    // no literal locatable phrase (sentence-length averages, word counts)
+    // simply contribute no spans here, which is correct: there is nothing
+    // in the text to point at for those.
+    var spans = [];
+    for (var fi = 0; fi < findings.length; fi++) {
+      if (findings[fi].matches && findings[fi].matches.length) {
+        // "A span is included only when it is a literal match" is a promise
+        // to the page and to the model, which is told these are exact phrases.
+        // Checked here rather than assumed: anything the post does not
+        // literally contain is dropped before it leaves the engine.
+        var lit = [];
+        for (var mi = 0; mi < findings[fi].matches.length; mi++) {
+          var mm = findings[fi].matches[mi];
+          if (mm && ctx.lower.indexOf(String(mm).toLowerCase()) >= 0) lit.push(mm);
+        }
+        if (lit.length) spans.push({ id: findings[fi].id, label: findings[fi].label, dim: findings[fi].dim, matches: lit });
+      }
+    }
+
+    var CLEAN_ROASTS = [
+      'No findings. Zero of ' + RULES.length + ' checks fired, which either means you wrote something real or you have read the checks.',
+      'Nothing to flag. This is statistically the least interesting outcome this tool produces and the best one for you.',
+      'The checklist has nothing to say. I want you to understand how rarely that happens.',
+      'Zero violations across ' + RULES.length + ' checks. I re-ran it. Still zero.'
+    ];
+    if (!top.length) {
+      top = [{ id: 'clean', label: 'No findings', dim: 'auth', weight: 0, n: 0,
+               text: pick(CLEAN_ROASTS, seed, 'cleanroast') }];
+    }
+
+    // Advice volume tracks severity. A post below the median does not get a
+    // three-point remediation plan; that reads as nitpicking a good post.
+    var adviceCount = overall < 3.2 ? 0 : overall < 5.0 ? 1 : 3;
+    var advice = findings.slice(0, adviceCount)
+      .map(function (f) { return ADVICE[f.id]; })
+      .filter(Boolean);
+    var adviceNote = '';
+    if (unscored) {
+      advice = [ADVICE['not-english']];
+      adviceNote = 'not scored';
+    } else if (hollow && !advice.length) {
+      // A hollow post at a low number still has one real thing to fix, and
+      // "nothing here is worth acting on" would contradict the roast.
+      advice = findings.slice(0, 1).map(function (f) { return ADVICE[f.id]; }).filter(Boolean);
+      adviceNote = 'optional';
+    } else if (!advice.length) {
+      // Only claim a clean sweep when the sweep was actually clean.
+      advice = findings.length
+        ? [pick(ADVICE_MINOR, seed, 'minor')]
+        : [pick(ADVICE_CLEAN, seed, 'clean')];
+      adviceNote = findings.length ? 'not urgent' : 'no action required';
+    } else if (adviceCount === 1) {
+      adviceNote = 'optional';
+    }
+
+    // Weights match suckParts above exactly. This is not a second opinion,
+    // it is the same arithmetic exposed so the number can be audited rather
+    // than just trusted. weightPct is the fixed share of the overall score
+    // this dimension is allowed to move; contribution is what it actually
+    // moved this time, in points out of 10.
+    var WEIGHTS = { authenticity: 26, clarity: 20, cringe: 20, bait: 17, brag: 17 };
+    var cats = [
+      { key: 'authenticity', label: 'Inauthenticity', score: scores.authenticity, polarity: 'higher-better', suck: 10 - scores.authenticity },
+      { key: 'clarity', label: 'Vagueness', score: scores.clarity, polarity: 'higher-better', suck: 10 - scores.clarity },
+      { key: 'cringe', label: 'Cringe Factor', score: scores.cringe, polarity: 'higher-worse', suck: scores.cringe },
+      { key: 'bait', label: 'Engagement Bait-ness', score: scores.bait, polarity: 'higher-worse', suck: scores.bait },
+      { key: 'brag', label: 'Humble Brag Intensity', score: scores.brag, polarity: 'higher-worse', suck: scores.brag }
+    ];
+    for (var ci = 0; ci < cats.length; ci++) {
+      cats[ci].verdict = verdictFor(cats[ci].key, cats[ci].score, seed);
+      cats[ci].weightPct = WEIGHTS[cats[ci].key];
+      cats[ci].contribution = Math.round(suckParts[ci] * 10) / 10;
+      cats[ci].score = Math.round(cats[ci].score * 10) / 10;
+      cats[ci].suck = Math.round(cats[ci].suck * 10) / 10;
+    }
+
+    var overallRounded = Math.round(overall * 10) / 10;
+    // The remainder between the five weighted category contributions and the
+    // rounded overall: the "more rules fired" volume bonus (capped at 2.2),
+    // the saturation raise for a maxed-out dimension, plus whatever the
+    // 0.2..9.9 floor/ceiling clamp adjusted at the extremes.
+    // Kept separate from the categories on purpose. It is not a quality
+    // dimension, it is a tax for tripping a lot of different rules at once.
+    var contributionSum = cats.reduce(function (a, c) { return a + c.contribution; }, 0);
+    var volumeBonus = Math.round((overallRounded - contributionSum) * 10) / 10;
+
+    var headline = pick([
+      'This post sucks',
+      'Suckiness index',
+      'The verdict',
+      'Suckiness report'
+    ], seed, 'headline');
+
+    // One line per band. No benchmark is referenced anywhere in these,
+    // because there is no benchmark: the score is a function of the text.
+    // The band comes from the rounded score, the one the reader sees. Taken
+    // from the unrounded value, a 3.16 printed as 3.2 in the mid-band colour
+    // beside the words for the band below it.
+    var band = bandFor(overallRounded);
+    var oneLiner = pick(band.key === 'barely' ? [
+      'Barely sucks. I checked twice because I did not believe it.',
+      'Almost nothing here for the rules to hold onto. That is the whole compliment.',
+      'Close to clean. The checks went looking and came back mostly empty.'
+    ] : band.key === 'normal' ? [
+      'Sucks a normal amount. Forgettable, but not actively hostile.',
+      'Unremarkable in both directions. Nobody is screenshotting this.',
+      'Neither the problem nor the cure. Ordinary LinkedIn.'
+    ] : band.key === 'lot' ? [
+      'Sucks a lot. The conventions are running the post rather than the other way around.',
+      'More platform than person at this point.',
+      'The format is doing the talking and the writer is doing the typing.'
+    ] : [
+      'Sucks completely. Every mechanism of the genre is present and functioning.',
+      'Nothing here escaped the format.',
+      'This is what the ceiling looks like.'
+    ], seed, 'oneliner');
+    if (unscored) oneLiner = 'Not scored. The checks are written for English and this post is not in English.';
+
+    var brutal = unscored
+      ? 'No verdict. The checklist reads English phrasing and this is not English. The number is a placeholder.'
+      : brutalTake(overall, seed, findings[0], isNarrative, worstDim, worstSuck);
+
+    return {
+      empty: ctx.wc === 0 && !findings.length,
+      overall: overallRounded,
+      band: band,
+      unscored: unscored,
+      oneLiner: oneLiner,
+      headline: headline,
+      categories: cats,
+      volumeBonus: volumeBonus,
+      roasts: top,
+      spans: spans,
+      credits: credits,
+      brutal: brutal,
+      advice: advice,
+      adviceNote: adviceNote,
+      narrative: isNarrative,
+      satireApplied: isSatire,
+      toneEligible: toneEligible,
+      pitchDetected: isPitch,
+      mediaAttached: hasMedia,
+      // Emoji that are part of a name. Never counted; the Worker uses this to
+      // stop the model suggesting anyone remove part of their name.
+      nameEmoji: ctx.nameEmoji,
+      stats: {
+        words: ctx.wc,
+        sentences: ctx.sentences.length,
+        lines: ctx.nonEmptyLines.length,
+        emoji: ctx.emojiCount,
+        hashtags: ctx.hashtags.length,
+        mentions: ctx.mentions.length,
+        emdashes: ctx.emdashes,
+        avgSentence: Math.round(ctx.avgSentence * 10) / 10,
+        specifics: ctx.specifics,
+        rulesFired: findings.length,
+        rulesTotal: RULES.length,
+        readSeconds: Math.max(1, Math.round((ctx.wc / 230) * 60))
+      },
+      narrativeOnly: isNarrative
+    };
+  }
+
+  var api = {
+    analyze: analyze, buildContext: buildContext, RULES: RULES, esc: esc,
+    cleanPaste: cleanPaste, normalizeText: normalizeText, bandFor: bandFor,
+    sensitiveCheck: sensitiveCheck, VERSION: '2.1',
+    // exposed for the rule tests: the advice keys have to be checkable
+    // against the rule ids, and the counting mechanism has to be checkable
+    // against the lists the rules actually pass it
+    ADVICE: ADVICE, anyPhrase: anyPhrase, totalOf: totalOf,
+    collectPhraseLists: collectPhraseLists
+  };
+
+  if (typeof module !== 'undefined' && module.exports) module.exports = api;
+  root.YourPostSucks = api;
+})(typeof globalThis !== 'undefined' ? globalThis : this);

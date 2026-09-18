@@ -1,0 +1,25 @@
+# dependencies and local state
+node_modules/
+.wrangler/
+.dev.vars
+*.tmp.mjs
+shot-card.png
+
+# Machine-specific: points npm at Git Bash on the owner's Windows machine.
+# On Windows, see "Running the tests on Windows" in the README.
+.npmrc
+
+# Private: real LinkedIn posts by real people, with engagement numbers, and the
+# documents that discuss them by name. The tests and the harness run without
+# them and say what they skipped. See "Validation against a labelled corpus".
+corpus.json
+corpus-results.txt
+corpus-scores.json
+VALIDATION_REPORT.md
+
+# A separate tool with its own data about named people. Not part of this product.
+data/
+
+# Local audit reports and agent tooling
+.reconcilers/
+.claude/

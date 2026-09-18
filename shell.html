@@ -1,0 +1,3675 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>yourpost.sucks · post quality assurance</title>
+<meta name="description" content="Paste a LinkedIn post. Receive an unsympathetic report.">
+<meta name="author" content="Bill Yost">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>%F0%9F%92%80</text></svg>">
+<meta name="theme-color" content="#0d0d0d">
+<!-- The workers.dev URL still serves this same page (nothing stops it from
+     being crawled or shared directly), so this points search engines at the
+     one canonical version instead of letting them see two identical pages. -->
+<link rel="canonical" href="https://yourpost.sucks">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<!-- Used for exactly one thing: the giant score number. Everything else on
+     the page stays on system fonts on purpose (fast, neutral, "internal
+     report" register) — this is the one place that earns a real typeface,
+     because it's the one number the whole page exists to deliver. -->
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@800&display=swap" rel="stylesheet" media="print" onload="this.media='all'">
+<noscript><link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@800&display=swap" rel="stylesheet"></noscript>
+<script>
+  // No data-theme attribute on <html> by default: dark is the bare-root
+  // CSS default (this brand's identity), but leaving the attribute unset
+  // lets the prefers-color-scheme:light media query apply for anyone whose
+  // system is set to light and has never touched the toggle. This only
+  // needs to run when there IS a saved explicit choice, and it has to run
+  // before first paint (hence: synchronous, inline, this early in <head>)
+  // or the page would flash the wrong theme for a moment on every load.
+  try {
+    var t = localStorage.getItem('theme');
+    if (t === 'light' || t === 'dark') document.documentElement.setAttribute('data-theme', t);
+  } catch (e) {}
+</script>
+
+<!-- Open Graph / Twitter Card. Live on the real domain now. -->
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="yourpost.sucks">
+<meta property="og:title" content="yourpost.sucks · post quality assurance">
+<meta property="og:description" content="Paste a LinkedIn post. Receive an unsympathetic report.">
+<meta property="og:url" content="https://yourpost.sucks">
+<meta property="og:image" content="https://yourpost.sucks/og-card.png">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta property="og:image:alt" content="yourpost.sucks report: a sample post scored 9.8 suckiness, where 0 is immaculate and 10 is unsalvageable">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="yourpost.sucks · post quality assurance">
+<meta name="twitter:description" content="Paste a LinkedIn post. Receive an unsympathetic report.">
+<meta name="twitter:image" content="https://yourpost.sucks/og-card.png">
+<style>
+/* Dark is the default, not light: this brand shipped dark-only from day
+   one, and that's the first-visit experience worth keeping. Light mode is
+   opt-in, via system preference or the toggle, layered on top rather than
+   the usual light-first structure. Every token below is redefined, not
+   overridden piecemeal, so no rule ever mixes tokens from both palettes. */
+:root{
+  color-scheme: dark;
+  --plane:#0d0d0d;
+  --plane-bg: radial-gradient(ellipse 1400px 900px at 50% -8%, #181816 0%, #0d0d0d 60%);
+  --surface:#1a1a19;
+  --surface-2:#141413;
+  --ink:#ffffff;
+  --ink-2:#c3c2b7;
+  --ink-3:#898781;
+  --ink-4:#8a867e;
+  --hair:#2c2c2a;
+  --rule:#383835;
+  --rule-2:#4d4d49;
+  --neutral:#383835;
+  --cool:#3987e5;
+  --cool-text:#8fc0f0;
+  --warm:#e66767;
+  --caution:#e0a33a;
+  --badge-llm-border:#2f5f96;
+  --badge-llm-text:#7fb0e8;
+  --sans: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  --mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
+  --display: "JetBrains Mono", ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
+}
+@media (prefers-color-scheme: light){
+  :root:not([data-theme="dark"]){
+    color-scheme: light;
+    --plane:#eeece7;
+    --plane-bg: radial-gradient(ellipse 1200px 800px at 50% -10%, #f8f5ee 0%, #eeece7 55%);
+    --surface:#ffffff;
+    --surface-2:#f6f4ef;
+    --ink:#17160f;
+    --ink-2:#38362f;
+    --ink-3:#5f5c53;
+    --ink-4:#66625a;
+    --hair:#e4e2db;
+    --rule:#d8d5cb;
+    --rule-2:#b8b4a8;
+    --neutral:#d8d5cb;
+    --cool-text:#1f5fa8;
+    --caution:#a86a1a;
+    --badge-llm-border:#a8c8ec;
+    --badge-llm-text:#1f5fa8;
+  }
+}
+:root[data-theme="light"]{
+  color-scheme: light;
+  --plane:#eeece7;
+  --plane-bg: radial-gradient(ellipse 1200px 800px at 50% -10%, #f8f5ee 0%, #eeece7 55%);
+  --surface:#ffffff;
+  --surface-2:#f6f4ef;
+  --ink:#17160f;
+  --ink-2:#38362f;
+  --ink-3:#5f5c53;
+  --ink-4:#66625a;
+  --hair:#e4e2db;
+  --rule:#d8d5cb;
+  --rule-2:#b8b4a8;
+  --neutral:#d8d5cb;
+  --cool-text:#1f5fa8;
+  --caution:#a86a1a;
+  --badge-llm-border:#a8c8ec;
+  --badge-llm-text:#1f5fa8;
+}
+:root[data-theme="dark"]{
+  color-scheme: dark;
+  --plane:#0d0d0d;
+  --plane-bg: radial-gradient(ellipse 1400px 900px at 50% -8%, #181816 0%, #0d0d0d 60%);
+  --surface:#1a1a19;
+  --surface-2:#141413;
+  --ink:#ffffff;
+  --ink-2:#c3c2b7;
+  --ink-3:#898781;
+  --ink-4:#8a867e;
+  --hair:#2c2c2a;
+  --rule:#383835;
+  --rule-2:#4d4d49;
+  --neutral:#383835;
+  --cool-text:#8fc0f0;
+  --caution:#e0a33a;
+  --badge-llm-border:#2f5f96;
+  --badge-llm-text:#7fb0e8;
+}
+*{box-sizing:border-box}
+/* One ring for everything that takes focus. Buttons, summaries, links,
+   the checkbox and the card toggle all share it; nothing below removes
+   the outline anywhere. */
+:focus-visible{outline:2px solid var(--cool);outline-offset:2px}
+html,body{margin:0;padding:0}
+.sr-only{
+  position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;
+  clip:rect(0,0,0,0);white-space:nowrap;border:0;
+}
+body{
+  /* Flat color on the body (it propagates to the canvas, so nothing can
+     ever show through as white), the gradient wash on a fixed pseudo
+     layer behind the content. That replaces a fixed attachment on the
+     body background, which iOS Safari ignores: the glow anchors to the
+     viewport's top either way, without scrolling away or repeating. */
+  background:var(--plane);
+  color:var(--ink-2);
+  font-family:var(--sans);
+  font-size:16px;
+  line-height:1.55;
+  -webkit-font-smoothing:antialiased;
+}
+body::before{
+  content:"";position:fixed;inset:0;z-index:-1;pointer-events:none;
+  background:var(--plane-bg, var(--plane));
+}
+.wrap{max-width:760px;margin:0 auto;padding:40px 20px 96px}
+
+/* ---------- masthead ---------- */
+header{border-bottom:1px solid var(--rule);padding-bottom:20px;margin-bottom:28px}
+.masthead-row{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap}
+.brand{
+  font-family:var(--mono);
+  font-size:26px;
+  letter-spacing:-0.02em;
+  color:var(--ink);
+  font-weight:600;
+  margin:0;
+}
+.brand span{color:var(--ink-3);font-weight:400}
+/* The flag is a button, and the button is an easter egg: it turns the site's
+   own copy into pirate. It sits outside the h1 so the heading is still just
+   the name. No visible affordance beyond the pointer, on purpose. */
+.brand-wrap{display:flex;align-items:center;min-width:0}
+.brand-flag{
+  margin:0 10px 0 0;padding:0;border:0;background:transparent;cursor:pointer;
+  font-size:22px;line-height:1;min-width:44px;min-height:44px;margin-left:-8px;
+  display:inline-flex;align-items:center;justify-content:center;border-radius:4px;
+  transform-origin:20% 80%;
+}
+.brand-flag:focus-visible{outline:2px solid var(--cool);outline-offset:2px}
+@keyframes flagwave{0%{transform:rotate(0)}25%{transform:rotate(-14deg)}50%{transform:rotate(9deg)}75%{transform:rotate(-5deg)}100%{transform:rotate(0)}}
+@media (prefers-reduced-motion: no-preference){
+  .brand-flag.waving{animation:flagwave .7s ease-in-out}
+}
+.theme-toggle{
+  font-family:var(--mono);font-size:14px;letter-spacing:.06em;text-transform:uppercase;
+  background:transparent;color:var(--ink-3);border:1px solid var(--rule);
+  border-radius:4px;padding:7px 12px;cursor:pointer;min-height:44px;
+  transition:background .12s,border-color .12s,color .12s;
+  flex-shrink:0;
+}
+.theme-toggle:hover{color:var(--ink-2);border-color:var(--rule-2)}
+.tagline{
+  font-family:var(--mono);
+  font-size:14px;
+  letter-spacing:.09em;
+  text-transform:uppercase;
+  color:var(--ink-3);
+  margin:8px 0 0;
+}
+.intro{
+  font-size:15.5px;
+  color:var(--ink-2);
+  line-height:1.6;
+  margin:16px 0 0;
+  /* Two even lines instead of one long line and two stranded words. The
+     browser balances it at any width, so the copy never has to be padded. */
+  text-wrap:balance;
+}
+
+/* ---------- tabs ---------- */
+.tabs{display:flex;gap:22px;margin:20px 0 0;border-bottom:1px solid var(--hair)}
+.tab-btn{
+  background:transparent;border:none;border-bottom:2px solid transparent;
+  font-family:var(--mono);font-size:14px;letter-spacing:.07em;text-transform:uppercase;
+  color:var(--ink-3);padding:10px 1px;margin-bottom:-1px;cursor:pointer;
+  transition:color .12s,border-color .12s;
+  /* 39px at 375px with the padding alone, under the 44px touch minimum.
+     min-height plus centering raises the target without moving the
+     underline, which is still drawn on the button's own bottom edge. */
+  min-height:44px;display:inline-flex;align-items:center;
+}
+.tab-btn:hover{color:var(--ink-2)}
+.tab-btn[aria-selected="true"]{color:var(--ink);border-bottom-color:var(--ink)}
+.tab-btn:focus-visible{outline:2px solid var(--cool);outline-offset:2px}
+
+/* ---------- input ---------- */
+.panel{
+  background:var(--surface);
+  border:1px solid var(--hair);
+  border-radius:6px;
+  padding:18px;
+}
+label.lbl{
+  display:block;
+  font-family:var(--mono);
+  font-size:14px;
+  letter-spacing:.09em;
+  text-transform:uppercase;
+  color:var(--ink-3);
+  margin-bottom:9px;
+}
+textarea{
+  width:100%;
+  min-height:190px;
+  background:var(--surface-2);
+  border:1px solid var(--rule);
+  border-radius:4px;
+  color:var(--ink);
+  font-family:var(--sans);
+  font-size:15px;
+  line-height:1.6;
+  padding:13px;
+  resize:vertical;
+}
+textarea:focus-visible{border-color:var(--rule-2);outline:2px solid var(--cool);outline-offset:2px}
+textarea::placeholder{color:var(--ink-4)}
+/* The over-limit error: persistent, under the field it belongs to, and
+   linked to the textarea by aria-describedby, instead of a toast that
+   disappears before anyone finds out how much to trim. */
+.field-err{
+  margin:8px 0 0;font-family:var(--mono);font-size:14px;color:var(--caution);line-height:1.5;
+}
+.field-err[hidden]{display:none}
+.meta.over{color:var(--caution)}
+.media-row{display:flex;flex-direction:column;gap:8px;margin-top:10px}
+.media-toggle{
+  display:flex;align-items:flex-start;gap:8px;
+  font-size:15px;color:var(--ink-3);line-height:1.45;cursor:pointer;
+}
+.media-toggle input{margin-top:3px;flex:none;cursor:pointer;width:18px;height:18px}
+.media-note{margin:-2px 0 0 26px;font-size:14px;color:var(--ink-4);line-height:1.45}
+.media-upload{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+.media-upload-btn{
+  font-family:var(--mono);font-size:13px;letter-spacing:.06em;text-transform:uppercase;
+  color:var(--ink-3);background:transparent;border:1px solid var(--rule);border-radius:4px;
+  padding:6px 12px;min-height:44px;cursor:pointer;transition:border-color .12s,color .12s;
+  display:inline-flex;align-items:center;
+}
+.media-upload-btn:hover{border-color:var(--cool);color:var(--ink)}
+.media-preview{display:flex;align-items:center;gap:8px;font-size:14px;color:var(--ink-3)}
+/* The flex rule above used to beat the hidden attribute, so an empty
+   preview row (a broken image icon and a remove button) sat on the page
+   before anything was attached. */
+.media-preview[hidden]{display:none}
+.media-preview img{
+  width:36px;height:36px;object-fit:cover;border-radius:4px;border:1px solid var(--rule);
+}
+.media-preview img[hidden]{display:none}
+.media-preview span{max-width:220px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.media-remove{
+  border:none;background:transparent;color:var(--ink-4);font-size:18px;line-height:1;
+  cursor:pointer;padding:2px 4px;border-radius:3px;
+  min-width:44px;min-height:44px;display:inline-flex;align-items:center;justify-content:center;
+}
+.media-remove:hover{color:var(--ink);background:var(--surface-2)}
+.controls{display:flex;gap:12px;align-items:center;margin-top:14px;flex-wrap:wrap}
+button{
+  font-family:var(--mono);
+  font-size:14px;
+  letter-spacing:.07em;
+  text-transform:uppercase;
+  border-radius:4px;
+  cursor:pointer;
+  transition:background .12s,border-color .12s,color .12s;
+}
+.btn-primary{
+  background:var(--ink);color:var(--plane);border:1px solid var(--ink);
+  padding:11px 20px;font-weight:600;min-height:44px;
+}
+.btn-primary:hover{background:var(--ink-2);border-color:var(--ink-2)}
+.btn-primary:disabled{background:var(--rule);border-color:var(--rule);color:var(--ink-3);cursor:not-allowed}
+.btn-ghost{
+  background:transparent;color:var(--ink-3);border:1px solid var(--rule);
+  padding:8px 13px;min-height:44px;
+}
+.btn-ghost:hover{color:var(--ink-2);border-color:var(--rule-2)}
+.btn-ghost:disabled{opacity:.5;cursor:not-allowed}
+.meta{
+  font-family:var(--mono);font-size:14px;color:var(--ink-3);
+  margin-left:auto;font-variant-numeric:tabular-nums;
+}
+.specimens{margin-top:14px;display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+.specimens .cap{
+  font-family:var(--mono);font-size:14px;letter-spacing:.09em;
+  text-transform:uppercase;color:var(--ink-4);
+  flex:0 0 100%; /* its own line; the buttons sit in one row below it */
+}
+/* Four buttons do not fit one row on a phone, so they make an even two by
+   two instead of breaking three and one. */
+@media (max-width:640px){
+  .specimens{display:grid;grid-template-columns:1fr 1fr}
+  .specimens .cap{grid-column:1 / -1}
+}
+
+/* ---------- report ---------- */
+#report{margin-top:34px}
+#report[hidden]{display:none}
+section{margin-bottom:30px}
+/* The report used to just appear, all of it, at once — a dump of
+   information rather than a verdict landing. Base state (and the only
+   state anyone with reduced-motion sees) is fully visible, no transform:
+   the animation is additive enhancement, not something content depends on
+   to reach its final, readable position. */
+@media (prefers-reduced-motion: no-preference){
+  #report > section{
+    opacity:0;
+    transform:translateY(8px);
+    animation:report-reveal .5s cubic-bezier(.16,1,.3,1) forwards;
+    animation-delay:calc(var(--i, 0) * 65ms);
+  }
+  @keyframes report-reveal{
+    to{opacity:1;transform:translateY(0)}
+  }
+}
+/* A class, not h2, so the receipts can use h3 for the same look one
+   level down without a second copy of this rule. */
+.sec{
+  font-family:var(--mono);
+  font-size:14px;
+  letter-spacing:.11em;
+  text-transform:uppercase;
+  color:var(--ink-3);
+  margin:0 0 12px;
+  padding-bottom:8px;
+  border-bottom:1px solid var(--hair);
+  display:flex;justify-content:space-between;align-items:baseline;gap:10px;flex-wrap:wrap;
+  font-weight:400;
+}
+.sec b{font-weight:400;color:var(--ink-4);font-size:14px}
+/* Phone widths: the title and the subtitle were squeezing each other into
+   two wrapped columns side by side, so "Suckiness report" and its subtitle
+   read as one interleaved block. Below 480px the subtitle takes a row of
+   its own and the title gets the full width, one line each. */
+@media (max-width:479px){
+  .sec{gap:3px 10px}
+  .sec b{flex:1 0 100%}
+}
+
+/* hero */
+.hero{
+  background:var(--surface);border:1px solid var(--hair);
+  border-radius:6px;padding:22px 22px 20px;
+  /* A soft lift, not a heavy drop shadow: --surface sits a shade lighter
+     than --plane in dark mode already (a card raised off a darker floor),
+     so a dark shadow reads as depth in both themes rather than needing a
+     different treatment per theme. */
+  box-shadow:0 1px 2px rgba(0,0,0,.05), 0 16px 40px -20px rgba(0,0,0,.4);
+}
+/* The badge says who wrote the commentary. That is a byline, not part of the
+   verdict, so it sits on the kicker row at the top right of the card instead
+   of trailing the band word as if it qualified the score. */
+.hero .kicker-row{display:flex;justify-content:space-between;align-items:center;gap:6px 12px;flex-wrap:wrap;margin-bottom:6px}
+.hero .kicker{
+  font-family:var(--mono);font-size:14px;letter-spacing:.11em;
+  text-transform:uppercase;color:var(--ink-3);
+}
+.hero .kicker-row .mode{flex-shrink:0}
+.hero .figure{
+  display:flex;align-items:baseline;gap:12px;flex-wrap:wrap;
+}
+.hero .num{
+  font-family:var(--display);
+  font-variant-numeric:tabular-nums;
+  font-size:68px;line-height:1;font-weight:800;letter-spacing:-0.03em;
+  color:var(--ink);
+}
+/* The verbal grade. The number alone read as a mark out of ten, and a 1.4
+   looked like a fail; the band written out next to it is what the number
+   actually means. */
+.hero .band{
+  font-family:var(--mono);font-size:22px;font-weight:600;letter-spacing:-0.01em;
+  color:var(--ink);text-transform:lowercase;
+}
+.hero .pill{
+  font-family:var(--mono);font-size:14px;letter-spacing:.08em;text-transform:uppercase;
+  border:1px solid var(--rule);border-radius:3px;padding:4px 8px;color:var(--ink-3);
+  font-variant-numeric:tabular-nums;
+}
+.hero .reason{margin:14px 0 0;color:var(--ink-2);font-size:15px}
+
+/* the scale strip: 0 to 10, no invented benchmark on it */
+.bench{margin-top:18px}
+.bench-track{
+  position:relative;height:8px;background:var(--surface-2);
+  border:1px solid var(--rule);border-radius:4px;overflow:visible;
+}
+.bench-fill{
+  position:absolute;left:0;top:0;bottom:0;
+  border-radius:3px 4px 4px 3px;
+  border-top:8px solid currentColor;box-sizing:border-box;
+}
+.bench-scale{
+  display:flex;justify-content:space-between;
+  font-family:var(--mono);font-size:14px;color:var(--ink-4);margin-top:7px;
+  font-variant-numeric:tabular-nums;
+}
+
+/* meters */
+.meters-note{margin:0 0 10px;font-size:14px;color:var(--ink-4);font-family:var(--mono)}
+.meters{display:flex;flex-direction:column;gap:1px;background:var(--hair);border:1px solid var(--hair);border-radius:6px;overflow:hidden}
+.meter{background:var(--surface);padding:14px 16px}
+.meter-head{display:flex;align-items:baseline;gap:10px;margin-bottom:9px;flex-wrap:wrap}
+.meter-name{
+  font-family:var(--mono);font-size:15px;letter-spacing:.05em;
+  text-transform:uppercase;color:var(--ink);font-weight:500;
+}
+.meter-val{
+  font-size:17px;font-weight:600;color:var(--ink);
+  font-variant-numeric:tabular-nums;margin-left:auto;letter-spacing:-0.01em;
+}
+.meter-val .of{font-size:14px;color:var(--ink-3);font-weight:400}
+.track{
+  position:relative;height:6px;background:var(--surface-2);
+  border-radius:3px;overflow:visible;
+}
+/* Every fill also carries a top border in its own colour. Backgrounds are
+   dropped by print (unless the reader ticks a box) and by forced-colours
+   mode; borders survive both, so the bar keeps its length on paper and in
+   Windows High Contrast. */
+.fill{position:absolute;left:0;top:0;bottom:0;border-radius:3px;border-top:6px solid currentColor;box-sizing:border-box}
+.meter-verdict{margin:10px 0 0;font-size:14.5px;color:var(--ink-2);line-height:1.5}
+
+/* roasts */
+.findings-note{margin:0 0 10px;font-family:var(--mono);font-size:15px;color:var(--ink-4)}
+ul.roasts{list-style:none;margin:0;padding:0}
+ul.roasts li{
+  background:var(--surface);border:1px solid var(--hair);border-radius:5px;
+  padding:13px 15px;margin-bottom:8px;font-size:15px;color:var(--ink-2);
+  display:grid;grid-template-columns:140px 1fr;gap:12px;align-items:start;
+}
+/* Fixed width, not auto: labels here can come from the model, so length
+   isn't bounded by what a developer typed. auto+nowrap sized the column to
+   whatever text showed up, which put untested widths on the layout's critical
+   path; a fixed column with wrapping degrades to two lines instead. */
+ul.roasts li .tag{
+  font-family:var(--mono);font-size:13.5px;letter-spacing:.06em;text-transform:uppercase;
+  color:var(--ink-4);border:1px solid var(--rule);border-radius:2px;padding:3px 6px;
+  margin-top:2px;line-height:1.4;display:inline-block;
+}
+/* On a phone the 140px label column took two fifths of the width and every
+   roast ran five to seven lines. Below 480px the label sits on its own line
+   above the text, which is the same content in about half the height. */
+@media (max-width:479px){
+  ul.roasts li{grid-template-columns:1fr;gap:7px}
+  ul.roasts li .tag{justify-self:start;margin-top:0}
+}
+/* The loudest four are shown; the rest are one tap away. The list is sorted
+   by weight, so what folds is the weakest material, and nothing is removed:
+   the copied report and the print view carry every roast. */
+.roasts-more{margin-top:2px}
+.roasts-more > summary{
+  list-style:none;cursor:pointer;min-height:44px;display:flex;align-items:center;gap:8px;
+  font-family:var(--mono);font-size:14px;letter-spacing:.06em;text-transform:uppercase;color:var(--ink-3);
+}
+.roasts-more > summary::-webkit-details-marker{display:none}
+.roasts-more > summary:hover{color:var(--ink)}
+.roasts-more > summary:focus-visible{outline:2px solid var(--cool);outline-offset:2px;border-radius:2px}
+.roasts-more > summary .rm-glyph::before{content:"+"}
+.roasts-more[open] > summary .rm-glyph::before{content:"\2212"}
+.roasts-more > ul.roasts{margin-top:6px}
+ul.credits{list-style:none;margin:0;padding:0}
+ul.credits li{
+  font-size:14px;color:var(--ink-3);padding:7px 0 7px 16px;position:relative;
+  border-bottom:1px solid var(--hair);
+}
+ul.credits li:last-child{border-bottom:0}
+ul.credits li::before{content:"+";position:absolute;left:0;color:var(--cool-text);font-family:var(--mono)}
+
+/* what's driving the score */
+.breakdown{display:flex;flex-direction:column;gap:8px}
+.bd-row{display:grid;grid-template-columns:120px 1fr 46px;gap:10px;align-items:center}
+/* Narrow screens: the label sits above the bar instead of squeezing a
+   120px column against a bar that ends up 30px wide. */
+@media (max-width:479px){
+  .bd-row{grid-template-columns:1fr 46px;gap:4px 10px}
+  .bd-label{grid-column:1 / -1}
+}
+.bd-label{font-family:var(--mono);font-size:14px;letter-spacing:.04em;color:var(--ink-2)}
+.bd-track{position:relative;height:8px;background:var(--surface-2);border:1px solid var(--rule);border-radius:4px;overflow:hidden}
+.bd-fill{position:absolute;left:0;top:0;bottom:0;border-radius:3px;border-top:8px solid currentColor;box-sizing:border-box}
+/* A row that subtracts is drawn from the right edge instead of the left, so
+   length and direction both carry the sign. Drawn left-anchored like every
+   other row, a -0.1 was indistinguishable from a +0.1 except in the value
+   column, and it sorted last while drawing longer than the rows above it. */
+.bd-row.bd-neg .bd-fill{left:auto;right:0;opacity:.6}
+.bd-val{font-family:var(--mono);font-size:14.5px;color:var(--ink-3);text-align:right;font-variant-numeric:tabular-nums}
+.bd-note{margin:10px 0 0;font-size:14px;color:var(--ink-4);font-family:var(--mono)}
+
+/* a model-written aside on an otherwise rules-only section. The numbers
+   above it are unchanged either way; this is commentary, not data. Only
+   ever appears in llm/cache mode, and only when the model actually wrote
+   one. No rules-only equivalent, so it's absent rather than faked offline. */
+.ai-aside{
+  margin:10px 0 0;padding:8px 0 8px 12px;border-left:2px solid var(--cool);
+  font-size:14px;color:var(--ink-2);line-height:1.6;
+}
+.ai-aside b{
+  display:block;font-family:var(--mono);font-size:13px;letter-spacing:.08em;
+  text-transform:uppercase;color:var(--cool-text);margin-bottom:3px;font-weight:600;
+}
+
+/* the annotated post: dim colours shared with the highlight legend.
+   Five categories cannot be made pairwise color-distinct under simulated
+   colour-vision deficiency at this palette's dark-mode steps (validated:
+   no ordering of 5 of these 8 hues clears the all-pairs floor; the closest
+   remaining pair, clarity↔bait, sits at ΔE 11.9 against a 15 floor). Colour
+   is therefore backed by underline STYLE as a second, colour-independent
+   channel (solid/dashed/dotted/double/wavy), so no two categories rely on
+   hue alone to be told apart. */
+:root{
+  --dim-auth:#3987e5; --dim-clar:#199e70; --dim-cring:#e66767;
+  --dim-bait:#008300; --dim-brag:#c98500;
+}
+.legend{display:flex;gap:16px;flex-wrap:wrap;margin-bottom:12px}
+.legend span{font-family:var(--mono);font-size:14.5px;color:var(--ink-3);display:inline-flex;align-items:center;gap:6px}
+.legend i{display:inline-block;width:20px;height:6px;border-bottom-width:2px}
+.legend .lg-auth i{border-bottom:2px solid var(--dim-auth)}
+.legend .lg-clar i{border-bottom:2px dashed var(--dim-clar)}
+.legend .lg-cring i{border-bottom:2px dotted var(--dim-cring)}
+.legend .lg-bait i{border-bottom:3px double var(--dim-bait)}
+/* border-style has no wavy, so this key used to be a hatch: a style the
+   brag mark never draws, and a background image, which browsers drop when
+   printing. Drawn with the same text-decoration property the mark itself
+   uses (on a non-breaking space held by the ::before), so the key and the
+   mark match on screen and on paper. */
+.legend .lg-brag i{
+  border-bottom:none;width:auto;height:auto;line-height:1;font-size:11px;
+  text-decoration:underline wavy var(--dim-brag);
+  text-decoration-thickness:2px;text-underline-offset:2px;
+}
+/* Three spaces of mono at 11px lands on the same 20px the bordered keys
+   use, so the five swatches still line up. */
+.legend .lg-brag i::before{content:"\00a0\00a0\00a0"}
+.legend-note{margin:-4px 0 12px;font-size:14px;color:var(--ink-4);font-family:var(--mono)}
+/* The check's name rides on the mark itself, in small type, so what a
+   span means is on the page and not only in a hover title. inline-block
+   keeps the mark's underline from running through it.
+   The tag's colour is --ink-2, not --ink-3. At 10px this text needs 4.5:1
+   and --ink-3 cleared none of the five mark fills in dark mode, the default
+   theme: 4.09 auth, 3.95 clar, 4.04 cring, 4.21 bait, 3.86 brag, composited
+   over #0d0d0d body, #1a1a19 .annotated surface and then the mark's own
+   rgba fill. --ink-2 over the same five stacks is 8.20 / 7.91 / 8.10 / 8.45
+   / 7.74 in dark and 10.32 / 10.11 / 10.39 / 9.64 / 10.27 in light. The
+   per-category --dim-* colours were the other candidate and they fail: bait
+   lands at 3.06 in dark and all five sit near 3 in light.
+   The tag also carries a leading non-breaking space in its own text (see
+   annotateHTML), so the boundary between the quoted phrase and the tag
+   survives for a screen reader instead of living only in this margin. The
+   margin drops to 0 because that space now draws the gap itself. */
+.annotated mark .mk{
+  display:inline-block;vertical-align:super;font-family:var(--mono);font-size:10px;
+  line-height:1;letter-spacing:.04em;text-transform:uppercase;color:var(--ink-2);
+  margin-left:0;white-space:nowrap;
+}
+.annotated{
+  background:var(--surface);border:1px solid var(--hair);border-radius:6px;
+  padding:16px 18px;font-size:15px;line-height:1.7;color:var(--ink-2);
+  white-space:pre-wrap;word-wrap:break-word;
+}
+.annotated mark{
+  border-radius:2px;padding:0 1px;background:transparent;color:inherit;
+  box-decoration-break:clone;-webkit-box-decoration-break:clone;
+  text-decoration-line:underline;text-decoration-thickness:2px;text-underline-offset:3px;
+  cursor:help;
+}
+.annotated mark.hl-auth{text-decoration-color:var(--dim-auth);text-decoration-style:solid;background:rgba(57,135,229,.14)}
+.annotated mark.hl-clar{text-decoration-color:var(--dim-clar);text-decoration-style:dashed;background:rgba(25,158,112,.16)}
+.annotated mark.hl-cring{text-decoration-color:var(--dim-cring);text-decoration-style:dotted;background:rgba(230,103,103,.14)}
+.annotated mark.hl-bait{text-decoration-color:var(--dim-bait);text-decoration-style:double;background:rgba(0,131,0,.16)}
+.annotated mark.hl-brag{text-decoration-color:var(--dim-brag);text-decoration-style:wavy;background:rgba(201,133,0,.16)}
+
+/* brutal: the hero card's closing line, not a card of its own */
+.brutal{
+  margin:18px 0 0;padding:2px 0 2px 16px;
+  border-left:3px solid var(--rule);
+  font-size:17px;line-height:1.55;color:var(--ink);
+}
+
+/* advice: the "Also" list at the end of Suggested changes */
+h3.also{
+  font-family:var(--mono);font-size:14px;letter-spacing:.09em;text-transform:uppercase;
+  color:var(--ink-4);margin:18px 0 2px;font-weight:400;
+  display:flex;justify-content:space-between;align-items:baseline;gap:10px;
+}
+h3.also b{font-weight:400;color:var(--ink-4);text-transform:none;letter-spacing:0}
+ol.advice{margin:0;padding:0;list-style:none;counter-reset:a}
+ol.advice li{
+  counter-increment:a;position:relative;padding:11px 0 11px 34px;
+  border-bottom:1px solid var(--hair);font-size:15px;color:var(--ink-2);
+}
+ol.advice li:last-child{border-bottom:0}
+ol.advice li::before{
+  content:counter(a,decimal-leading-zero);position:absolute;left:0;top:12px;
+  font-family:var(--mono);font-size:14px;color:var(--ink-4);
+}
+
+/* diagnostics */
+table.diag{
+  width:100%;border-collapse:collapse;
+  font-family:var(--mono);font-size:14.5px;font-variant-numeric:tabular-nums;
+}
+table.diag td,table.diag th{padding:6px 0;border-bottom:1px solid var(--hair);color:var(--ink-2)}
+table.diag th{color:var(--ink-3);letter-spacing:.03em;font-weight:400;text-align:left;font-family:var(--mono)}
+table.diag td{text-align:right;color:var(--ink)}
+table.diag tr:last-child td,table.diag tr:last-child th{border-bottom:0}
+.diag-grid{display:grid;grid-template-columns:1fr 1fr;gap:0 32px}
+@media (max-width:560px){.diag-grid{grid-template-columns:1fr}}
+
+/* share */
+.share-box{
+  background:var(--surface-2);border:1px solid var(--rule);border-radius:5px;
+  padding:14px;font-family:var(--mono);font-size:14px;line-height:1.6;
+  color:var(--ink-2);white-space:pre-wrap;word-break:break-word;
+}
+/* The share card used to render at full column width, which is most of
+   a screen for something people mostly download. Thumbnail by default,
+   buttons alongside; click the card (or the button) for full size. The
+   canvas itself stays full size (1080x1350 now, LinkedIn's portrait), so
+   download and copy are unaffected. */
+.share-row{display:flex;gap:16px;margin-top:14px;flex-wrap:wrap;align-items:flex-start}
+/* A real button, so the size toggle works from the keyboard and reports
+   its state (aria-pressed) instead of being a click-only div. */
+#cardwrap{
+  flex:0 1 250px;max-width:250px; /* a 4:5 portrait thumbnail, about 312px tall */cursor:zoom-in;min-width:0;
+  display:block;padding:0;margin:0;border:0;background:transparent;border-radius:6px;
+  text-align:left;font:inherit;letter-spacing:0;text-transform:none;
+}
+#cardwrap.full{flex-basis:100%;max-width:100%;cursor:zoom-out}
+.share-actions{display:flex;gap:10px;flex-wrap:wrap;flex:1 1 220px;align-content:flex-start}
+/* The three main actions never split two-and-one. Beside the card they are a
+   column of equal-width buttons; once the row wraps under the card they are
+   three equal columns. */
+.share-row > .share-actions{flex:0 0 auto;flex-direction:column;flex-wrap:nowrap;align-items:stretch}
+@media (max-width:640px){
+  .share-row > .share-actions{flex:1 1 100%;display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
+  .share-row > .share-actions button{padding-left:6px;padding-right:6px;font-size:13px;letter-spacing:.04em}
+}
+.share-more{flex-basis:100%}
+.share-more > summary{
+  cursor:pointer;list-style:none;font-family:var(--mono);font-size:14px;letter-spacing:.07em;
+  text-transform:uppercase;color:var(--ink-3);padding:8px 0;min-height:44px;display:flex;align-items:center;gap:8px;
+}
+.share-more > summary::-webkit-details-marker{display:none}
+.share-more > summary:hover{color:var(--ink-2)}
+.share-more .sm-glyph::before{content:"+"}
+.share-more[open] .sm-glyph::before{content:"\2212"}
+.share-more .share-actions{margin-top:6px}
+
+/* the receipts: everything that backs the verdict up, folded by default */
+.receipts > summary{
+  list-style:none;cursor:pointer;
+  display:flex;justify-content:space-between;align-items:baseline;gap:10px;
+  padding-bottom:8px;border-bottom:1px solid var(--hair);
+  font-family:var(--mono);font-size:14px;letter-spacing:.11em;text-transform:uppercase;color:var(--ink-3);
+}
+.receipts > summary::-webkit-details-marker{display:none}
+.receipts > summary:hover{color:var(--ink-2)}
+.receipts > summary:focus-visible{outline:2px solid var(--cool);outline-offset:2px;border-radius:2px}
+/* The +/- glyph lives in an aria-hidden span (generated content is read
+   out by most screen readers; a stray "plus" before every summary was
+   noise), and CSS only decides which glyph it shows. */
+.receipts .rc-glyph{color:var(--ink-4);margin-right:10px}
+.receipts .rc-glyph::before{content:"+"}
+.receipts[open] .rc-glyph::before{content:"\2212"}
+.receipts .rc-sub{font-size:14.5px;letter-spacing:0;text-transform:none;color:var(--ink-4);text-align:right}
+.receipts .receipt{margin-top:26px}
+.receipts .receipt:first-child{margin-top:20px}
+
+footer{
+  border-top:1px solid var(--rule);margin-top:56px;padding-top:18px;
+  font-family:var(--mono);font-size:14px;color:var(--ink-4);line-height:1.7;
+}
+footer a{color:var(--ink-3);text-decoration-color:var(--rule);text-underline-offset:2px;transition:color .12s,text-decoration-color .12s}
+footer a:hover{color:var(--ink);text-decoration-color:var(--ink-3)}
+footer a:focus-visible{outline:2px solid var(--cool);outline-offset:2px;border-radius:2px}
+footer .credit{font-weight:600;color:var(--ink-2)}
+footer .credit a{color:var(--ink);text-decoration-color:var(--ink-3)}
+footer .credit a:hover{text-decoration-color:var(--ink)}
+/* The coffee link rides on the credit line but stays quiet: footer grey and regular weight, not the bold white of the name beside it. */
+footer .credit a.tip{font-weight:400;color:var(--ink-3);text-decoration-color:var(--rule)}
+footer .credit a.tip:hover{color:var(--ink);text-decoration-color:var(--ink-3)}
+
+/* suggested changes: the useful half */
+ol.changes{list-style:none;margin:0;padding:0;counter-reset:ch}
+ol.changes li{
+  counter-increment:ch;background:var(--surface);border:1px solid var(--hair);
+  border-radius:5px;padding:14px 16px;margin-bottom:9px;
+}
+ol.changes .ctype{
+  font-family:var(--mono);font-size:14px;letter-spacing:.07em;text-transform:uppercase;
+  color:var(--cool-text);margin-bottom:7px;display:block;
+}
+ol.changes .ctype::before{content:counter(ch,decimal-leading-zero) " · ";color:var(--ink-4)}
+ol.changes .cprob{margin:0 0 7px;font-size:14.5px;color:var(--ink-2)}
+ol.changes .csugg{margin:0;font-size:14.5px;color:var(--ink)}
+ol.changes .crewrite{
+  margin-top:11px;padding:11px 13px;background:var(--surface-2);
+  border-left:2px solid var(--cool);border-radius:3px;
+  font-size:14px;color:var(--ink);white-space:pre-wrap;line-height:1.55;
+}
+ol.changes .crewrite .lbl{
+  display:block;font-family:var(--mono);font-size:13px;letter-spacing:.08em;
+  text-transform:uppercase;color:var(--ink-4);margin-bottom:6px;
+}
+.clean-nudge{
+  margin:12px 0 0;font-size:14.5px;color:var(--ink-3);
+}
+.annotated-sparse{
+  margin:0 0 14px;padding:9px 0 9px 12px;border-left:2px solid var(--cool);
+  font-size:14.5px;color:var(--ink-2);line-height:1.6;
+}
+
+/* the reword: verified against the same rules, never asserted by the model */
+.reword-empty{
+  background:var(--surface);border:1px solid var(--hair);border-radius:5px;
+  padding:14px 16px;font-size:15px;color:var(--ink-2);
+}
+.reword-actions{display:flex;align-items:center;gap:12px;flex-wrap:wrap}
+.reword-note{font-family:var(--mono);font-size:14px;color:var(--ink-3)}
+.reword-caveat{font-family:var(--mono);font-size:14px;color:var(--ink-3);margin:10px 0 0;line-height:1.6}
+.reword-result{margin-top:14px}
+.reword-summary{margin:0 0 12px;font-size:14.5px;color:var(--ink-2)}
+.reword-text{
+  background:var(--surface-2);border:1px solid var(--rule);border-radius:5px;
+  padding:14px 16px;font-size:15px;line-height:1.65;color:var(--ink);
+  white-space:pre-wrap;word-wrap:break-word;
+}
+.reword-delta{
+  display:flex;align-items:center;gap:14px;margin-top:14px;flex-wrap:wrap;
+}
+.reword-delta .rd-num{font-family:var(--sans);font-size:22px;font-weight:650}
+.reword-delta .rd-lbl{font-family:var(--mono);font-size:14px;letter-spacing:.06em;text-transform:uppercase;color:var(--ink-3);display:block;margin-bottom:2px}
+.reword-delta .rd-arrow{color:var(--ink-3);font-size:18px}
+.reword-delta .rd-tag{
+  font-family:var(--mono);font-size:14px;letter-spacing:.06em;text-transform:uppercase;
+  padding:3px 8px;border-radius:2px;border:1px solid var(--rule);color:var(--ink-3);
+}
+.reword-actions-row{display:flex;gap:10px;margin-top:12px;flex-wrap:wrap}
+.reword-error{
+  background:var(--surface);border:1px solid var(--rule);border-left:3px solid var(--caution);
+  border-radius:5px;padding:14px 16px;font-size:14px;color:var(--ink-2);
+  display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;
+}
+.reword-error + .reword-summary, .reword-error + .reword-text{margin-top:12px}
+
+/* paste hygiene notices */
+#notices{margin-top:12px;display:none}
+#notices.on{display:block}
+#notices ul{list-style:none;margin:0;padding:0}
+#notices li{
+  font-family:var(--mono);font-size:14px;line-height:1.6;color:var(--ink-3);
+  padding:4px 0 4px 15px;position:relative;
+}
+#notices li::before{content:"\2713";position:absolute;left:0;color:var(--cool)}
+#notices li.warn::before{content:"!";color:var(--caution)}
+#notices .hdr{
+  font-family:var(--mono);font-size:14px;letter-spacing:.09em;text-transform:uppercase;
+  color:var(--ink-4);margin-bottom:4px;
+}
+
+/* provenance badge: the report always says how it was produced */
+.mode{
+  font-family:var(--mono);font-size:13px;letter-spacing:.09em;text-transform:uppercase;
+  border:1px solid var(--rule);border-radius:2px;padding:3px 7px;color:var(--ink-3);
+}
+.mode.llm{border-color:var(--badge-llm-border);color:var(--badge-llm-text)}
+.mode.rules,.mode.offline{border-color:var(--rule);color:var(--ink-3)}
+.mode-why{font-family:var(--mono);font-size:15px;color:var(--ink-4);margin-top:10px}
+
+/* Explains a scoring adjustment the reader would otherwise have no way to
+   notice: a rule fired at reduced weight (or not at all) because of context
+   the engine detected (a priced offer) or the reader declared (attached
+   media). Never hides that the underlying finding still exists elsewhere
+   in the report - this is a footnote on the weighting, not a redaction. */
+.context-note{
+  margin:10px 0 0;padding:9px 0 9px 12px;border-left:2px solid var(--cool);
+  font-size:15px;color:var(--ink-2);line-height:1.55;
+}
+
+/* the bail-out */
+.declined{
+  background:var(--surface);border:1px solid var(--rule);border-left:3px solid var(--cool);
+  border-radius:6px;padding:22px;
+}
+.declined h3{
+  font-family:var(--mono);font-size:14px;letter-spacing:.09em;text-transform:uppercase;
+  color:var(--ink);margin:0 0 12px;font-weight:600;
+}
+.declined p{margin:0;font-size:15.5px;color:var(--ink-2);line-height:1.6}
+
+/* share card */
+#card{width:100%;height:auto;border:1px solid var(--rule);border-radius:6px;display:block}
+.btn-primary.busy{opacity:.6;pointer-events:none}
+@keyframes blink{0%,100%{opacity:1}50%{opacity:.35}}
+.busy-note{font-family:var(--mono);font-size:14px;color:var(--ink-3);animation:blink 1.1s infinite}
+@media (prefers-reduced-motion: reduce){.busy-note{animation:none}}
+
+/* Indeterminate on purpose: a real call can come back from cache in under
+   a second or take most of the server's 30s timeout, and there's no way
+   to know which until it does. A determinate bar would have to lie about
+   a percentage it cannot know; this one only ever claims "still going." */
+.progress-track{
+  position:relative;height:3px;margin-top:12px;
+  background:var(--surface-2);border:1px solid var(--rule);border-radius:3px;
+  overflow:hidden;
+}
+.progress-track[hidden]{display:none}
+.progress-thumb{
+  position:absolute;top:-1px;bottom:-1px;left:0;width:35%;
+  background:var(--cool);border-radius:3px;
+  animation:progress-slide 1.3s ease-in-out infinite;
+}
+@keyframes progress-slide{
+  0%{left:-35%}
+  100%{left:100%}
+}
+@media (prefers-reduced-motion: reduce){
+  /* A static partial thumb. A full track is the universal glyph for done. */
+  .progress-thumb{animation:none;left:32%;width:36%;opacity:.55}
+}
+
+.toast{
+  position:fixed;left:50%;bottom:calc(28px + env(safe-area-inset-bottom, 0px));
+  transform:translateX(-50%) translateY(12px);
+  background:var(--ink);color:var(--plane);font-family:var(--mono);font-size:14px;
+  letter-spacing:.06em;text-transform:uppercase;padding:10px 18px;border-radius:4px;
+  opacity:0;pointer-events:none;transition:opacity .18s,transform .18s;
+  max-width:calc(100vw - 32px);text-align:center;
+}
+.toast.on{opacity:1;transform:translateX(-50%) translateY(0)}
+.toast.error{border-left:4px solid var(--caution)}
+
+/* ---------- how this works ---------- */
+#panel-explain[hidden]{display:none}
+.explain-intro{font-size:15px;color:var(--ink-2);margin:0 0 26px;line-height:1.6}
+.explain-block{margin-bottom:30px}
+.explain-block > p{margin:0 0 12px;font-size:14.5px;color:var(--ink-2);line-height:1.6}
+.explain-groups{display:flex;flex-direction:column;gap:1px;background:var(--hair);border:1px solid var(--hair);border-radius:6px;overflow:hidden}
+.check-group{background:var(--surface);padding:14px 16px}
+.check-group summary{
+  cursor:pointer;list-style:none;display:flex;align-items:baseline;justify-content:space-between;gap:10px;
+}
+.check-group summary::-webkit-details-marker{display:none}
+.check-group summary .cg-glyph{font-family:var(--mono);color:var(--ink-4);margin-right:10px}
+.check-group summary .cg-glyph::before{content:"+"}
+.check-group[open] summary .cg-glyph::before{content:"\2212"}
+.check-group summary .cg-name{font-size:15px;color:var(--ink);font-weight:500;flex:1}
+.check-group summary .cg-count{font-family:var(--mono);font-size:14px;color:var(--ink-4);white-space:nowrap}
+.check-group .cg-blurb{margin:9px 0 0;font-size:15px;color:var(--ink-3);line-height:1.5}
+ul.cg-list{list-style:none;margin:10px 0 0;padding:10px 0 0;border-top:1px solid var(--hair)}
+ul.cg-list li{
+  font-family:var(--mono);font-size:14px;color:var(--ink-3);
+  padding:5px 0 5px 15px;position:relative;
+}
+ul.cg-list li::before{content:"\2022";position:absolute;left:0;color:var(--ink-4)}
+
+/* ---------- bonus round: a side-scroller nobody asked for ----------
+   Visually it borrows the exact tokens the report above already uses
+   (surface/hair/rule for structure, cool/warm/caution for accents) so it
+   reads as part of the same product instead of a widget dropped in from
+   somewhere else, and it repaints itself live when the theme toggle fires
+   because it's reading CSS custom properties, not hardcoded hex. */
+.game-wrap{margin-top:8px}
+/* Not in the flow until a report exists: the landing page's second call
+   to action should not be "Start running". */
+.game-wrap[hidden]{display:none}
+.game-blurb{margin:0 0 16px;font-size:14.5px;color:var(--ink-2);line-height:1.6}
+.game-stage{
+  position:relative;width:100%;aspect-ratio:20/9;max-height:420px;min-height:200px;
+  background:var(--surface);
+  background:linear-gradient(180deg, var(--surface) 0%, var(--surface-2) 100%);
+  border:1px solid var(--hair);border-radius:6px;overflow:hidden;
+  touch-action:none;cursor:pointer;-webkit-tap-highlight-color:transparent;
+}
+.game-stage:focus-visible{outline:2px solid var(--cool);outline-offset:2px}
+#game-canvas{display:block;width:100%;height:100%}
+.game-hud{
+  position:absolute;top:10px;left:12px;right:12px;display:flex;justify-content:space-between;gap:10px;
+  font-family:var(--mono);font-size:13px;letter-spacing:.07em;text-transform:uppercase;
+  color:var(--ink-3);pointer-events:none;text-shadow:0 1px 3px rgba(0,0,0,.35);
+}
+.game-hud-item b{color:var(--ink);font-weight:600;margin-left:6px;font-variant-numeric:tabular-nums;letter-spacing:0;transition:color .15s}
+/* The only honest way to prove the ×2 is real while it's happening: color
+   the actual number it's happening to. The canvas already prints a "×2
+   IMPRESSIONS · 4.2s" countdown, but that's off to the side and easy to
+   miss; tinting the score itself means there is no separate claim to take
+   on faith, just the one number changing color exactly when its math does. */
+#game-score.boosted{color:var(--caution)}
+.game-panel{
+  position:absolute;inset:0;display:flex;align-items:center;justify-content:center;text-align:center;
+  background:var(--surface);
+  background:color-mix(in srgb, var(--plane) 78%, transparent);
+  padding:16px;transition:opacity .15s;
+}
+.game-panel[hidden]{display:none}
+.game-panel-inner{max-width:320px}
+.game-kicker{margin:0 0 8px;font-family:var(--mono);font-size:13px;letter-spacing:.09em;text-transform:uppercase;color:var(--ink-3)}
+.game-title{margin:0 0 8px;font-size:22px;font-weight:650;letter-spacing:-0.01em;color:var(--ink)}
+.game-sub{margin:0 0 16px;font-size:15px;color:var(--ink-3)}
+.game-score-big{font-family:var(--display);font-variant-numeric:tabular-nums;font-size:40px;font-weight:800;letter-spacing:-0.01em;color:var(--ink);line-height:1}
+.game-score-tag{display:inline-block;margin-top:6px;font-family:var(--mono);font-size:13px;letter-spacing:.08em;text-transform:uppercase;color:var(--cool-text);border:1px solid var(--badge-llm-border);border-radius:2px;padding:2px 7px}
+.game-controls{display:flex;align-items:center;gap:10px;margin-top:12px;flex-wrap:wrap}
+.game-btn{min-width:88px}
+.game-hint{font-family:var(--mono);font-size:14px;color:var(--ink-4);margin-left:auto}
+@media (max-width:520px){.game-hint{display:none}}
+.game-footnote{margin:14px 0 0;font-family:var(--mono);font-size:14px;color:var(--ink-4)}
+
+/* Phone first fold: the masthead used to wrap the theme toggle onto its
+   own row and the intro ran five lines, which pushed the textarea below
+   the fold on a 375-wide screen. One row, one intro sentence, tighter
+   spacing above the panel. */
+@media (max-width:599px){
+  .wrap{padding-top:22px}
+  header{padding-bottom:14px;margin-bottom:18px}
+  .masthead-row{flex-wrap:nowrap}
+  .brand{font-size:21px}
+  .brand-flag{margin-right:2px}
+  .theme-toggle{font-size:12px;padding:5px 9px;letter-spacing:.04em}
+  .tagline{margin-top:6px;font-size:14px}
+  .intro{margin-top:12px;font-size:15px}
+  .tabs{margin-top:14px}
+  .panel{padding:14px}
+  .hero .num{font-size:56px}
+  /* The HUD is absolute at top:10px and runs about 20px tall, so its bottom
+     edge sits at 30px. The start panel centres its content inside this box,
+     so padding here is a floor the content cannot rise above: at 375px the
+     scoreboard used to print straight through the panel title. */
+  .game-panel{padding-top:40px}
+}
+
+@media print{
+  body{background:#fff;color:#111}
+  body::before{display:none}
+  .panel,.controls,.specimens,.share-actions,.share-more,.tabs,footer,.game-wrap,.toast{display:none}
+  .hero,.meter,ul.roasts li,.share-box{background:#fff;border-color:#ccc;color:#111}
+  .hero .num{color:#111 !important}
+  .meter-name,.meter-val,.brutal{color:#111}
+  .receipts:not([open]) > *:not(summary),.roasts-more:not([open]) > *:not(summary){display:block}
+  .roasts-more > summary{display:none}
+}
+
+/* The receipts fold used to be a one-line whisper that only a reader already
+   hunting for it would find. It is the door to a third of the report, so it
+   gets a real row: bordered, padded, a title you can read from across the
+   room, and the list of what's behind it in a legible size. */
+.receipts > summary{
+  display:flex;align-items:center;justify-content:space-between;gap:10px 18px;flex-wrap:wrap;
+  padding:16px 18px;border:1px solid var(--rule);border-radius:6px;background:var(--surface-2);
+  cursor:pointer;list-style:none;
+}
+.receipts > summary::-webkit-details-marker{display:none}
+.receipts > summary:hover{border-color:var(--cool)}
+.receipts > summary:focus-visible{outline:2px solid var(--cool);outline-offset:2px}
+.receipts .rc-title{font-size:16px;letter-spacing:.08em}
+.receipts .rc-glyph{font-size:18px;font-weight:600}
+.receipts .rc-sub{font-size:14.5px;text-align:left;color:var(--ink-3);flex:1 1 30ch}
+.receipts[open] > summary{border-bottom-left-radius:0;border-bottom-right-radius:0;border-bottom-color:transparent}
+.receipts[open] > .receipt:first-of-type, .receipts[open] > summary + *{border-top:1px solid var(--rule)}
+@media (max-width:599px){ .receipts .rc-sub{flex-basis:100%} }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<header>
+  <div class="masthead-row">
+    <div class="brand-wrap">
+      <button class="brand-flag" id="pirateflag" type="button" aria-pressed="false" aria-label="Pirate mode">🏴‍☠️</button>
+      <h1 class="brand">yourpost<span>.sucks</span></h1>
+    </div>
+    <button class="theme-toggle" id="themetoggle" type="button">Light mode</button>
+  </div>
+  <p class="tagline">Post quality assurance &middot; automated &middot; unsympathetic</p>
+  <p class="intro">Paste a LinkedIn post. Get a suckiness score, the reasons, and a rewrite if it needs one. Free, no sign-up, never stored.</p>
+</header>
+
+<div class="tabs" role="tablist" aria-label="Site sections">
+  <button class="tab-btn" id="tab-tool" role="tab" type="button" aria-selected="true" aria-controls="panel-tool">Roast my post</button>
+  <button class="tab-btn" id="tab-explain" role="tab" type="button" aria-selected="false" tabindex="-1" aria-controls="panel-explain">How this works</button>
+</div>
+
+<main>
+<div id="panel-tool" role="tabpanel" aria-labelledby="tab-tool">
+<div class="panel">
+  <label class="lbl" for="post">Paste the post</label>
+  <textarea id="post" spellcheck="false" placeholder="Excited to announce..." aria-describedby="counter limit-err"></textarea>
+  <p id="limit-err" class="field-err" hidden></p>
+  <div class="media-row">
+    <label class="media-toggle" for="hasmedia">
+      <input type="checkbox" id="hasmedia">
+      There's an image, carousel, or video with this post. The text is the caption, not the whole thing.
+    </label>
+    <p class="media-note">Turns off the checks that assume the text is the whole post. The report says so when it did.</p>
+    <div class="media-upload">
+      <button type="button" class="media-upload-btn" id="mediabtn">Attach image (optional)</button>
+      <input type="file" id="mediafile" accept="image/jpeg,image/png,image/webp,image/gif,image/heic,image/heif" hidden>
+      <div class="media-preview" id="mediapreview" hidden>
+        <img id="mediapreview-img" alt="" hidden>
+        <span id="mediapreview-name"></span>
+        <button type="button" class="media-remove" id="mediaremove" aria-label="Remove attached image">&times;</button>
+      </div>
+    </div>
+  </div>
+  <div class="controls">
+    <button class="btn-primary" id="run" aria-disabled="false">Analyze</button>
+    <button class="btn-ghost" id="clear">Clear</button>
+    <span class="meta" id="counter">0 words</span>
+    <span class="busy-note" id="busynote" hidden>Still going. The AI takes a few seconds longer than the checklist does.</span>
+  </div>
+  <div class="progress-track" id="progress" hidden role="progressbar" aria-label="Analyzing"><div class="progress-thumb"></div></div>
+  <div id="notices"></div>
+  <div class="specimens">
+    <span class="cap">Or try one of these</span>
+    <button class="btn-ghost" data-spec="0">Job announcement</button>
+    <button class="btn-ghost" data-spec="1">Thought leader</button>
+    <button class="btn-ghost" data-spec="2">Layoff arc</button>
+    <button class="btn-ghost" data-spec="3">Control group</button>
+  </div>
+</div>
+
+<div id="live" class="sr-only" role="status" aria-live="polite"></div>
+<div id="report" hidden tabindex="-1"></div>
+</div>
+
+<div id="panel-explain" role="tabpanel" aria-labelledby="tab-explain" tabindex="-1" hidden>
+
+  <p class="explain-intro">The whole thing, nothing hidden. Same page whether you trust it or not.</p>
+
+  <section class="explain-block">
+    <h2 class="sec">What decides the score</h2>
+    <p>A fixed checklist, in code, the same every time. It never asks AI for anything, so the score is identical whether AI is on, off or broken. Five categories. Open one to see its checks.</p>
+    <div class="explain-groups" id="checkgroups"></div>
+  </section>
+
+  <section class="explain-block">
+    <h2 class="sec">What AI adds</h2>
+    <p>When available, AI writes the commentary, the one-line verdict and the rewrite. It gets the finished score and cannot change it. Everything it writes is checked first. It can't:</p>
+    <ul class="credits">
+      <li>state or imply a score</li>
+      <li>predict reach</li>
+      <li>put a number in a rewrite that your post didn't contain</li>
+      <li>say "as an AI"</li>
+      <li>use an em dash</li>
+    </ul>
+    <p>It can still get a name or a detail wrong, so read a rewrite before you post it. Anything that fails is swapped for the checklist's version. The badge by the score says who wrote the commentary. It is not a verdict on whether your post is AI-written.</p>
+  </section>
+
+  <section class="explain-block">
+    <h2 class="sec">When it says no</h2>
+    <p>A post about a death, serious illness, self-harm, abuse, violence or pregnancy loss is declined before anything else runs. No AI, no score, no cache. It errs toward declining on purpose.</p>
+  </section>
+
+  <section class="explain-block">
+    <h2 class="sec">What happens to what you paste</h2>
+    <p>The post and any image go to Anthropic's API for the commentary. The AI's notes are cached for 30 days. Your post is not. An hourly per-IP counter limits AI reports and expires on its own. No accounts, no analytics on your text.</p>
+  </section>
+
+</div>
+</main>
+
+<section class="game-wrap" id="game-wrap" aria-label="Bonus game: Outrun the Algorithm" hidden>
+  <h2 class="sec">Bonus round<b>zero checks, zero mercy</b></h2>
+  <p class="game-blurb">You already know your post sucks. Here's a side-scroller about why. Jump the humblebrags, duck the notifications.<span class="sr-only"> Obstacles are announced as they appear, with whether to jump or duck.</span></p>
+  <div class="game-stage" id="game-stage" tabindex="-1" role="application" aria-label="Outrun the Algorithm, an endless runner. Space or tap to jump, down arrow to duck.">
+    <canvas id="game-canvas"></canvas>
+    <div class="game-hud">
+      <span class="game-hud-item">Impressions<b id="game-score">0</b></span>
+      <span class="game-hud-item">Best<b id="game-best">0</b></span>
+    </div>
+    <div class="game-panel" id="game-panel">
+      <div class="game-panel-inner">
+        <p class="game-kicker" id="game-kicker">A completely unnecessary side-scroller</p>
+        <p class="game-title" id="game-title">Outrun the Algorithm</p>
+        <p class="game-sub" id="game-sub">Space / tap to jump &middot; &darr; to duck</p>
+        <button class="btn-primary" id="game-start" type="button">Start running</button>
+      </div>
+    </div>
+  </div>
+  <div class="game-controls" id="game-controls">
+    <button class="btn-ghost game-btn" id="game-btn-jump" type="button">Jump</button>
+    <button class="btn-ghost game-btn" id="game-btn-duck" type="button">Duck</button>
+    <span class="game-hint">Keyboard: Space / &uarr; jump &middot; &darr; duck</span>
+  </div>
+  <div id="game-live" class="sr-only" role="status" aria-live="polite"></div>
+  <p class="game-footnote">Runs entirely in your browser. No score is sent anywhere, which is already more privacy than the platform this is mocking gives you.</p>
+</section>
+
+<footer>
+  <div class="credit">Built by <a href="https://www.linkedin.com/in/billyost/" target="_blank" rel="noopener noreferrer"><span aria-hidden="true">🏴‍☠️ </span>Bill Yost</a>, who is aware of the irony. <a class="tip" href="https://buymeacoffee.com/billyost" target="_blank" rel="noopener noreferrer">Buy him a coffee.</a></div>
+  <div><span id="rulecount"></span> fixed checks decide the score. AI never touches that number. <a href="https://github.com/cruce5/yourpost.sucks" target="_blank" rel="noopener noreferrer">Read the code.</a></div>
+  <div>It measures the writing, not the reach.</div>
+</footer>
+
+</div>
+<div class="toast" id="toast" role="status" aria-live="polite"></div>
+
+<script>
+/*ENGINE*/
+</script>
+<script>
+(function(){
+  'use strict';
+  var YPS = window.YourPostSucks;
+  var $ = function(s){ return document.querySelector(s); };
+
+  /* ---------------- bot check: off unless the server says it's on --------
+     Mirrors the server's own rule (no TURNSTILE_SECRET means the check is
+     skipped, see worker.js): no site key in /api/status means this never
+     loads Cloudflare's script and never renders a widget. getTurnstileToken()
+     always resolves, worst case with null, and a missing or failed token
+     just makes the server fall back to a rules-only report instead of
+     blocking anyone, same as every other degrade path in this tool. This
+     is the client half of that fix: previously the server was safe to
+     enable but nothing on the page could ever produce a token at all.
+
+     Verified end-to-end against Cloudflare's real siteverify endpoint using
+     their public always-pass test keys: the widget renders, execute()
+     returns a real token, the server verifies it and proceeds. One cosmetic
+     warning showed up during that testing ("already executing") that did
+     not affect the outcome on any run — it's consistent with a known class
+     of Turnstile postMessage-origin quirk specific to testing over plain
+     HTTP on a non-canonical host (127.0.0.1:port), not the HTTPS production
+     domain a real deployment runs on. Worth one more smoke test with a real
+     site key on the live domain once one exists, but nothing here should be
+     held up waiting on that. */
+  var tsState = { widgetId: null, ready: false, pendingResolve: null };
+  fetch('api/status').then(function(r){ return r.ok ? r.json() : null; }).then(function(s){
+    var siteKey = s && s.turnstileSiteKey;
+    if (!siteKey) return;
+    var script = document.createElement('script');
+    script.src = 'https://challenges.cloudflare.com/turnstile/v0/api.js';
+    script.async = true; script.defer = true;
+    script.onload = function(){
+      if (!window.turnstile) return;
+      // Turnstile has no size:"invisible" (that was a wrong assumption,
+      // caught by actually running this rather than trusting the plan):
+      // the real equivalent is appearance:"execute", which keeps the
+      // widget at zero footprint unless Cloudflare decides an interactive
+      // challenge is actually needed. That's also why the holder is NOT
+      // display:none — a hidden container would make that rare real
+      // challenge unsolvable instead of merely invisible.
+      var holder = document.createElement('div');
+      document.body.appendChild(holder);
+      tsState.widgetId = window.turnstile.render(holder, {
+        sitekey: siteKey,
+        size: 'normal',
+        appearance: 'execute',
+        // Run the challenge only when getTurnstileToken() calls execute().
+        // The default ("render") runs it immediately on render: the token
+        // arrived with nobody waiting, was discarded, the reset kicked off
+        // another automatic run, and every later execute() hit "already
+        // executing" until the wait timed out. Caught live with a real
+        // site key in a real browser; the test keys never showed it.
+        execution: 'execute',
+        // Reset happens HERE, right as one cycle finishes, not right before
+        // the next execute() call. Resetting just-in-time on the way into
+        // execute() raced against the widget's own execute() and produced
+        // "already executing" warnings (caught by testing this live against
+        // Cloudflare's real endpoint, not by reasoning about the API).
+        callback: function(token){
+          if (tsState.pendingResolve) { var r = tsState.pendingResolve; tsState.pendingResolve = null; r(token); }
+          try { window.turnstile.reset(tsState.widgetId); } catch (e) {}
+        },
+        'error-callback': function(){
+          if (tsState.pendingResolve) { var r = tsState.pendingResolve; tsState.pendingResolve = null; r(null); }
+          try { window.turnstile.reset(tsState.widgetId); } catch (e) {}
+        }
+      });
+      tsState.ready = true;
+    };
+    document.head.appendChild(script);
+  }).catch(function(){ /* status endpoint unreachable: stay off, same as no site key */ });
+
+  // A fresh token per submission, never blocking on one. 8s leaves room for
+  // a managed-mode challenge that decides to show a real checkbox; an
+  // invisible pass usually resolves in well under a second. Past the limit
+  // the request goes out without a token and gets the rules-only report.
+  function getTurnstileToken(){
+    return new Promise(function(resolve){
+      if (!tsState.ready || tsState.widgetId === null || !window.turnstile) { resolve(null); return; }
+      var settled = false;
+      var done = function(token){ if (settled) return; settled = true; resolve(token); };
+      tsState.pendingResolve = done;
+      setTimeout(function(){ done(null); }, 8000);
+      // No reset() here: the widget is already in a fresh, ready-to-execute
+      // state (either its very first run, or reset by the callback right
+      // after the previous cycle finished, above).
+      try {
+        window.turnstile.execute(tsState.widgetId);
+      } catch (e) { done(null); }
+    });
+  }
+
+  /* Theme: dark is the CSS default (see :root in the stylesheet), so the
+     only state that needs tracking here is an explicit override. No
+     override means "follow the system," which the media query in the
+     stylesheet already handles on its own without any JS involvement. */
+  function currentTheme(){
+    var explicit = document.documentElement.getAttribute('data-theme');
+    if (explicit === 'light' || explicit === 'dark') return explicit;
+    return (window.matchMedia && window.matchMedia('(prefers-color-scheme: light)').matches) ? 'light' : 'dark';
+  }
+  function savedTheme(){
+    try { return localStorage.getItem('theme'); } catch (e) { return null; }
+  }
+  function syncThemeUI(){
+    var btn = $('#themetoggle');
+    if (!btn) return;
+    var cur = currentTheme();
+    var meta = document.querySelector('meta[name="theme-color"]');
+    if (cur === 'dark') {
+      btn.textContent = 'Light mode';
+      btn.setAttribute('aria-label', 'Switch to light mode');
+      if (meta) meta.setAttribute('content', '#0d0d0d');
+    } else {
+      btn.textContent = 'Dark mode';
+      btn.setAttribute('aria-label', 'Switch to dark mode');
+      if (meta) meta.setAttribute('content', '#eeece7');
+    }
+  }
+  function setTheme(theme){
+    document.documentElement.setAttribute('data-theme', theme);
+    try { localStorage.setItem('theme', theme); } catch (e) {}
+    syncThemeUI();
+  }
+
+  /* The permalink is self-contained: the post text itself travels in the
+     `?p=` query param. No server-side hash lookup, no new KV schema, no
+     endpoint that can 404 once a cache entry expires. Loading one just
+     re-runs the exact same analyze path a fresh paste would, so it costs
+     nothing extra to build or keep working.
+
+     Two wire formats. Old links are plain URL-safe base64 of the UTF-8
+     bytes. New links are deflated first (CompressionStream, 'deflate-raw')
+     and prefixed with 'z', which roughly halves the URL for a typical post.
+     Where the API is missing the encoder falls back to the old format, and
+     the decoder accepts both. A plain-format link can itself begin with
+     'z' (it is a base64 character), so a 'z' payload that fails to inflate
+     is retried as plain rather than rejected. Both functions are async. */
+  function bytesToB64url(bytes){
+    var bin = '';
+    for (var i = 0; i < bytes.length; i++) bin += String.fromCharCode(bytes[i]);
+    return btoa(bin).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+  }
+  function b64urlToBytes(s){
+    var b64 = s.replace(/-/g, '+').replace(/_/g, '/');
+    while (b64.length % 4) b64 += '=';
+    var bin = atob(b64);
+    var bytes = new Uint8Array(bin.length);
+    for (var i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+    return bytes;
+  }
+  function pipeBytes(bytes, transform){
+    return new Response(new Blob([bytes]).stream().pipeThrough(transform)).arrayBuffer()
+      .then(function(buf){ return new Uint8Array(buf); });
+  }
+  function encodePost(text){
+    var bytes = new TextEncoder().encode(text);
+    var plain = bytesToB64url(bytes);
+    if (typeof CompressionStream !== 'function' || typeof Blob !== 'function') return Promise.resolve(plain);
+    return pipeBytes(bytes, new CompressionStream('deflate-raw'))
+      .then(function(out){ return 'z' + bytesToB64url(out); })
+      .catch(function(){ return plain; });
+  }
+  function decodePlain(encoded){
+    try { return new TextDecoder().decode(b64urlToBytes(encoded)); } catch (e) { return null; }
+  }
+  function decodePost(encoded){
+    if (!encoded) return Promise.resolve(null);
+    if (encoded.charAt(0) !== 'z' || typeof DecompressionStream !== 'function') return Promise.resolve(decodePlain(encoded));
+    var bytes;
+    try { bytes = b64urlToBytes(encoded.slice(1)); } catch (e) { return Promise.resolve(null); }
+    return pipeBytes(bytes, new DecompressionStream('deflate-raw'))
+      .then(function(out){ return new TextDecoder('utf-8', { fatal: true }).decode(out); })
+      .catch(function(){ return decodePlain(encoded); });
+  }
+
+  /* Scrolls the report into view and announces it to screen readers via the
+     aria-live region, since the button-text change alone (e.g. "Analyzing"
+     back to "Analyze") is not reliably surfaced to anyone not looking at the
+     screen during a 5-15s model call. Respects prefers-reduced-motion rather
+     than forcing a smooth scroll on everyone regardless of that setting. */
+  function scrollToReport(announcement){
+    var reduced = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    var rep = $('#report');
+    // Focus first (tabindex=-1 on #report makes it focusable without adding
+    // it to the tab order), so the next Tab press lands inside the report
+    // instead of back on the button that produced it.
+    try { rep.focus({ preventScroll: true }); } catch (e) { rep.focus(); }
+    var live = $('#live');
+    if (live) live.textContent = announcement;
+    // The scroll runs two frames later, after the reveal has laid out and
+    // nothing else in this tick is touching scroll position: Chrome drops a
+    // smooth scroll silently when anything else scrolls or focuses in the
+    // same frame, which left the report a screen below the fold with focus
+    // on it. If the smooth scroll still did not land, fall back to an
+    // instant one rather than leave the result out of view.
+    var go = function(){
+      rep.scrollIntoView({ behavior: reduced ? 'auto' : 'smooth', block: 'start' });
+      if (!reduced) setTimeout(function(){
+        var top = rep.getBoundingClientRect().top;
+        if (top > 120 || top < -40) rep.scrollIntoView({ behavior: 'auto', block: 'start' });
+      }, 900);
+    };
+    // A timer, not requestAnimationFrame: an occluded or backgrounded tab gets
+    // no animation frames at all, and the report would never scroll into view.
+    setTimeout(go, 0);
+  }
+
+
+  /* The score is suckiness, 0 to 10, lower is better. The four bands below
+     are the same thresholds the engine uses for its own brutal-take pools
+     (and for r.band, where the engine supplies it); the labels are what the
+     number means in words, and they are what the hero, share text, share
+     card and copied report all say instead of "x / 10", which read as a
+     grade and made a 1.4 look like a fail. Cached reports can predate the
+     engine's r.band, so bandFor() is the fallback everywhere it's read. */
+  var BANDS = [
+    [3.2, 'barely', 'barely sucks'],
+    [5.6, 'normal', 'sucks a normal amount'],
+    [8.0, 'lot', 'sucks a lot'],
+    [Infinity, 'completely', 'sucks completely']
+  ];
+  function bandFor(overall){
+    var n = Number(overall) || 0;
+    for (var i = 0; i < BANDS.length; i++){
+      if (n < BANDS[i][0]) return { key: BANDS[i][1], label: BANDS[i][2] };
+    }
+    return { key: 'completely', label: 'sucks completely' };
+  }
+  function bandOf(r){
+    // A post the checks cannot read (not English) is not scored at all, and
+    // must never be dressed up as a low score.
+    if (r && r.unscored) return { key: 'unscored', label: 'not scored' };
+    return (r && r.band && r.band.label) ? r.band : bandFor(r ? r.overall : 0);
+  }
+
+  var SCALE_NOTE = '0 is immaculate, 10 is unsalvageable';
+  var SCORE_TITLE = 'Suckiness. 0 is immaculate, 10 is unsalvageable.';
+
+  // Cool for the "barely" band, warm from "sucks a lot" up, neutral for the
+  // normal band in between. Same edges as the bands, so the colour never
+  // disagrees with the words next to it. NEUTRAL is a mid grey rather than
+  // the old near-surface tone: it now covers a wide band and has to carry a
+  // 68px number legibly on both themes.
+  var COOL = '#3987e5', WARM = '#e66767', NEUTRAL = '#8a867e';
+  function colorFor(suck){
+    if (suck < 3.2) return COOL;
+    if (suck >= 5.6) return WARM;
+    return NEUTRAL;
+  }
+
+  // The verdict counting up to its final value, instead of just appearing,
+  // is the one moment on the page that's allowed to feel like something
+  // happened. Skips straight to the final value under reduced-motion —
+  // the count-up is decoration, the number itself is the only thing that
+  // has to arrive.
+  // The display face is loaded non-blocking, so the count-up waits for it
+  // (or 300ms, whichever comes first) rather than starting in a fallback
+  // font and reflowing mid-animation.
+  function whenDisplayFontReady(cb){
+    var called = false;
+    var go = function(){ if (called) return; called = true; cb(); };
+    if (document.fonts && document.fonts.load){
+      try { document.fonts.load('800 68px "JetBrains Mono"').then(go, go); } catch (e) { go(); }
+    }
+    setTimeout(go, 300);
+  }
+  function animateScoreNum(el, target){
+    if (!el) return;
+    var reduceMotion = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    if (reduceMotion){ el.textContent = target.toFixed(1); return; }
+    var duration = 700, start = null;
+    function easeOutExpo(t){ return t >= 1 ? 1 : 1 - Math.pow(2, -10 * t); }
+    function step(ts){
+      if (start === null) start = ts;
+      var p = Math.min(1, (ts - start) / duration);
+      el.textContent = (target * easeOutExpo(p)).toFixed(1);
+      if (p < 1) requestAnimationFrame(step);
+    }
+    whenDisplayFontReady(function(){ requestAnimationFrame(step); });
+  }
+
+  var SPECIMENS = [
+"Excited to announce I'm joining TechCorp as Senior Analytics Manager! Grateful for this opportunity and can't wait to make an impact. Thanks to everyone who believed in me 🙌🙌",
+
+"In today's fast-paced digital landscape, organizations must leverage data-driven insights to unlock transformative value across the ecosystem.\n\nHere's the thing.\n\nOur cross-functional team has been aligning on a robust, best-in-class framework that operationalizes actionable insights at scale — a true game-changer for stakeholders moving forward.\n\nAt the end of the day, it's not just about the technology, it's about the people.\n\nRead that again.\n\n3 lessons I learned:\n✅ Stay curious\n✅ Leverage your network\n✅ Delve into your why\n\nThoughts? 👇\n\n#leadership #growth #mindset #datadriven",
+
+"I almost didn't post this.\n\nReal talk: last year I was laid off. It was the lowest point of my career.\n\nBut looking back, it was a blessing in disguise. I learned so much about myself.\n\nToday I'm humbled and grateful to share that I've started something new. 🙏\n\nIf you're going through it right now — DM me. I'll go first.",
+
+"We ran an A/B test on the onboarding flow for six weeks. 41,000 users. The variant I was certain about lost by 3 points.\n\nI was wrong about which one would win. I have now been wrong about this four times.\n\nThe tests keep working anyway."
+  ];
+
+  /* One axis for all five, higher always worse, matching the overall score
+     and matching each other. Used to read as two different scales at once
+     (Authenticity and Clarity ran "higher is better," the other three ran
+     "higher is worse," with a pill on every row to say which) — confusing
+     to parse five times over. `suck` was already computed this way for
+     every category; the display just needed to actually use it instead of
+     the raw, direction-mixed `score`. Authenticity and Clarity are
+     relabeled Inauthenticity/Vagueness in engine.js so the label keeps
+     agreeing with the number: a high Inauthenticity score reads as bad,
+     the same as a high Cringe Factor score, with nothing to flip in your
+     head between rows. */
+  function meterHTML(c){
+    var pct = Math.max(2, (c.suck / 10) * 100);
+    var col = colorFor(c.suck);
+    var trackLabel = c.label + ': ' + c.suck.toFixed(1) + ' on a 0 to 10 scale, higher is worse.';
+    return '' +
+      '<div class="meter">' +
+        '<div class="meter-head">' +
+          '<span class="meter-name">' + YPS.esc(c.label) + '</span>' +
+          '<span class="meter-val" title="' + YPS.esc(trackLabel) + '">' + c.suck.toFixed(1) + '</span>' +
+        '</div>' +
+        '<div class="track" role="meter" aria-valuenow="' + c.suck.toFixed(1) + '" aria-valuemin="0" aria-valuemax="10" aria-valuetext="' + c.suck.toFixed(1) + ' of 10, higher is worse" aria-label="' + YPS.esc(c.label) + '" title="' + YPS.esc(trackLabel) + '">' +
+          '<div class="fill" style="width:' + pct + '%;background:' + col + ';color:' + col + '"></div>' +
+        '</div>' +
+        '<p class="meter-verdict">' + YPS.esc(c.verdict) + '</p>' +
+      '</div>';
+  }
+
+  /* "What's driving the score": the same five weighted numbers the engine
+     summed to reach the headline figure, shown instead of just asserted.
+     Bars are sized against the overall total so the biggest bar is visibly
+     the biggest reason, not just the highest-scoring category in isolation. */
+  var DIM_COLOR = { auth: 'var(--dim-auth)', clar: 'var(--dim-clar)', cring: 'var(--dim-cring)', bait: 'var(--dim-bait)', brag: 'var(--dim-brag)' };
+  var CAT_DIM = { authenticity: 'auth', clarity: 'clar', cringe: 'cring', bait: 'bait', brag: 'brag' };
+
+  /* One source for the five dimension names, and it is the engine's own
+     category labels mapped through CAT_DIM. There used to be two more
+     copies of this table typed out by hand, and one of them still carried
+     the retired names (Authenticity, Clarity) that run the opposite
+     direction to the numbers beside them. A report carries the labels on
+     r.categories; the "How this works" tab is built before any report
+     exists, so it reads them off a throwaway analyze of an empty string,
+     computed once and kept. */
+  var DIM_LABEL_CACHE = null;
+  function dimLabels(cats){
+    if (!cats){
+      if (!DIM_LABEL_CACHE) DIM_LABEL_CACHE = dimLabels(YPS.analyze('').categories);
+      return DIM_LABEL_CACHE;
+    }
+    var m = {};
+    cats.forEach(function(c){ if (CAT_DIM[c.key]) m[CAT_DIM[c.key]] = c.label; });
+    return m;
+  }
+
+  function breakdownHTML(r){
+    var overall = Math.max(r.overall, 0.1);
+    var rows = r.categories.map(function(c){
+      return { label: c.label, points: c.contribution, dim: CAT_DIM[c.key] };
+    });
+    // No adjustment row when nothing fired. There is no volume to tax and
+    // no restraint to credit on a post with zero findings: what is left is
+    // the two roundings disagreeing, the five rounded contributions against
+    // the rounded overall, which lands as a -0.1 labelled "Restraint" on a
+    // fifth of the corpus. A rounding residue is not a reason for a score.
+    var adjShown = Math.abs(r.volumeBonus) < 0.1 || r.stats.rulesFired > 0;
+    if (Math.abs(r.volumeBonus) >= 0.1 && r.stats.rulesFired > 0){
+      rows.push({ label: r.volumeBonus > 0 ? 'Piling it on' : 'Restraint', points: r.volumeBonus, dim: null });
+    }
+    rows.sort(function(a, b){ return b.points - a.points; });
+    var body = rows.map(function(row){
+      var neg = row.points < 0;
+      var pct = Math.max(0, Math.min(100, (Math.abs(row.points) / overall) * 100));
+      var col = row.dim ? DIM_COLOR[row.dim] : 'var(--ink-3)';
+      return '<div class="bd-row' + (neg ? ' bd-neg' : '') + '">' +
+        '<span class="bd-label">' + YPS.esc(row.label) + '</span>' +
+        '<span class="bd-track"><span class="bd-fill" style="width:' + pct + '%;background:' + col + ';color:' + col + '"></span></span>' +
+        '<span class="bd-val">' + (row.points >= 0 ? '+' : '') + row.points.toFixed(1) + '</span>' +
+      '</div>';
+    }).join('');
+    // The weights come off the categories themselves. Typed out by hand they
+    // sat one sentence away from "nothing here is asserted without the
+    // arithmetic behind it", which is the worst place in the product for a
+    // literal to go stale.
+    var weights = r.categories.map(function(c){ return c.weightPct; }).join('/');
+    return '<div class="receipt">' +
+      '<h3 class="sec">What\'s driving the score<b>points toward the ' + r.overall.toFixed(1) + '</b></h3>' +
+      '<div class="breakdown">' + body + '</div>' +
+      '<p class="bd-note">Five weighted categories (' + weights + ') plus a tax for tripping many checks at once, a credit for tripping almost none. ' + (adjShown ? 'They sum to the number above.' : 'Each is rounded to a tenth, so they can miss the number above by 0.1.') + '</p>' +
+      (r.breakdownNote ? '<p class="ai-aside"><b>Aside</b>' + YPS.esc(r.breakdownNote) + '</p>' : '') +
+    '</div>';
+  }
+
+  /* The annotated post: the cleaned, analyzed text with the literal spans
+     each rule matched marked up in place. Every span comes from engine.js's
+     own case-insensitive recovery of text the rule already found (see
+     locate() in engine.js). Nothing here is guessed at or written by a
+     model; a span is shown only when it is a real substring of the post. */
+  function annotateHTML(text, spans, note, cats){
+    if (!spans || !spans.length) return '';
+    var lower = text.toLowerCase();
+    var ranges = [];
+    spans.forEach(function(s){
+      (s.matches || []).forEach(function(m){
+        var idx = lower.indexOf(String(m).toLowerCase());
+        if (idx < 0) return;
+        ranges.push({ start: idx, end: idx + m.length, dim: s.dim, label: s.label });
+      });
+    });
+    if (!ranges.length) return '';
+    ranges.sort(function(a, b){ return a.start - b.start || (b.end - b.start) - (a.end - a.start); });
+    /* One range wholly inside another is drawn nested, not dropped. The
+       promo-lede check hands back the first 70 characters of sentence one,
+       which swallowed every other mark in that sentence and took the
+       swallowed marks' categories out of the legend with them. A partial
+       overlap is still skipped, because nesting it would need the same text
+       in two places at once, but its category is recorded either way so the
+       legend always lists every dimension the post actually tripped. One
+       level of nesting is enough: no third span has ever landed inside a
+       nested one, and the styling would stop being readable if it did. */
+    var kept = [], lastEnd = -1, seenDims = {};
+    ranges.forEach(function(r2){
+      seenDims[r2.dim] = true;
+      if (r2.start >= lastEnd){
+        kept.push({ range: r2, inner: [] });
+        lastEnd = r2.end;
+        return;
+      }
+      var outer = kept[kept.length - 1];
+      if (outer && r2.start === outer.range.start && r2.end === outer.range.end){
+        // Same stretch, second check: one mark, both names in its title.
+        outer.range = { start: outer.range.start, end: outer.range.end, dim: outer.range.dim, label: outer.range.label, also: (outer.range.also || []).concat(r2.label) };
+        return;
+      }
+      if (outer && r2.start >= outer.range.start && r2.end <= outer.range.end){
+        var last = outer.inner[outer.inner.length - 1];
+        if (!last || r2.start >= last.end) outer.inner.push(r2);
+      }
+    });
+    var markCount = kept.reduce(function(a, k){ return a + 1 + k.inner.length; }, 0);
+
+    // The check's name, or its first two words, printed on the mark so the
+    // meaning is visible and not only in a hover title. A two-word slice can
+    // land on a separator ("Honored / recognized" gave "Honored /"), so a
+    // trailing separator token is dropped and the label ends on a word.
+    function shortLabel(label){
+      var words = String(label || '').trim().split(/\s+/);
+      if (words.length > 2) words = words.slice(0, 2);
+      while (words.length > 1 && /^[\/·\-&]+$/.test(words[words.length - 1])) words.pop();
+      return words.join(' ');
+    }
+    // The leading non-breaking space is a real character in the tag's text,
+    // not a CSS margin: it is the only thing that puts a boundary between
+    // the quoted phrase and its tag for anything that reads the text rather
+    // than looking at it.
+    function markHTML(r2, innerHTML){
+      return '<mark class="hl-' + r2.dim + '" title="' + YPS.esc(r2.label + (r2.also ? ', ' + r2.also.join(', ') : '')) + '">' + innerHTML +
+        '<sup class="mk"> ' + YPS.esc(shortLabel(r2.label)) + '</sup></mark>';
+    }
+    var out = '', cursor = 0;
+    kept.forEach(function(k){
+      var r2 = k.range;
+      out += YPS.esc(text.slice(cursor, r2.start));
+      var inner = '', c2 = r2.start;
+      k.inner.forEach(function(n){
+        inner += YPS.esc(text.slice(c2, n.start));
+        inner += markHTML(n, YPS.esc(text.slice(n.start, n.end)));
+        c2 = n.end;
+      });
+      inner += YPS.esc(text.slice(c2, r2.end));
+      out += markHTML(r2, inner);
+      cursor = r2.end;
+    });
+    out += YPS.esc(text.slice(cursor));
+
+    var LEGEND = dimLabels(cats);
+    var legend = Object.keys(LEGEND).filter(function(d){ return seenDims[d]; }).map(function(d){
+      return '<span class="lg-' + d + '"><i></i>' + LEGEND[d] + '</span>';
+    }).join('');
+
+    // A long post with two marks in it reads as "did this even look at the
+    // whole thing," not as the good news it actually is. The wall of plain
+    // text between them is what a clean post looks like; say so up front
+    // instead of letting a reader scroll past most of it wondering.
+    // A mark is a passage, not a word: this counted marks and called them
+    // words, under a sentence that invites the reader to go and count.
+    var wordCount = (text.match(/\S+/g) || []).length;
+    var sparse = wordCount > 90 && markCount > 0 && markCount <= 3;
+    var sparseNote = sparse
+      ? '<p class="annotated-sparse">Only ' + markCount + ' passage' + (markCount === 1 ? '' : 's') + ' in ' + wordCount + ' words tripped a check. Here ' + (markCount === 1 ? 'it is' : 'they are') + ':</p>'
+      : '';
+
+    return '<div class="receipt">' +
+      '<h3 class="sec">The annotated post<b>' + markCount + ' span' + (markCount === 1 ? '' : 's') + ' marked</b></h3>' +
+      sparseNote +
+      '<div class="legend">' + legend + '</div>' +
+      '<p class="legend-note">Underline style is the category. The small label on each mark is the check it tripped.</p>' +
+      '<div class="annotated">' + out + '</div>' +
+      (note ? '<p class="ai-aside"><b>Aside</b>' + YPS.esc(note) + '</p>' : '') +
+    '</div>';
+  }
+
+  function shareText(r){
+    var top = r.roasts[0] ? r.roasts[0].text : r.oneLiner;
+    if (top.length > 190) top = top.slice(0, 187).replace(/\s+\S*$/, '') + '...';
+    if (r.unscored) return 'yourpost.sucks could not score my post: its checks are written for English.\n\n' + top;
+    return 'My post ' + bandOf(r).label + ': ' + r.overall.toFixed(1) + ' on yourpost.sucks, where ' + SCALE_NOTE + '.\n\n' + top;
+  }
+
+  /* Category lines use c.suck, the same higher-is-worse number the meters
+     show. They used to print c.score, which runs the other way for two of
+     the five categories, so the copied report contradicted the page. */
+  function plainReport(r){
+    var L = [];
+    var band = bandOf(r);
+    L.push('SUCKINESS REPORT: ' + band.label.toUpperCase());
+    // An unscored post has no number to copy: the 0.2 is a floor and the five
+    // category figures are what the page deliberately does not print.
+    if (r.unscored){
+      L.push('The checks are written for English, so this post was not scored.');
+      L.push(r.oneLiner);
+      L.push('');
+    } else {
+      L.push((r.headline || 'This post sucks') + ': ' + r.overall.toFixed(1) + ' suckiness, where ' + SCALE_NOTE);
+      L.push(r.oneLiner);
+      L.push('');
+      L.push('CATEGORY BREAKDOWN (higher is worse)');
+      r.categories.forEach(function(c){
+        L.push(c.label + ': ' + c.suck.toFixed(1) + '. ' + c.verdict);
+      });
+      L.push('');
+    }
+    L.push('THE ROASTS');
+    r.roasts.forEach(function(x){ L.push('• ' + x.text); });
+    if (r.credits.length){
+      L.push('');
+      L.push('IN ITS DEFENSE');
+      r.credits.forEach(function(x){ L.push('+ ' + x); });
+    }
+    L.push('');
+    L.push('THE BRUTAL TAKE');
+    L.push(r.brutal);
+    L.push('');
+    L.push('SUGGESTED CHANGES');
+    if (r.changes && r.changes.length){
+      r.changes.forEach(function(c, i){
+        L.push((i+1) + '. ' + c.type);
+        L.push('   Problem: ' + c.problem);
+        L.push('   Fix: ' + c.suggestion);
+        if (c.rewrite) L.push('   Try this: ' + c.rewrite);
+      });
+      if (r.advice && r.advice.length) L.push('Also:');
+    }
+    (r.advice || []).forEach(function(a, i){ L.push((i+1) + '. ' + a); });
+    L.push('');
+    L.push('-- yourpost.sucks');
+    return L.join('\n');
+  }
+
+  var MODE_LABEL = {
+    // Says who wrote the COMMENTARY on this report, never anything about how
+    // the post itself was written. The old label here was "AI-written", and
+    // sitting next to the score on a tool that has a machine-phrasing check,
+    // it read as a verdict on the post.
+    // The cache is an implementation detail: a cached report is still the
+    // AI's commentary, so the badge says so and the title carries the rest.
+    llm: 'AI commentary', cache: 'AI commentary', rules: 'checklist-only commentary',
+    offline: 'offline', declined: 'declined'
+  };
+  // None of these expose *why* in operator terms (no "API key", no "UTC"):
+  // whatever broke is this site's problem, not something a visitor needs
+  // the mechanism for. Every one of them ends the same way on purpose,
+  // because it's the one thing worth a stranger actually knowing: the
+  // score itself never depended on any of this.
+  var MODE_WHY = {
+    no_key:           'AI is switched off on this site right now.',
+    rate_limited:     'Out of AI commentary for this hour. Back next hour.',
+    budget:           'Today\'s AI budget is spent. Back tomorrow.',
+    llm_unavailable:  'The AI\'s commentary came back unusable.',
+    turnstile:        'The bot check did not pass. Try again for AI commentary.',
+    unscored:         'The checks are written for English, so this post was not scored and the AI was not asked.',
+    timeout:          'The AI ran past 30 seconds. Your browser\'s checklist wrote this one.',
+    server:           'The server had a problem. Your browser scored it instead.',
+    offline:          'No internet connection. Everything ran right here in your browser, score included.'
+  };
+  // Shown in the mode-why line whenever the commentary is not the AI's:
+  // the one case where "checklist-only" next to a score on a tool with a
+  // machine-phrasing check could be misread as a verdict on the post.
+  var BADGE_CLARIFIER = 'The badge says who wrote the commentary, not how your post was written.';
+  function modeBadge(mode){
+    var cls = mode === 'llm' || mode === 'cache' ? 'llm' : 'rules';
+    var title = mode === 'cache'
+      ? 'Who wrote the commentary. Cached from an earlier run. Not a verdict on your writing.'
+      : 'Who wrote the commentary on this report. Not a judgment of how your post was written.';
+    return '<span class="mode ' + cls + '" title="' + title + '">' + (MODE_LABEL[mode] || mode) + '</span>';
+  }
+  function modeWhy(mode, reason){
+    var why = mode === 'offline' ? MODE_WHY.offline : (reason ? (MODE_WHY[reason] || '') : '');
+    if (mode === 'llm' || mode === 'cache') return why;
+    // Said once here instead of seven ways in the strings above. Not for an
+    // unscored post (there is no score to be the same) or offline, which says
+    // it in its own words.
+    var same = (why && reason !== 'unscored' && mode !== 'offline') ? 'Same score either way. ' : '';
+    return (why ? why + ' ' : '') + same + BADGE_CLARIFIER;
+  }
+
+  function renderDeclined(){
+    var rep = $('#report');
+    rep.innerHTML =
+      '<section><h2 class="sec">No report generated</h2>' +
+      '<div class="declined">' +
+        '<h3>Analysis declined</h3>' +
+        '<p>This reads like something that actually happened to somebody. The tool roasts ' +
+        'platform conventions, not a life, and cannot reliably tell them apart. Declined ' +
+        'before any AI was involved. Nothing was scored or cached.</p>' +
+      '</div></section>';
+    rep.hidden = false;
+    scrollToReport('Analysis declined. This post was not scored.');
+  }
+
+  var RECEIPTS_KEY = 'yps_receipts_open';
+
+  function render(r, mode, reason, text){
+    var rep = $('#report');
+    var band = bandOf(r);
+    var col = r.unscored ? NEUTRAL : colorFor(r.overall);
+    var s = r.stats;
+    var scoreStr = r.unscored ? 'n/a' : r.overall.toFixed(1);
+
+    var html = '';
+
+    /* hero: the number, the band it lands in written out, the one-liner,
+       and the brutal take as the card's closing line. The brutal take had
+       a section of its own; it reads better as the last word here. */
+    html += '<section>' +
+      '<h2 class="sec">Suckiness report <b>' + s.rulesFired + ' of ' + s.rulesTotal + ' checks triggered</b></h2>' +
+      '<div class="hero">' +
+        '<div class="kicker-row"><div class="kicker">' + YPS.esc(r.headline || 'This post sucks') + '</div>' + modeBadge(mode) + '</div>' +
+        '<div class="figure">' +
+          '<span class="num" style="color:' + col + '" title="' + SCORE_TITLE + '">' + scoreStr + '</span>' +
+          '<span class="band">' + YPS.esc(band.label) + '</span>' +
+        '</div>' +
+        '<p class="reason">' + YPS.esc(r.oneLiner) + '</p>' +
+        (modeWhy(mode, reason) ? '<div class="mode-why">' + YPS.esc(modeWhy(mode, reason)) + '</div>' : '') +
+        (r.mediaAttached ? '<div class="context-note">You flagged an image or video, so the checklist went easier on short or vague text.</div>' : '') +
+        (r.pitchDetected ? '<div class="context-note">A declared paid offer with a real number attached, so the ask was penalised less, not excused. It is still engagement bait, just not a trick.</div>' : '') +
+        // No scale strip for an unscored post: a bar at 0.2 would be a
+        // score by another name, and the number is a placeholder.
+        (r.unscored ? '' :
+        '<div class="bench">' +
+          '<div class="bench-track" role="meter" aria-valuenow="' + scoreStr + '" aria-valuemin="0" aria-valuemax="10" aria-valuetext="' + scoreStr + ' of 10, higher is worse" aria-label="Suckiness, ' + YPS.esc(band.label) + '. ' + SCALE_NOTE + '.">' +
+            '<div class="bench-fill" style="width:' + Math.max(1.5, r.overall * 10) + '%;background:' + col + ';color:' + col + '"></div>' +
+          '</div>' +
+          '<div class="bench-scale"><span>0 · immaculate</span><span>10 · unsalvageable</span></div>' +
+        '</div>') +
+        '<div class="brutal" style="border-left-color:' + col + '">' + YPS.esc(r.brutal) + '</div>' +
+      '</div>' +
+    '</section>';
+
+    /* roasts: the hook, straight after the score. Get to the fun fast.
+       The list is capped by the engine; when more checks fired than roasts
+       shown, say so, since the header above already gave the real count. */
+    var shown = r.roasts.length;
+    // Four up front. A fifth alone would hide one roast behind a tap for no
+    // saving, so five are all shown; six shows four and folds two.
+    var ROASTS_UP_FRONT = shown === 5 ? 5 : 4;
+    function roastLI(x){
+      return '<li><span class="tag">' + YPS.esc(x.label) + '</span><span>' + YPS.esc(x.text) + '</span></li>';
+    }
+    html += '<section>' +
+      '<h2 class="sec">The roasts</h2>' +
+      (s.rulesFired > shown ? '<p class="findings-note">' + shown + ' of ' + s.rulesFired + ' findings written up, loudest first. All ' + s.rulesFired + ' count toward the score.</p>' : '') +
+      '<ul class="roasts">' + r.roasts.slice(0, ROASTS_UP_FRONT).map(roastLI).join('') + '</ul>' +
+      (shown > ROASTS_UP_FRONT
+        ? '<details class="roasts-more"><summary><span class="rm-glyph" aria-hidden="true"></span>' + (shown - ROASTS_UP_FRONT) + ' more</summary>' +
+          '<ul class="roasts">' + r.roasts.slice(ROASTS_UP_FRONT).map(roastLI).join('') + '</ul></details>'
+        : '') +
+    '</section>';
+
+    /* share: built here, appended after the fix-it cluster below. It used to
+       sit straight after the roasts. The owner's call: the reword is the more
+       powerful thing this page does, so the fix comes before the share. Card
+       as a thumbnail with the buttons beside it; the canvas is still the
+       full 1080x1350. */
+    var cardLabel = 'Share card: ' + band.label + ', ' + scoreStr + ' suckiness';
+    var shareSection = '<section>' +
+      '<h2 class="sec">Share the verdict</h2>' +
+      '<div class="share-box" id="sharebox">' + YPS.esc(shareText(r)) + '</div>' +
+      '<div class="share-row">' +
+        '<button type="button" id="cardwrap" aria-pressed="false" title="Show full size"><canvas id="card" width="1080" height="1350" role="img" aria-label="' + YPS.esc(cardLabel) + '"></canvas></button>' +
+        '<div class="share-actions">' +
+          '<button class="btn-primary" id="copylink" type="button">Copy link</button>' +
+          '<button class="btn-ghost" id="savecard" type="button" aria-label="Download card">Download</button>' +
+          '<button class="btn-ghost" id="copycard" type="button">Copy image</button>' +
+        '</div>' +
+        '<details class="share-more">' +
+          '<summary><span class="sm-glyph" aria-hidden="true"></span>More ways to share</summary>' +
+          '<div class="share-actions">' +
+            '<button class="btn-ghost" id="copyshare" type="button">Copy text</button>' +
+            '<button class="btn-ghost" id="copyfull" type="button">Copy full report</button>' +
+            '<button class="btn-ghost" id="printit" type="button">Print</button>' +
+          '</div>' +
+        '</details>' +
+      '</div>' +
+    '</section>';
+
+    /* The fix-it cluster (suggested changes with the advice folded in, then
+       reword) sits right after the roasts: react, then the offer to fix it,
+       then share, then the receipts for anyone who wants the evidence. */
+
+    /* suggested changes: the model's structural changes when it wrote any,
+       then the rules' advice as a short "Also" list. With no model changes
+       the advice stands alone under the same header. */
+    var adviceList = (r.advice && r.advice.length)
+      ? '<ol class="advice">' + r.advice.map(function(a){ return '<li>' + YPS.esc(a) + '</li>'; }).join('') + '</ol>'
+      : '';
+    var nudge = r.adviceNote === 'no action required'
+      ? '<p class="clean-nudge">Most posts do not land here. Same checks either way, and the same absence of mercy.</p>'
+      : '';
+    if (r.changes && r.changes.length){
+      html += '<section>' +
+        '<h2 class="sec">Suggested changes<b>' + r.changes.length + ' · ordered by impact</b></h2>' +
+        '<ol class="changes">' + r.changes.map(function(c){
+          return '<li>' +
+            '<span class="ctype">' + YPS.esc(c.type) + '</span>' +
+            '<p class="cprob">' + YPS.esc(c.problem) + '</p>' +
+            '<p class="csugg">' + YPS.esc(c.suggestion) + '</p>' +
+            (c.rewrite ? '<div class="crewrite"><span class="lbl">Try this</span>' + YPS.esc(c.rewrite) + '</div>' : '') +
+          '</li>';
+        }).join('') + '</ol>' +
+        (adviceList ? '<h3 class="also">Also' + (r.adviceNote ? '<b>' + YPS.esc(r.adviceNote) + '</b>' : '') + '</h3>' + adviceList : '') +
+        nudge +
+      '</section>';
+    } else {
+      html += '<section>' +
+        '<h2 class="sec">Suggested changes' + (r.adviceNote ? '<b>' + YPS.esc(r.adviceNote) + '</b>' : '') + '</h2>' +
+        adviceList +
+        nudge +
+      '</section>';
+    }
+
+    /* reword: the model writes it, the same rules engine verifies it. This
+       cannot degrade to a rules-only version the way the main report can.
+       Generating replacement prose is exactly the thing rules cannot do. */
+    if (r.unscored){
+      html += '<section>' +
+        '<h2 class="sec">Reword it</h2>' +
+        '<div class="reword-empty">Not scored, so nothing to rewrite.</div>' +
+      '</section>';
+    } else if (r.stats.rulesFired === 0){
+      html += '<section>' +
+        '<h2 class="sec">Reword it</h2>' +
+        '<div class="reword-empty">Nothing to rewrite. It came back clean.</div>' +
+      '</section>';
+    } else if (mode === 'offline'){
+      html += '<section>' +
+        '<h2 class="sec">Reword it</h2>' +
+        '<div class="reword-note">Needs an internet connection. Not available in this offline copy.</div>' +
+      '</section>';
+    } else if (reason === 'rate_limited' || reason === 'budget'){
+      // The analyze call already learned the AI is out of reach for this
+      // visitor, so the reword button would be a wasted click. Say so.
+      html += '<section>' +
+        '<h2 class="sec">Reword it</h2>' +
+        '<div class="reword-note">' + YPS.esc(REWORD_UNAVAILABLE_NOTES[reason]) + '</div>' +
+      '</section>';
+    } else {
+      html += '<section>' +
+        '<h2 class="sec">Reword it<b>AI writes it, the checklist re-scores it</b></h2>' +
+        '<div class="reword-actions">' +
+          '<button class="btn-primary" id="rewordbtn">Reword this post</button>' +
+          '<span class="reword-note">Same voice, better structure. The same checks re-score it, so the before and after is measured.</span>' +
+        '</div>' +
+        '<div class="progress-track" id="reword-progress" hidden role="progressbar" aria-label="Rewording"><div class="progress-thumb"></div></div>' +
+        '<p class="reword-caveat">Invented numbers get thrown out. A made-up name or quote might not. Read it first.</p>' +
+        '<div id="rewordresult" class="reword-result"></div>' +
+      '</section>';
+    }
+
+    html += shareSection;
+
+    /* the receipts: category meters, the arithmetic, the annotated post,
+       credits and diagnostics, all in one closed-by-default details. Every
+       block is unchanged inside; the section headers became h3s. Open state
+       is remembered so anyone who wants the evidence every time gets it. */
+    var receipts = '';
+    if (r.unscored){
+      // No category numbers and no arithmetic for a post the checks could
+      // not read: meters at 0.0 would be a score wearing a disguise.
+      receipts += '<div class="receipt">' +
+        '<h3 class="sec">Category breakdown</h3>' +
+        '<p class="meters-note">Not scored. The checks are written for English, so there are no category numbers for this post.</p>' +
+      '</div>';
+    } else {
+      receipts += '<div class="receipt">' +
+        '<h3 class="sec">Category breakdown<b>higher is worse</b></h3>' +
+        '<p class="meters-note">Every one of these runs the same direction: 0 to 10, higher always means worse.</p>' +
+        '<div class="meters">' + r.categories.map(meterHTML).join('') + '</div>' +
+      '</div>';
+      receipts += breakdownHTML(r);
+    }
+    if (text) receipts += annotateHTML(text, r.spans, r.annotatedNote, r.categories);
+    if (r.credits.length){
+      receipts += '<div class="receipt">' +
+        '<h3 class="sec">In its defense</h3>' +
+        '<ul class="credits">' + r.credits.map(function(x){
+          return '<li>' + YPS.esc(x) + '</li>';
+        }).join('') + '</ul>' +
+      '</div>';
+    }
+    var rows = [
+      ['Words', s.words], ['Sentences', s.sentences],
+      ['Avg sentence', s.avgSentence + ' w'], ['Line breaks', s.lines],
+      ['Emoji', s.emoji], ['Hashtags', s.hashtags],
+      ['Mentions', s.mentions], ['Em-dashes', s.emdashes],
+      ['Concrete refs', s.specifics], ['Read time', s.readSeconds + 's']
+    ];
+    var half = Math.ceil(rows.length / 2);
+    function tbl(list){
+      return '<table class="diag"><tbody>' + list.map(function(r2){
+        return '<tr><th scope="row">' + r2[0] + '</th><td>' + r2[1] + '</td></tr>';
+      }).join('') + '</tbody></table>';
+    }
+    receipts += '<div class="receipt">' +
+      '<h3 class="sec">Diagnostics</h3>' +
+      '<div class="diag-grid">' + tbl(rows.slice(0, half)) + tbl(rows.slice(half)) + '</div>' +
+      (r.diagnosticsNote ? '<p class="ai-aside"><b>Aside</b>' + YPS.esc(r.diagnosticsNote) + '</p>' : '') +
+    '</div>';
+
+    // The index is read off the blocks actually assembled, in order, so it
+    // cannot name an annotated post or a defence that this report lacks.
+    function receiptsIndex(markup){
+      var names = [], re = /<h3 class="sec">([^<]+)/g, m;
+      while ((m = re.exec(markup))) names.push(m[1].trim());
+      if (!names.length) return 'Where the number came from';
+      return names.map(function(x, i){ return i ? x.charAt(0).toLowerCase() + x.slice(1) : x; }).join(', ');
+    }
+    var receiptsOpen = false;
+    try { receiptsOpen = localStorage.getItem(RECEIPTS_KEY) === '1'; } catch (e) {}
+    html += '<section>' +
+      '<details class="receipts" id="receipts"' + (receiptsOpen ? ' open' : '') + '>' +
+        '<summary><span class="rc-title"><span class="rc-glyph" aria-hidden="true"></span>The receipts</span><span class="rc-sub">' + receiptsIndex(receipts) + '</span></summary>' +
+        receipts +
+      '</details>' +
+    '</section>';
+
+    rep.innerHTML = html;
+    rep.hidden = false;
+    // The bonus game joins the page only once there is a report above it.
+    var gameWrap = $('#game-wrap');
+    if (gameWrap) gameWrap.hidden = false;
+
+    // Stagger index for the CSS reveal above; a plain loop, not a CSS
+    // nth-child rule, because it has to match the actual DOM order of
+    // sections built above, not a rule that would need updating every time
+    // a section gets added, removed, or reordered up there.
+    Array.prototype.forEach.call(rep.children, function(sec, i){ sec.style.setProperty('--i', i); });
+    // Not for an unscored post. The hero says "n/a" there, and this call used
+    // to run regardless and count up to the 0.2 floor on top of it: the tenth
+    // place that needed the guard, and the one that wrote last.
+    if (!r.unscored) animateScoreNum($('.hero .num'), r.overall);
+
+    $('#receipts').addEventListener('toggle', function(){
+      try { localStorage.setItem(RECEIPTS_KEY, this.open ? '1' : '0'); } catch (e) {}
+    });
+
+    function toggleCardSize(){
+      var wrap = $('#cardwrap');
+      var full = wrap.classList.toggle('full');
+      wrap.setAttribute('aria-pressed', full ? 'true' : 'false');
+      wrap.title = full ? 'Show thumbnail' : 'Show full size';
+    }
+    $('#cardwrap').addEventListener('click', toggleCardSize);
+
+    drawCard(r);
+    $('#savecard').addEventListener('click', function(){
+      $('#card').toBlob(function(blob){
+        var a = document.createElement('a');
+        a.href = URL.createObjectURL(blob);
+        a.download = 'yourpost-sucks-' + r.overall.toFixed(1).replace('.','-') + '.png';
+        a.click();
+        setTimeout(function(){ URL.revokeObjectURL(a.href); }, 4000);
+        toast('Saving card');
+      }, 'image/png');
+    });
+    $('#copycard').addEventListener('click', function(){
+      if (!window.ClipboardItem || !navigator.clipboard || !navigator.clipboard.write){
+        toast('Use download instead', { error: true }); return;
+      }
+      $('#card').toBlob(function(blob){
+        navigator.clipboard.write([new ClipboardItem({ 'image/png': blob })])
+          .then(function(){ toast('Image copied'); }, function(){ toast('Use download instead', { error: true }); });
+      }, 'image/png');
+    });
+    $('#copyshare').addEventListener('click', function(){ copy(shareText(r)); });
+
+    // Self-contained: the post itself travels in the URL (see encodePost/
+    // decodePost), not a server-side hash, so a shared link replays the
+    // exact same post through the exact same /api/analyze path a fresh
+    // visit would use (hitting the KV cache when it was already scored),
+    // rather than depending on a report that only exists if it happened
+    // to get cached. Works from the offline copy too: it just re-runs the
+    // local engine, same as any other offline analysis.
+    // Encoded up front rather than on click: encoding is async now, and
+    // some browsers only allow a clipboard write inside the click itself.
+    var permalink = null;
+    var linkBase = location.origin + location.pathname + '?p=';
+    encodePost(text).then(function(enc){ permalink = linkBase + enc; });
+    $('#copylink').addEventListener('click', function(){
+      if (permalink) { copy(permalink); return; }
+      encodePost(text).then(function(enc){ permalink = linkBase + enc; copy(permalink); });
+    });
+    $('#copyfull').addEventListener('click', function(){ copy(plainReport(r)); });
+    $('#printit').addEventListener('click', function(){ window.print(); });
+
+    var rewordBtn = $('#rewordbtn');
+    if (rewordBtn) rewordBtn.addEventListener('click', function(){ runReword(text, r, rewordBtn); });
+
+    scrollToReport('Report ready. ' + band.label + ': ' + scoreStr + ' suckiness, where ' + SCALE_NOTE + '.');
+  }
+
+  /* The reword: an explicit, separate model call the user opts into (it costs
+     real money and there is no free rules-only version of "write new prose").
+     Whatever comes back is re-scored by the exact same ENGINE.analyze() that
+     produced everything else on this page. The before/after shown here is
+     measured, not asserted by the model that wrote the rewrite. */
+  var REWORD_TIMEOUT_MS = 35000;
+  var rewordInFlight = false;
+  function runReword(post, r, btn){
+    if (rewordInFlight) return;
+    rewordInFlight = true;
+    var out = $('#rewordresult');
+    var progress = $('#reword-progress');
+    btn.classList.add('busy'); btn.textContent = 'Rewording'; btn.setAttribute('aria-disabled', 'true');
+    if (progress) progress.hidden = false;
+    // Same reassurance pattern as the main Analyze button: a real rewrite
+    // call can take several seconds, so say so rather than leaving the
+    // button label as the only, easily-missed sign anything is happening.
+    var noteTimer = setTimeout(function(){ btn.textContent = 'Still rewording'; }, 3500);
+    var ctrl = (typeof AbortController === 'function') ? new AbortController() : null;
+    var killer = setTimeout(function(){ if (ctrl) ctrl.abort(); }, REWORD_TIMEOUT_MS);
+    var finish = function(){
+      rewordInFlight = false;
+      clearTimeout(noteTimer); clearTimeout(killer);
+      btn.classList.remove('busy'); btn.textContent = 'Reword this post'; btn.setAttribute('aria-disabled', 'false');
+      if (progress) progress.hidden = true;
+    };
+    var clearError = function(){
+      var old = out.querySelector('.reword-error'); if (old) old.parentNode.removeChild(old);
+    };
+    // A failure goes ABOVE whatever is already there: a previous rewrite
+    // that worked is not thrown away because a retry did not.
+    var fail = function(msg){
+      finish();
+      clearError();
+      var box = document.createElement('div');
+      box.className = 'reword-error';
+      box.setAttribute('role', 'alert');
+      box.innerHTML = '<span>' + YPS.esc(msg) + '</span><button class="btn-ghost" type="button">Try again</button>';
+      box.querySelector('button').addEventListener('click', function(){ runReword(post, r, btn); });
+      out.insertBefore(box, out.firstChild);
+    };
+    getTurnstileToken().then(function(turnstileToken){
+      fetch('api/reword', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ post: post, flags: Object.assign({}, pasteFlags, { hasMedia: $('#hasmedia').checked }), turnstileToken: turnstileToken }),
+        signal: ctrl ? ctrl.signal : undefined
+      }).then(function(res){
+        if (res.ok) return res.json();
+        var err = new Error('http ' + res.status); err.status = res.status; throw err;
+      }).then(function(payload){
+        finish();
+        clearError();
+        renderReword(payload, out, r);
+        // Every outcome (a rewrite, a decline, nothing to fix, no improvement)
+        // used to land with no announcement and focus left on a button that
+        // had just changed meaning. Say it, and put focus on the result.
+        out.setAttribute('tabindex', '-1');
+        var liveR = $('#live');
+        if (liveR) liveR.textContent = payload.mode === 'reworded'
+          ? 'Rewrite ready. Before ' + r.overall.toFixed(1) + ', after ' + payload.after.overall.toFixed(1) + '.'
+          : (out.textContent || 'No rewrite.').trim().slice(0, 200);
+        try { out.focus({ preventScroll: true }); } catch (e) { out.focus(); }
+      }).catch(function(err){
+        var status = err && err.status;
+        var msg;
+        if (status === 413) msg = 'That post is too long to reword.';
+        else if (status >= 500) msg = 'The server had a problem. Try again in a moment.';
+        else if (err && err.name === 'AbortError') msg = 'The AI took too long. Try again in a moment.';
+        else msg = 'Could not reach the AI just now. Try again in a moment.';
+        fail(msg);
+      });
+    });
+  }
+
+  var REWORD_UNAVAILABLE_NOTES = {
+    no_key: 'AI is switched off on this site right now.',
+    rate_limited: 'That was the hour\'s worth from your connection. Try again next hour.',
+    budget: 'Today\'s AI budget is spent. Try again tomorrow.',
+    llm_unavailable: 'The AI didn\'t return a usable rewrite that time. Try again.',
+    turnstile: 'The bot check did not pass that time, so no rewrite was requested. Try again.',
+    no_improvement: 'Two attempts, neither beat your post. You will not be shown a worse version.'
+  };
+
+  function renderReword(payload, out, r){
+    if (payload.mode === 'declined'){
+      out.innerHTML = '<div class="reword-error">A fresh check flagged this as sensitive content. Declining to generate a rewrite of it.</div>';
+      return;
+    }
+    if (payload.mode === 'clean'){
+      out.innerHTML = '<div class="reword-empty">Checked it again. Still clean. No rewrite needed.</div>';
+      return;
+    }
+    if (payload.mode === 'unavailable'){
+      out.innerHTML = '<div class="reword-error">' + YPS.esc(REWORD_UNAVAILABLE_NOTES[payload.reason] || 'Reword is unavailable right now.') + '</div>';
+      return;
+    }
+
+    var before = r.overall, after = payload.after.overall;
+    var delta = Math.round((after - before) * 10) / 10;
+    // The server only returns a rewrite that scored strictly better, fresh or
+    // cached, so the second branch is a guard, not a feature. It says one true
+    // thing if it ever renders.
+    var tag = delta <= -0.1 ? 'verified improvement' : 'not an improvement';
+
+    out.innerHTML =
+      // The summary is optional: the server drops it (and only it) when
+      // the model's one-line note fails a check the rewrite itself passed.
+      (payload.summary ? '<p class="reword-summary">' + YPS.esc(payload.summary) + '</p>' : '') +
+      '<div class="reword-text">' + YPS.esc(payload.rewritten) + '</div>' +
+      '<div class="reword-delta">' +
+        '<div><span class="rd-lbl">Before</span><span class="rd-num" style="color:' + colorFor(before) + '">' + before.toFixed(1) + '</span></div>' +
+        '<span class="rd-arrow">→</span>' +
+        '<div><span class="rd-lbl">After · re-checked</span><span class="rd-num" style="color:' + colorFor(after) + '">' + after.toFixed(1) + '</span></div>' +
+        '<span class="rd-tag">' + tag + '</span>' +
+      '</div>' +
+      '<div class="reword-actions-row">' +
+        '<button class="btn-ghost" id="copyreword">Copy rewritten post</button>' +
+        '<button class="btn-ghost" id="analyzereword">Analyze this rewrite</button>' +
+      '</div>';
+
+    $('#copyreword').addEventListener('click', function(){ copy(payload.rewritten); });
+    // Closes the loop: without this, seeing the full report on the rewrite
+    // (not just its before/after score) means copying it out, scrolling up,
+    // pasting it back in, and clicking Analyze by hand.
+    $('#analyzereword').addEventListener('click', function(){
+      $('#post').value = payload.rewritten;
+      updateCounter();
+      run();
+    });
+  }
+
+  /* The share card is the thing that actually travels. Rendered in the browser,
+     so it costs nothing and works with the API switched off entirely. */
+  function drawCard(r){
+    var cv = $('#card'); if (!cv || !cv.getContext) return;
+    var g = cv.getContext('2d');
+    /* 1080 x 1350, LinkedIn's 4:5 portrait: the largest a single image gets in
+       the feed. The card used to be 1200 x 630, which is the LINK-PREVIEW
+       shape. Posted as an image it became a thin strip, and the feed shows an
+       image about 550px wide, so its 29px takeaway read at 13px and its
+       captions at 8. Everything here is sized for that halving: the takeaway
+       is 52px, the smallest type on the card is 28. (public/og-card.png, the
+       actual link preview, stays 1200 x 630 and is drawn by og-card.mjs.) */
+    var W = 1080, H = 1350, M = 96;
+    // An unscored post gets the neutral grey, as it does on the page: the 0.2
+    // the engine parks it at is a floor, not a score, and the cool blue would
+    // say "barely sucks" about a post nobody scored.
+    var col = r.unscored ? NEUTRAL : colorFor(r.overall), band = bandOf(r);
+    var SANS = 'system-ui, -apple-system, "Segoe UI", Roboto, sans-serif';
+    var MONO = 'ui-monospace, SFMono-Regular, Menlo, Consolas, monospace';
+    var GREY = '#898781'; // clears 4.5:1 on the #1a1a19 panel
+
+    g.fillStyle = '#0d0d0d'; g.fillRect(0, 0, W, H);
+    g.fillStyle = '#1a1a19'; g.fillRect(40, 40, W - 80, H - 80);
+    g.strokeStyle = '#2c2c2a'; g.lineWidth = 2; g.strokeRect(41, 41, W - 82, H - 82);
+
+    g.textBaseline = 'alphabetic';
+    g.fillStyle = '#ffffff'; g.font = '600 56px ' + MONO;
+    g.fillText('yourpost', M, 168);
+    var wm = g.measureText('yourpost').width;
+    g.fillStyle = GREY; g.fillText('.sucks', M + wm, 168);
+    g.font = '26px ' + MONO;
+    g.fillText('POST QUALITY ASSURANCE', M, 214);
+
+    // The verdict in words above the number, so a 1.4 that "barely sucks"
+    // never ships under a headline saying it sucks, full stop.
+    g.fillStyle = GREY; g.font = '40px ' + MONO;
+    g.fillText(band.label.toUpperCase(), M, 392);
+
+    g.fillStyle = col; g.font = '650 360px ' + SANS;
+    g.fillText((r.unscored ? 'n/a' : r.overall.toFixed(1)), M - 12, 690);
+
+    // What the number means. No caption and no strip for an unscored post, for
+    // the reason render() gives three times over: a bar at 0.2 is a score by
+    // another name, and this is the one surface that leaves the site.
+    g.fillStyle = GREY; g.font = '28px ' + MONO;
+    if (r.unscored){
+      g.fillText('THE CHECKS ARE WRITTEN FOR ENGLISH', M, 760);
+    } else {
+      g.fillText('0 IMMACULATE \u00b7 10 UNSALVAGEABLE', M, 760);
+      // scale strip, no invented benchmark tick
+      var bx = M, by = 784, bw = W - 2 * M, bh = 20;
+      g.fillStyle = '#141413'; g.fillRect(bx, by, bw, bh);
+      g.fillStyle = col; g.fillRect(bx, by, Math.max(10, bw * (r.overall / 10)), bh);
+    }
+
+    // The takeaway, in a fixed 330px window above the footer. A long roast
+    // steps the type down rather than running into the footer or being cut
+    // mid-sentence; it never goes below 42px, which is 21px in the feed.
+    var line = r.roasts[0] ? r.roasts[0].text : r.oneLiner;
+    var size = line.length > 190 ? 42 : (line.length > 130 ? 46 : 52);
+    var lh = Math.round(size * 1.27);
+    g.fillStyle = '#e8e7df'; g.font = '400 ' + size + 'px ' + SANS;
+    wrapText(g, line, M, 900, W - 2 * M, lh, Math.floor(330 / lh));
+
+    // The footer carries the address, because a posted image has no link.
+    g.font = '28px ' + MONO;
+    g.fillStyle = GREY;
+    g.fillText(r.stats.rulesFired + ' OF ' + r.stats.rulesTotal + ' CHECKS TRIGGERED', M, H - 92);
+    g.fillStyle = '#e8e7df';
+    var right = 'YOURPOST.SUCKS';
+    g.fillText(right, W - M - g.measureText(right).width, H - 92);
+  }
+
+  function wrapText(g, text, x, y, maxW, lh, maxLines){
+    var words = String(text).split(/\s+/), line = '', n = 0;
+    for (var i = 0; i < words.length; i++){
+      var test = line ? line + ' ' + words[i] : words[i];
+      if (g.measureText(test).width > maxW && line){
+        if (n === maxLines - 1){
+          while (g.measureText(line + '...').width > maxW && line.indexOf(' ') > 0)
+            line = line.slice(0, line.lastIndexOf(' '));
+          g.fillText(line + '...', x, y); return;
+        }
+        g.fillText(line, x, y); y += lh; n++; line = words[i];
+      } else line = test;
+    }
+    if (line) g.fillText(line, x, y);
+  }
+
+  function copy(text){
+    var done = function(){ toast('Copied'); };
+    if (navigator.clipboard && navigator.clipboard.writeText){
+      navigator.clipboard.writeText(text).then(done, function(){ copyFallback(text, done); });
+    } else { copyFallback(text, done); }
+  }
+  function copyFallback(text, cb){
+    var ta = document.createElement('textarea');
+    ta.value = text; ta.style.position='fixed'; ta.style.opacity='0';
+    document.body.appendChild(ta); ta.select();
+    // execCommand reports failure by returning false, not by throwing, so
+    // a false has to become a throw or "Copied" fires on a copy that never
+    // happened.
+    try {
+      if (!document.execCommand('copy')) throw new Error('execCommand copy returned false');
+      cb();
+    } catch(e){ toast('Copy failed', { error: true }); }
+    document.body.removeChild(ta);
+  }
+  var toastTimer;
+  // Success toasts are polite status messages that clear in 2.5s. An error
+  // toast is an alert and stays for at least 6s: long enough to read, and
+  // long enough for a screen reader to get to it.
+  function toast(msg, opts){
+    var isError = !!(opts && opts.error);
+    var t = $('#toast');
+    t.setAttribute('role', isError ? 'alert' : 'status');
+    t.setAttribute('aria-live', isError ? 'assertive' : 'polite');
+    t.classList.toggle('error', isError);
+    t.textContent = msg; t.classList.add('on');
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(function(){ t.classList.remove('on'); }, isError ? 6000 : 2500);
+  }
+
+  var MAX_CHARS = 4000;
+
+  /* One request at a time. `inFlight` is the guard every entry point
+     (button, Ctrl+Enter, specimens, "Analyze this rewrite", permalink)
+     goes through; `activeRun` is how Cancel reaches the request. */
+  var inFlight = false;
+  var activeRun = null;
+  var ANALYZING_MSG = 'Analyzing. This can take up to 30 seconds.';
+
+  function setBusy(on){
+    var btn = $('#run'), clr = $('#clear'), panel = $('#panel-tool');
+    btn.classList.toggle('busy', on);
+    btn.textContent = on ? 'Analyzing' : 'Analyze';
+    btn.setAttribute('aria-disabled', on ? 'true' : 'false');
+    // Clear becomes Cancel for as long as there is something to cancel.
+    clr.textContent = on ? 'Cancel' : 'Clear';
+    if (on) panel.setAttribute('aria-busy', 'true'); else panel.removeAttribute('aria-busy');
+    // The bar shows immediately, same moment as the button's own busy state:
+    // a cache hit finishing in under a second just means it flashes
+    // briefly, which is still an honest answer to "did my click register."
+    $('#progress').hidden = !on;
+    if (!on) $('#busynote').hidden = true;
+    Array.prototype.forEach.call(document.querySelectorAll('[data-spec]'), function(b){ b.disabled = on; });
+    var live = $('#live');
+    if (on && live) live.textContent = ANALYZING_MSG;
+  }
+
+  /* The client never depends on the API. It asks, and if anything at all goes
+     wrong (offline, timeout, 500, budget spent, malformed reply) it computes
+     the identical scores locally and shows a checklist-written report. The
+     only thing that degrades is the prose. The badge and its note say which
+     of those happened, honestly: 'offline' only when the browser is offline
+     or the network request itself failed, 'timeout' when the AI ran past
+     the killer, 'server' for a bad status or an unreadable reply. */
+  function run(){
+    if (inFlight) return;
+    hygiene();
+    var text = $('#post').value;
+    if (!text.trim()){ toast('Nothing to analyze'); $('#post').focus(); return; }
+    if (text.length > MAX_CHARS){ updateCounter(); $('#post').focus(); return; }
+
+    // hygiene() just replaced pasteFlags wholesale (it owns the paste-only
+    // flags), so the media checkbox, a separate, persistent, user-set
+    // signal, is folded in fresh at call time rather than stored inside
+    // pasteFlags, where it would get wiped out by the next paste.
+    var flags = Object.assign({}, pasteFlags, { hasMedia: $('#hasmedia').checked });
+
+    inFlight = true;
+    setBusy(true);
+    var note = $('#busynote');
+    // The text note stays on its own 3.5s delay: that one is explaining a
+    // wait that's actually gone long, not confirming the click landed.
+    var noteTimer = setTimeout(function(){ note.hidden = false; }, 3500);
+    var ctrl = (typeof AbortController === 'function') ? new AbortController() : null;
+    var fell_back = false;
+    var killer = null;
+
+    var settle = function(){
+      inFlight = false; activeRun = null;
+      clearTimeout(noteTimer); clearTimeout(killer);
+      setBusy(false);
+    };
+
+    var done = function(report, mode, reason){
+      settle();
+      // A result for text that is no longer in the box is not this run's
+      // to show: the reader changed their mind while it was in flight.
+      if ($('#post').value !== text) return;
+      if (report && report.sensitive) renderDeclined();
+      else render(report, mode, reason, text);
+    };
+
+    var fallback = function(reason){
+      if (fell_back) return; fell_back = true;
+      if (ctrl) { try { ctrl.abort(); } catch (e) {} }
+      var offline = navigator.onLine === false || reason === 'network';
+      done(YPS.analyze(text, flags), offline ? 'offline' : 'rules', offline ? undefined : reason);
+    };
+
+    activeRun = {
+      cancel: function(){
+        if (fell_back) return; fell_back = true;
+        if (ctrl) { try { ctrl.abort(); } catch (e) {} }
+        settle();
+        var live = $('#live');
+        if (live) live.textContent = 'Canceled.';
+      }
+    };
+
+    // Matches the server's own LLM_TIMEOUT_MS (30s in src/worker.js) plus a
+    // margin for network/processing overhead. Read off the test seam at
+    // call time so a test can shorten it without waiting half a minute.
+    var killerMs = (window.YPSClient && Number(window.YPSClient.killerMs)) || 32000;
+    killer = setTimeout(function(){ fallback('timeout'); }, killerMs);
+
+    getTurnstileToken().then(function(turnstileToken){
+      if (fell_back) return;
+      fetch('api/analyze', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ post: text, flags: flags, image: attachedImage || undefined, turnstileToken: turnstileToken }),
+        signal: ctrl ? ctrl.signal : undefined
+      }).then(function(res){
+        if (res.ok) return res.json();
+        var err = new Error('http ' + res.status); err.status = res.status; throw err;
+      }).then(function(payload){
+        if (fell_back) return;
+        if (!payload || !payload.report) return fallback('server');
+        fell_back = true;
+        done(payload.report, payload.mode || 'rules', payload.reason);
+      }).catch(function(err){
+        if (fell_back) return; // the killer or Cancel already spoke
+        // A TypeError from fetch is the network itself failing (offline,
+        // DNS, CORS, a file:// copy). Anything else came back from a
+        // server that answered, badly.
+        fallback(err && err.name === 'TypeError' ? 'network' : 'server');
+      });
+    });
+  }
+
+  function updateCounter(){
+    var v = $('#post').value;
+    var w = (v.match(/\S+/g) || []).length;
+    var over = v.length - MAX_CHARS;
+    var counter = $('#counter'), err = $('#limit-err');
+    counter.textContent = w + (w === 1 ? ' word' : ' words') + ' · ' +
+      (over > 0 ? 'over by ' + over + ' chars' : v.length + ' / ' + MAX_CHARS + ' chars');
+    counter.classList.toggle('over', over > 0);
+    if (err){
+      err.hidden = over <= 0;
+      err.textContent = over > 0 ? MAX_CHARS + ' characters is the limit. Trim ' + over + '.' : '';
+    }
+    $('#run').disabled = w === 0 || over > 0;
+    // Said once on the way over and once on the way back, not per keystroke.
+    if ((over > 0) !== !!wasOver){
+      wasOver = over > 0;
+      var liveC = $('#live');
+      if (liveC) liveC.textContent = wasOver ? 'Over the ' + MAX_CHARS + ' character limit. Analyze is off until it is trimmed.' : 'Back under the limit.';
+    }
+  }
+  var wasOver = false;
+
+  /* ---------------- easter egg: click the flag, the site talks pirate --------
+     Only the site's own words change: the tagline, the intro, the tabs, the
+     report's commentary, the explainer, the footer. Never the visitor's post,
+     the annotated copy of it, a rewrite, the share text, the card, or any
+     number. It is a text-node filter with the originals kept, so switching
+     it off puts every word back, and nothing is sent or stored. */
+  var PIRATE = { on: false, originals: new Map(), timer: null };
+  var PIRATE_SKIP = '#sharebox, canvas, .annotated, textarea, script, style, .num, #run, #clear, #themetoggle, ' +
+    '#rewordbtn, #analyzereword, .reword-text, .game-wrap, #counter, #limit-err, [aria-live], .toast, #pirateflag';
+  var PIRATE_PHRASES = [
+    [/post quality assurance/gi, 'Plunder quality assurance'],
+    [/unsympathetic/gi, 'no quarter given'],
+    [/never stored/gi, 'no loot kept'],
+    [/checklist-only commentary/gi, 'articles-only commentary'],
+    [/roast my post/gi, 'Keelhaul me post'],
+    [/how this works/gi, 'How she sails'],
+    [/\bai commentary\b/gi, 'parrot commentary'],
+    [/\bthe ai\b/gi, 'the parrot'],
+    [/\bai\b/gi, 'the parrot'],
+    [/\bthe checklist\b/gi, "the ship's articles"],
+    [/\bchecklist\b/gi, 'articles'],
+    [/\bbuy him a coffee\b/gi, 'Buy him a grog'],
+    [/\byou're\b/gi, 'ye be'], [/\byou are\b/gi, 'ye be'],
+    [/\byours\b/gi, 'yers'], [/\byour\b/gi, 'yer'], [/\byou\b/gi, 'ye'],
+    [/\bis not\b/gi, 'be not'], [/\bisn't\b/gi, "ain't"],
+    [/\bis\b/gi, 'be'], [/\bare\b/gi, 'be'], [/\bam\b/gi, 'be'],
+    [/\bmy\b/gi, 'me'], [/\byes\b/gi, 'aye'],
+    [/\bfriends\b/gi, 'mateys'], [/\bfriend\b/gi, 'matey'],
+    [/\bmoney\b/gi, 'doubloons'], [/\bhello\b/gi, 'ahoy']
+  ];
+  function pirateWord(match, to){
+    if (match === match.toUpperCase() && match.length > 2) return to.toUpperCase();
+    if (match.charAt(0) === match.charAt(0).toUpperCase()) return to.charAt(0).toUpperCase() + to.slice(1);
+    return to.charAt(0).toLowerCase() + to.slice(1);
+  }
+  function pirateText(t){
+    PIRATE_PHRASES.forEach(function(p){ t = t.replace(p[0], function(m){ return pirateWord(m, p[1]); }); });
+    return t;
+  }
+  function pirateApply(){
+    if (!PIRATE.on) return;
+    ['header .tagline', 'header .intro', '.tabs', '#report', '#panel-explain', 'footer'].forEach(function(sel){
+      var root = $(sel); if (!root) return;
+      var walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT, null), node, batch = [];
+      while ((node = walker.nextNode())) batch.push(node);
+      batch.forEach(function(nd){
+        if (PIRATE.originals.has(nd) || !nd.nodeValue.trim()) return;
+        if (nd.parentElement && nd.parentElement.closest(PIRATE_SKIP)) return;
+        var next = pirateText(nd.nodeValue);
+        PIRATE.originals.set(nd, nd.nodeValue);
+        if (next !== nd.nodeValue) nd.nodeValue = next;
+      });
+    });
+  }
+  function pirateRestore(){
+    PIRATE.originals.forEach(function(text, nd){ if (nd.isConnected) nd.nodeValue = text; });
+    PIRATE.originals = new Map();
+  }
+  $('#pirateflag').addEventListener('click', function(){
+    PIRATE.on = !PIRATE.on;
+    this.setAttribute('aria-pressed', PIRATE.on ? 'true' : 'false');
+    this.classList.remove('waving'); void this.offsetWidth; this.classList.add('waving');
+    if (PIRATE.on){ pirateApply(); toast('Pirate mode. Yer post still sucks.'); }
+    else { pirateRestore(); toast('Back to business casual.'); }
+  });
+  // New reports and rewrites arrive as fresh nodes; translate those too.
+  if (window.MutationObserver){
+    new MutationObserver(function(){
+      if (!PIRATE.on) return;
+      clearTimeout(PIRATE.timer);
+      PIRATE.timer = setTimeout(pirateApply, 30);
+    }).observe($('#report'), { childList: true, subtree: true });
+  }
+
+  $('#themetoggle').addEventListener('click', function(){
+    setTheme(currentTheme() === 'dark' ? 'light' : 'dark');
+  });
+  syncThemeUI();
+  // Only relevant when nothing is explicitly saved: if the system theme
+  // changes while the tab is open and the user never toggled, keep the
+  // button's label truthful rather than leaving it stale until next load.
+  if (window.matchMedia){
+    var lightQuery = window.matchMedia('(prefers-color-scheme: light)');
+    var onSystemChange = function(){ if (!savedTheme()) syncThemeUI(); };
+    if (lightQuery.addEventListener) lightQuery.addEventListener('change', onSystemChange);
+    else if (lightQuery.addListener) lightQuery.addListener(onSystemChange); // older Safari
+  }
+
+  $('#run').addEventListener('click', run);
+  $('#clear').addEventListener('click', function(){
+    // Mid-run the button reads Cancel and does exactly that: the request is
+    // aborted, nothing renders late, and the text is left alone.
+    if (inFlight && activeRun){ activeRun.cancel(); return; }
+    $('#post').value = '';
+    pasteFlags = {};
+    $('#hasmedia').checked = false;
+    clearAttachedImage();
+    showNotices([]);
+    $('#report').hidden = true;
+    // The game joins the page only under a report, so it leaves with one.
+    var gw = $('#game-wrap'); if (gw) gw.hidden = true;
+    updateCounter();
+    $('#post').focus();
+  });
+  var pasteFlags = {};
+
+  /* Attached image: resized and re-encoded entirely in the browser before
+     it ever leaves the page, so the worst-case upload (and the server's
+     worst-case token cost) is bounded regardless of what a phone camera
+     actually produced. Never touches the score — ENGINE.analyze() never
+     sees it — it only ever reaches the model, as something for the prose
+     to comment on. Discarded, not stored: nothing here is saved server-side
+     either, same "nothing is saved" promise the text side already makes. */
+  var attachedImage = null; // { mediaType, data } sent as body.image, or null
+  var MEDIA_MAX_DIMENSION = 1024;
+  var MEDIA_MAX_SOURCE_BYTES = 12 * 1024 * 1024;
+  // True only while the attach itself is what ticked the media checkbox, so
+  // removing the image can untick it without undoing a choice the reader
+  // made by hand.
+  var mediaCheckedByAttach = false;
+
+  function clearAttachedImage(){
+    attachedImage = null;
+    $('#mediafile').value = '';
+    $('#mediapreview').hidden = true;
+    var img = $('#mediapreview-img');
+    img.removeAttribute('src'); img.hidden = true;
+    $('#mediapreview-name').textContent = '';
+    if (mediaCheckedByAttach){ $('#hasmedia').checked = false; mediaCheckedByAttach = false; }
+  }
+
+  // Keyboard-reachable stand-in for the hidden file input.
+  $('#mediabtn').addEventListener('click', function(){ $('#mediafile').click(); });
+  $('#hasmedia').addEventListener('change', function(){ mediaCheckedByAttach = false; });
+
+  function loadViaImage(file){
+    return new Promise(function(resolve, reject){
+      var url = URL.createObjectURL(file);
+      var img = new Image();
+      img.onload = function(){ URL.revokeObjectURL(url); resolve(img); };
+      img.onerror = function(){ URL.revokeObjectURL(url); reject(new Error('image load failed')); };
+      img.src = url;
+    });
+  }
+  // createImageBitmap decodes off the main thread and honours EXIF
+  // orientation; the Image element is the fallback where it is missing or
+  // refuses the file (HEIC on a browser that cannot read it, for one).
+  function decodeImageFile(file){
+    if (typeof createImageBitmap === 'function'){
+      return createImageBitmap(file).catch(function(){ return loadViaImage(file); });
+    }
+    return loadViaImage(file);
+  }
+  function resizeImageFile(file){
+    return decodeImageFile(file).then(function(src){
+      var w = src.naturalWidth || src.width, h = src.naturalHeight || src.height;
+      if (!w || !h) throw new Error('image has no size');
+      var scale = Math.min(1, MEDIA_MAX_DIMENSION / Math.max(w, h));
+      var cw = Math.max(1, Math.round(w * scale)), ch = Math.max(1, Math.round(h * scale));
+      var canvas = document.createElement('canvas');
+      canvas.width = cw; canvas.height = ch;
+      var g = canvas.getContext('2d');
+      // JPEG has no alpha: without this, a transparent PNG or GIF flattens
+      // to black on the way out.
+      g.fillStyle = '#ffffff'; g.fillRect(0, 0, cw, ch);
+      g.drawImage(src, 0, 0, cw, ch);
+      if (src.close) { try { src.close(); } catch (e) {} }
+      return canvas.toDataURL('image/jpeg', 0.82);
+    });
+  }
+
+  $('#mediafile').addEventListener('change', function(){
+    var input = this;
+    var file = input.files && input.files[0];
+    if (!file) return;
+    // iOS reports HEIC as image/heic (and sometimes as no type at all);
+    // Safari transcodes it on the way in, other browsers may not decode it,
+    // and that failure surfaces as the error toast below.
+    var typeOk = /^image\/(jpeg|png|webp|gif|heic|heif)$/.test(file.type) || (!file.type && /\.hei[cf]$/i.test(file.name));
+    if (!typeOk){
+      toast('Unsupported image type', { error: true }); input.value = ''; return;
+    }
+    if (file.size > MEDIA_MAX_SOURCE_BYTES){
+      toast('Image too large. 12MB max', { error: true }); input.value = ''; return;
+    }
+    // Say so straight away: a large photo can take a second or two to
+    // decode and a silent gap reads as "nothing happened".
+    $('#mediapreview-img').hidden = true;
+    $('#mediapreview-name').textContent = 'Preparing image';
+    $('#mediapreview').hidden = false;
+    resizeImageFile(file).then(function(dataUrl){
+      attachedImage = { mediaType: 'image/jpeg', data: dataUrl.split(',')[1] };
+      // Attaching an image IS the "this post has media" signal: the
+      // checkbox still exists on its own for a video or multi-slide
+      // carousel nobody screenshotted, but a real attached image should
+      // never leave it unchecked.
+      if (!$('#hasmedia').checked){ $('#hasmedia').checked = true; mediaCheckedByAttach = true; }
+      var img = $('#mediapreview-img');
+      img.src = dataUrl; img.hidden = false;
+      $('#mediapreview-name').textContent = file.name;
+      $('#mediapreview').hidden = false;
+      var liveM = $('#live'); if (liveM) liveM.textContent = 'Image attached: ' + file.name + '.';
+    }).catch(function(){
+      clearAttachedImage();
+      toast('Could not read that image', { error: true });
+    });
+  });
+
+  $('#mediaremove').addEventListener('click', function(){ clearAttachedImage(); $('#mediabtn').focus(); });
+
+  function showNotices(list, header){
+    var n = $('#notices');
+    if (!list || !list.length){ n.className = ''; n.innerHTML = ''; return; }
+    n.innerHTML = '<div class="hdr">' + YPS.esc(header || 'Cleaned before scoring') + '</div><ul>' + list.map(function(t){
+      var warn = /truncated/.test(t) ? ' class="warn"' : '';
+      return '<li' + warn + '>' + YPS.esc(t) + '</li>';
+    }).join('') + '</ul>';
+    n.className = 'on';
+  }
+
+  /* Copying a post out of LinkedIn drags the interface along with it: the
+     author header, the reaction counts, "hashtag#" prefixes, invisible
+     characters, and bold text made of maths symbols. Clean it, then tell the
+     user precisely what was removed. Never edit their words silently. */
+  function hygiene(){
+    var res = YPS.cleanPaste($('#post').value);
+    pasteFlags = res.flags;
+    if (res.changed) $('#post').value = res.text;
+    showNotices(res.notices);
+    updateCounter();
+    return res;
+  }
+
+  $('#post').addEventListener('paste', function(){
+    setTimeout(hygiene, 0); // let the paste land first
+  });
+  $('#post').addEventListener('input', function(){
+    updateCounter();
+    if ($('#notices').className && !$('#post').value.trim()) showNotices([]);
+  });
+  $('#post').addEventListener('keydown', function(e){
+    if ((e.metaKey || e.ctrlKey) && e.key === 'Enter'){ e.preventDefault(); run(); }
+  });
+  Array.prototype.forEach.call(document.querySelectorAll('[data-spec]'), function(b){
+    b.addEventListener('click', function(){
+      $('#post').value = SPECIMENS[+b.getAttribute('data-spec')];
+      pasteFlags = {};
+      $('#hasmedia').checked = false;
+      clearAttachedImage();
+      showNotices([]);
+      updateCounter();
+      run();
+    });
+  });
+
+  // A shared "Copy link" lands here: ?p=<encoded post> re-runs the exact
+  // same analyze path a fresh paste and click would, so a clicked-through
+  // link shows the live report immediately instead of the blank homepage.
+  (function loadPermalink(){
+    var encoded = new URLSearchParams(location.search).get('p');
+    if (!encoded) return;
+    decodePost(encoded).then(function(text){
+      if (!text){
+        showNotices(['This link did not contain a readable post. Paste it in instead.'], 'Link problem');
+        return;
+      }
+      $('#post').value = text;
+      pasteFlags = {};
+      updateCounter();
+      // An over-limit link shows the same inline error the textarea does;
+      // run() returns without a toast in that case.
+      run();
+    });
+  })();
+
+  // Test seam: client.test.mjs round-trips the permalink codec, checks the
+  // band thresholds, and shortens the analyze killer through here. Nothing
+  // on the page reads it except run(), which reads killerMs.
+  window.YPSClient = { encodePost: encodePost, decodePost: decodePost, bandFor: bandFor, killerMs: 32000 };
+
+  /* Two tabs, no more, so switching is just "select the other one" rather
+     than a general roving-tabindex implementation. Standard tab ARIA:
+     inactive tab gets tabindex -1 so Tab key skips it, arrow keys move
+     focus between the two, and only the active tabpanel is in the DOM's
+     visible flow. */
+  var DIM_ORDER = ['auth', 'clar', 'cring', 'bait', 'brag'];
+  // Read off the engine's own category labels (see dimLabels above), not
+  // typed out a third time.
+  var DIM_NAME = dimLabels();
+  var DIM_BLURB = {
+    auth: 'Does this sound like a real person, or like a template with the names swapped in.',
+    clar: 'Can a stranger tell what actually happened, in plain terms, without translating it.',
+    cring: 'Is there a specific line here that would make someone wince if they read it out loud.',
+    bait: 'Is the post trying to get a reaction out of you, instead of just telling you something.',
+    brag: 'Is a personal update dressed up as a lesson for the audience.'
+  };
+  // Built from the live checklist itself (YPS.RULES), never a hand-kept
+  // copy, so this can't drift out of sync with what the tool actually runs.
+  function buildCheckGroups(){
+    var byDim = {};
+    DIM_ORDER.forEach(function(d){ byDim[d] = []; });
+    YPS.RULES.forEach(function(r){ if (byDim[r.dim]) byDim[r.dim].push(r.label); });
+    var html = DIM_ORDER.map(function(d){
+      var list = byDim[d];
+      var items = list.map(function(label){ return '<li>' + YPS.esc(label) + '</li>'; }).join('');
+      return '' +
+        '<details class="check-group">' +
+          '<summary>' +
+            '<span class="cg-glyph" aria-hidden="true"></span>' +
+            '<span class="cg-name">' + YPS.esc(DIM_NAME[d]) + '</span>' +
+            '<span class="cg-count">' + list.length + ' checks</span>' +
+          '</summary>' +
+          '<p class="cg-blurb">' + YPS.esc(DIM_BLURB[d]) + '</p>' +
+          '<ul class="cg-list">' + items + '</ul>' +
+        '</details>';
+    }).join('');
+    $('#checkgroups').innerHTML = html;
+  }
+
+  function selectTab(which){
+    var showExplain = which === 'explain';
+    var toolBtn = $('#tab-tool'), explainBtn = $('#tab-explain');
+    var toolPanel = $('#panel-tool'), explainPanel = $('#panel-explain');
+    toolBtn.setAttribute('aria-selected', showExplain ? 'false' : 'true');
+    toolBtn.tabIndex = showExplain ? -1 : 0;
+    explainBtn.setAttribute('aria-selected', showExplain ? 'true' : 'false');
+    explainBtn.tabIndex = showExplain ? 0 : -1;
+    toolPanel.hidden = showExplain;
+    explainPanel.hidden = !showExplain;
+  }
+  $('#tab-tool').addEventListener('click', function(){ selectTab('tool'); });
+  $('#tab-explain').addEventListener('click', function(){ selectTab('explain'); });
+  Array.prototype.forEach.call(document.querySelectorAll('.tab-btn'), function(btn){
+    btn.addEventListener('keydown', function(e){
+      var target;
+      if (e.key === 'ArrowLeft' || e.key === 'ArrowRight') target = btn.id === 'tab-tool' ? $('#tab-explain') : $('#tab-tool');
+      else if (e.key === 'Home') target = $('#tab-tool');
+      else if (e.key === 'End') target = $('#tab-explain');
+      else return;
+      e.preventDefault();
+      selectTab(target.id === 'tab-explain' ? 'explain' : 'tool');
+      target.focus();
+    });
+  });
+
+  buildCheckGroups();
+  if (location.hash === '#how-it-works') selectTab('explain');
+
+  $('#rulecount').textContent = YPS.RULES.length;
+  Array.prototype.forEach.call(document.querySelectorAll('.rulecount-inline'), function(e){ e.textContent = YPS.RULES.length; });
+  updateCounter();
+})();
+</script>
+
+<script>
+/* Outrun the Algorithm: a bonus side-scroller bolted onto the bottom of the
+   page. Its own IIFE, its own localStorage key, its own rAF loop, so it
+   can't step on the analysis tool above it and a bug here can't break that.
+   Colors are read live off the same CSS custom properties the report uses,
+   so flipping the theme toggle re-skins the game with it instead of leaving
+   a stale dark canvas sitting in a light page. Everything is drawn with
+   canvas primitives, no images, so there is nothing to fail to load. */
+(function(){
+  'use strict';
+  var stage = document.getElementById('game-stage');
+  var canvas = document.getElementById('game-canvas');
+  if (!stage || !canvas || !canvas.getContext) return;
+  var ctx = canvas.getContext('2d');
+  var panel = document.getElementById('game-panel');
+  var kickerEl = document.getElementById('game-kicker');
+  var titleEl = document.getElementById('game-title');
+  var subEl = document.getElementById('game-sub');
+  var startBtn = document.getElementById('game-start');
+  var scoreEl = document.getElementById('game-score');
+  var bestEl = document.getElementById('game-best');
+  var liveEl = document.getElementById('game-live');
+  var jumpBtn = document.getElementById('game-btn-jump');
+  var duckBtn = document.getElementById('game-btn-duck');
+  if (!panel || !startBtn) return;
+
+  function esc(s){
+    return String(s).replace(/[&<>"]/g, function(c){
+      return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c];
+    });
+  }
+
+  var BEST_KEY = 'yps_outrun_best_v1';
+  var best = 0;
+  try { best = parseInt(localStorage.getItem(BEST_KEY), 10) || 0; } catch (e) {}
+  if (bestEl) bestEl.textContent = best;
+
+  /* ---------------- theme: read the report's own tokens live ---------------- */
+  var C = {};
+  function readTheme(){
+    var s = getComputedStyle(document.documentElement);
+    function v(name, fb){ var x = s.getPropertyValue(name); x = x ? x.trim() : ''; return x || fb; }
+    C.plane = v('--plane', '#0d0d0d');
+    C.surface = v('--surface', '#1a1a19');
+    C.surface2 = v('--surface-2', '#141413');
+    C.ink = v('--ink', '#ffffff');
+    C.ink2 = v('--ink-2', '#c3c2b7');
+    C.ink3 = v('--ink-3', '#898781');
+    C.ink4 = v('--ink-4', '#8a867e');
+    C.hair = v('--hair', '#2c2c2a');
+    C.rule = v('--rule', '#383835');
+    C.rule2 = v('--rule-2', '#4d4d49');
+    C.cool = v('--cool', '#3987e5');
+    C.warm = v('--warm', '#e66767');
+    C.caution = v('--caution', '#e0a33a');
+  }
+  readTheme();
+  if (window.MutationObserver){
+    new MutationObserver(readTheme).observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme'] });
+  }
+  if (window.matchMedia){
+    var lq = window.matchMedia('(prefers-color-scheme: light)');
+    if (lq.addEventListener) lq.addEventListener('change', readTheme);
+    else if (lq.addListener) lq.addListener(readTheme);
+  }
+
+  /* ---------------- sizing: everything below is scaled off stage height,
+     so play feels the same at 200px tall on a phone or 420px on a desktop */
+  var W = 0, H = 0, DPR = 1, scale = 1, groundY = 0;
+  var STAND_H = 70, DUCK_H = 34, PLAYER_W = 40, PLAYER_X = 60;
+  function resize(){
+    var rect = stage.getBoundingClientRect();
+    W = Math.max(240, Math.round(rect.width));
+    H = Math.max(140, Math.round(rect.height));
+    DPR = Math.min(window.devicePixelRatio || 1, 2.5);
+    canvas.width = Math.round(W * DPR);
+    canvas.height = Math.round(H * DPR);
+    ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
+    groundY = Math.round(H * 0.8);
+    scale = H / 300;
+    STAND_H = 70 * scale;
+    DUCK_H = 34 * scale;
+    PLAYER_W = 40 * scale;
+    PLAYER_X = W * 0.16;
+  }
+  function debounce(fn, ms){
+    var t;
+    return function(){ clearTimeout(t); t = setTimeout(fn, ms); };
+  }
+  resize();
+  window.addEventListener('resize', debounce(resize, 150));
+  if (window.ResizeObserver) new ResizeObserver(debounce(resize, 80)).observe(stage);
+
+  function roundRect(g, x, y, w, h, r){
+    g.beginPath();
+    g.moveTo(x + r, y);
+    g.arcTo(x + w, y, x + w, y + h, r);
+    g.arcTo(x + w, y + h, x, y + h, r);
+    g.arcTo(x, y + h, x, y, r);
+    g.arcTo(x, y, x + w, y, r);
+    g.closePath();
+  }
+  function accentColor(name){ return C[name] || C.rule2; }
+
+  /* ---------------- color language -----------------------------------
+     One rule, applied everywhere below: warm (red) means "this kills you"
+     and is used for nothing else in the entire game. Collectibles keep
+     individual accent hues (cool/caution/ink3) to tell reward types apart
+     at a glance, which is safe precisely because none of those hues ever
+     appears on anything lethal. Before this pass that wasn't true: the
+     flying-notification obstacle and the chart pickup were both drawn in
+     caution amber, so a player couldn't learn "that color = duck" without
+     also learning "that color = safe to fly into," which is a contradiction
+     no amount of practice fixes. Background parallax cards stay pure
+     neutral grays (surface/hair/rule2, no accent color at all) so an
+     accent color appearing on screen always means "this is interactive,"
+     never "this is scenery." */
+  function drawTrophyGlyph(cx, cy, s, color){
+    ctx.fillStyle = color;
+    ctx.beginPath();
+    ctx.moveTo(cx - 7 * s, cy - 7 * s);
+    ctx.quadraticCurveTo(cx - 7 * s, cy + 1 * s, cx - 2 * s, cy + 2 * s);
+    ctx.lineTo(cx + 2 * s, cy + 2 * s);
+    ctx.quadraticCurveTo(cx + 7 * s, cy + 1 * s, cx + 7 * s, cy - 7 * s);
+    ctx.closePath();
+    ctx.fill();
+    ctx.strokeStyle = color; ctx.lineWidth = Math.max(1, 1.3 * s);
+    ctx.beginPath(); ctx.arc(cx - 8.6 * s, cy - 4 * s, 2.6 * s, Math.PI * 0.15, Math.PI * 1.55); ctx.stroke();
+    ctx.beginPath(); ctx.arc(cx + 8.6 * s, cy - 4 * s, 2.6 * s, Math.PI * 1.45, Math.PI * 2.85); ctx.stroke();
+    ctx.fillRect(cx - 1.1 * s, cy + 2 * s, 2.2 * s, 3.6 * s);
+    ctx.fillRect(cx - 4.6 * s, cy + 5.6 * s, 9.2 * s, 2 * s);
+  }
+  function drawEnvelopeGlyph(cx, cy, s, color){
+    var w = 15 * s, h = 10.5 * s;
+    ctx.strokeStyle = color; ctx.lineWidth = Math.max(1, 1.4 * s);
+    roundRect(ctx, cx - w / 2, cy - h / 2, w, h, 1.5 * s);
+    ctx.stroke();
+    ctx.beginPath();
+    ctx.moveTo(cx - w / 2 + 1 * s, cy - h / 2 + 1 * s);
+    ctx.lineTo(cx, cy + 1.5 * s);
+    ctx.lineTo(cx + w / 2 - 1 * s, cy - h / 2 + 1 * s);
+    ctx.stroke();
+  }
+  function drawLadderGlyph(top, bottom, x, w, color){
+    ctx.strokeStyle = color; ctx.lineWidth = Math.max(1, 1.6 * scale);
+    ctx.beginPath();
+    ctx.moveTo(x + 3 * scale, top); ctx.lineTo(x + 3 * scale, bottom);
+    ctx.moveTo(x + w - 3 * scale, top); ctx.lineTo(x + w - 3 * scale, bottom);
+    for (var yy = top + 8 * scale; yy < bottom - 2 * scale; yy += 11 * scale){
+      ctx.moveTo(x + 3 * scale, yy); ctx.lineTo(x + w - 3 * scale, yy);
+    }
+    ctx.stroke();
+  }
+  function drawWarningGlyph(cx, cy, s, color){
+    ctx.fillStyle = color;
+    ctx.beginPath();
+    ctx.moveTo(cx, cy - 6 * s); ctx.lineTo(cx + 5.5 * s, cy + 5 * s); ctx.lineTo(cx - 5.5 * s, cy + 5 * s);
+    ctx.closePath(); ctx.fill();
+    ctx.fillStyle = C.surface2;
+    ctx.fillRect(cx - 0.7 * s, cy - 2.5 * s, 1.4 * s, 4 * s);
+    ctx.beginPath(); ctx.arc(cx, cy + 2.6 * s, 0.9 * s, 0, Math.PI * 2); ctx.fill();
+  }
+
+  /* ---------------- state ---------------- */
+  var STATE_IDLE = 'idle', STATE_PLAY = 'play', STATE_OVER = 'over';
+  var state = STATE_IDLE;
+  var player, obstacles, collectibles, particles, cardsBack, cardsFront;
+  var distance, distanceScore, score, bonus, elapsed, speed;
+  var shield, multiplier, multiplierT, duckHeld, invulnT;
+  var groundScroll, obstacleTimer, collectibleTimer;
+  var shakeT = 0, shakeMag = 0, flashT = 0, flashDur = 0.35;
+  var lastDisplayedScore = -1;
+  var visible = true, lastT = 0, rafId = null;
+  // Set by an explicit Start: until then the stage is not in the tab order
+  // and Space or the arrows are left alone for the page to use.
+  var armed = false;
+  // Under reduced motion there is no idle loop (one static frame instead),
+  // no camera shake, no red flash, and the runner does not bob.
+  var reduceMotion = !!(window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches);
+  if (window.matchMedia){
+    var rmq = window.matchMedia('(prefers-reduced-motion: reduce)');
+    var onRm = function(){ reduceMotion = rmq.matches; if (reduceMotion && state !== STATE_PLAY) drawStatic(); };
+    if (rmq.addEventListener) rmq.addEventListener('change', onRm);
+    else if (rmq.addListener) rmq.addListener(onRm);
+  }
+
+  function makeCardLayer(n){
+    var arr = [];
+    for (var i = 0; i < n; i++) arr.push(randomCard(Math.random() * W));
+    return arr;
+  }
+  function randomCard(x){
+    return { x: x, y: 14 + Math.random() * (groundY * 0.45), w: 46 + Math.random() * 40, h: 30 + Math.random() * 16 };
+  }
+
+  function resetGame(){
+    player = { offsetY: 0, vy: 0, onGround: true, ducking: false, visualHeight: STAND_H, runPhase: 0, squash: 0, idleBob: 0 };
+    obstacles = [];
+    collectibles = [];
+    particles = [];
+    distance = 0; distanceScore = 0; score = 0; bonus = 0; elapsed = 0; speed = 0;
+    shield = false; multiplier = 1; multiplierT = 0; duckHeld = false; invulnT = 0;
+    groundScroll = 0;
+    obstacleTimer = 1.2; collectibleTimer = 2.4;
+    lastDisplayedScore = -1;
+    if (scoreEl) { scoreEl.textContent = '0'; scoreEl.classList.remove('boosted'); }
+    cardsBack = makeCardLayer(4);
+    cardsFront = makeCardLayer(3);
+  }
+
+  /* ---------------- spawning ---------------- */
+  // No per-kind accent color here anymore: every ground obstacle is warm
+  // (see the color-language note above), differentiated by silhouette
+  // instead of hue so "which one is this" and "is it safe" are two
+  // separate questions with two separate visual answers.
+  var GROUND_KINDS = [
+    { h: 30, glyph: 'post' },
+    { h: 46, glyph: 'trophy' },
+    { h: 46, glyph: 'invite' },
+    { h: 82, glyph: 'ladder' }
+  ];
+  var DUCK_CAPTIONS = ['Agree? 👇', "Let's connect", 'Thoughts?', '47 notifications', 'Someone is typing…'];
+  // A full-screen takeover, not a notification: this one's tall enough
+  // that jumping never clears it (max jump height is vy²/2g ≈ 150.5*scale;
+  // this starts at 175*scale, comfortably past that with margin for frame
+  // timing), so ducking is the only way through. It doesn't bob, either —
+  // a barrier that drifted vertically could wander into "jumpable" for a
+  // frame, which would quietly undo the one guarantee it exists to make.
+  var WALL_CAPTIONS = ['Accept all cookies?', 'Turn on notifications?', 'Subscribe to Premium', 'Continue in the app?'];
+
+  // The obstacle stream is canvas-only, so each spawn is also said out loud:
+  // what it is and which key answers it. Rate-limited, because a polite live
+  // region that is rewritten faster than it can be read says nothing at all.
+  var lastSaid = 0;
+  function sayObstacle(o){
+    if (!liveEl) return;
+    var now = Date.now();
+    if (now - lastSaid < 700) return; // spawns never come closer than 0.75s, so none is dropped
+    lastSaid = now;
+    liveEl.textContent = o.kind === 'ground' ? 'Jump: ' + o.glyph + ' ahead.'
+      : (o.kind === 'wall' ? 'Duck: a wall of text ahead.' : 'Duck: a notification ahead.');
+  }
+
+  function spawnObstacle(){
+    var r = Math.random();
+    if (r < 0.20){
+      var bh = 24 * scale, bottom = groundY - 50 * scale;
+      obstacles.push({
+        kind: 'duck', x: W + 20, w: 92 * scale, top: bottom - bh, bottom: bottom,
+        caption: DUCK_CAPTIONS[(Math.random() * DUCK_CAPTIONS.length) | 0],
+        bob: Math.random() * Math.PI * 2
+      });
+    } else if (r < 0.32){
+      obstacles.push({
+        kind: 'wall', x: W + 20, w: 78 * scale, top: groundY - 175 * scale, bottom: groundY - 46 * scale,
+        caption: WALL_CAPTIONS[(Math.random() * WALL_CAPTIONS.length) | 0]
+      });
+    } else {
+      var k = GROUND_KINDS[(Math.random() * GROUND_KINDS.length) | 0];
+      var h = k.h * scale;
+      obstacles.push({ kind: 'ground', x: W + 20, w: 34 * scale, top: groundY - h, bottom: groundY, h: h, glyph: k.glyph });
+    }
+    sayObstacle(obstacles[obstacles.length - 1]);
+  }
+
+  var COLLECTIBLE_KINDS = ['unicorn', 'chart', 'coffee', 'treasure'];
+  function spawnCollectible(){
+    var kind = COLLECTIBLE_KINDS[(Math.random() * COLLECTIBLE_KINDS.length) | 0];
+    if (kind === 'unicorn' && Math.random() < 0.6) kind = 'chart'; // keep the unicorn rare
+    var high = Math.random() < 0.5;
+    var y = high ? groundY - 90 * scale : groundY - 26 * scale;
+    collectibles.push({ kind: kind, x: W + 20, y: y, r: 13 * scale, bob: Math.random() * Math.PI * 2 });
+  }
+
+  /* ---------------- particles ---------------- */
+  function spawnDust(){
+    particles.push({
+      x: PLAYER_X - PLAYER_W * 0.2 + (Math.random() * 8 - 4), y: groundY - 2,
+      vx: -speed * 0.4 + (Math.random() * 20 - 10), vy: -(20 + Math.random() * 30),
+      life: 0.4, maxLife: 0.4, r: 2 + Math.random() * 2, color: C.ink4, kind: 'dot'
+    });
+  }
+  function spawnBurst(x, y, color, n){
+    for (var i = 0; i < n; i++){
+      var a = Math.random() * Math.PI * 2, sp = 60 + Math.random() * 140;
+      particles.push({ x: x, y: y, vx: Math.cos(a) * sp, vy: Math.sin(a) * sp - 40, life: 0.5 + Math.random() * 0.3, maxLife: 0.8, r: 2 + Math.random() * 2.5, color: color, kind: 'dot' });
+    }
+  }
+  function popText(x, y, text, color){
+    particles.push({ x: x, y: y, vx: 0, vy: -30, life: 1.1, maxLife: 1.1, color: color, kind: 'text', text: text });
+  }
+  function updateParticles(dt){
+    for (var i = particles.length - 1; i >= 0; i--){
+      var pt = particles[i];
+      pt.x += pt.vx * dt; pt.y += pt.vy * dt;
+      if (pt.kind !== 'text') pt.vy += 90 * dt;
+      pt.life -= dt;
+      if (pt.life <= 0) particles.splice(i, 1);
+    }
+  }
+  function drawParticles(){
+    particles.forEach(function(pt){
+      var a = Math.max(0, pt.life / pt.maxLife);
+      ctx.globalAlpha = a;
+      if (pt.kind === 'text'){
+        ctx.fillStyle = pt.color;
+        ctx.font = '700 ' + (12 * scale) + 'px ui-monospace, monospace';
+        ctx.textAlign = 'center';
+        ctx.fillText(pt.text, pt.x, pt.y);
+      } else {
+        ctx.beginPath();
+        ctx.arc(pt.x, pt.y, pt.r, 0, Math.PI * 2);
+        ctx.fillStyle = pt.color;
+        ctx.fill();
+      }
+    });
+    ctx.globalAlpha = 1;
+    ctx.textAlign = 'start';
+  }
+
+  /* ---------------- background parallax cards ---------------- */
+  function updateCards(dt, spd){
+    [[cardsBack, 0.28], [cardsFront, 0.48]].forEach(function(pair){
+      pair[0].forEach(function(c){
+        c.x -= spd * pair[1] * dt;
+        if (c.x + c.w < -10){
+          c.x = W + 10 + Math.random() * 60;
+          c.y = 14 + Math.random() * (groundY * 0.45);
+          c.w = 46 + Math.random() * 40;
+          c.h = 30 + Math.random() * 16;
+        }
+      });
+    });
+  }
+  function drawCards(arr, alpha){
+    ctx.save();
+    ctx.globalAlpha = alpha;
+    arr.forEach(function(c){
+      roundRect(ctx, c.x, c.y, c.w, c.h, 4);
+      ctx.fillStyle = C.surface; ctx.fill();
+      ctx.strokeStyle = C.hair; ctx.lineWidth = 1; ctx.stroke();
+      ctx.fillStyle = C.rule2;
+      ctx.beginPath(); ctx.arc(c.x + 8, c.y + 8, 3, 0, Math.PI * 2); ctx.fill();
+      ctx.fillRect(c.x + 15, c.y + 6, c.w * 0.4, 2);
+      ctx.fillRect(c.x + 7, c.y + 16, c.w - 14, 2);
+      ctx.fillRect(c.x + 7, c.y + 22, c.w * 0.6, 2);
+    });
+    ctx.restore();
+  }
+  function drawGround(){
+    ctx.strokeStyle = C.rule; ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.moveTo(0, groundY + 1); ctx.lineTo(W, groundY + 1); ctx.stroke();
+    ctx.strokeStyle = C.hair; ctx.lineWidth = 1;
+    var spacing = 28 * scale, offset = groundScroll % spacing;
+    ctx.beginPath();
+    for (var x = -offset; x < W; x += spacing){ ctx.moveTo(x, groundY + 5); ctx.lineTo(x + 10 * scale, groundY + 5); }
+    ctx.stroke();
+  }
+
+  /* ---------------- drawing: obstacles, collectibles, player ---------------- */
+  function drawObstacle(o){
+    if (o.kind === 'duck'){
+      var bob = Math.sin(o.bob) * 3 * scale, y = o.top + bob, h = o.bottom - o.top;
+      // Soft warm glow behind the pill, same trick as the collectibles get
+      // below: it reads as "notice this" from further away than the 1.5px
+      // stroke alone would, which matters most here because this is the
+      // one obstacle that needs a reaction (duck) rather than a reflex.
+      ctx.globalAlpha = 0.16;
+      roundRect(ctx, o.x - 4 * scale, y - 4 * scale, o.w + 8 * scale, h + 8 * scale, 11 * scale);
+      ctx.fillStyle = C.warm; ctx.fill();
+      ctx.globalAlpha = 1;
+      roundRect(ctx, o.x, y, o.w, h, 8 * scale);
+      ctx.fillStyle = C.surface2; ctx.fill();
+      ctx.strokeStyle = C.warm; ctx.lineWidth = 1.6; ctx.stroke();
+      drawWarningGlyph(o.x + 15 * scale, y + h / 2, 3.4 * scale, C.warm);
+      if (W > 460){
+        ctx.fillStyle = C.ink2;
+        ctx.font = (11 * scale) + 'px system-ui, -apple-system, sans-serif';
+        ctx.textBaseline = 'middle';
+        ctx.fillText(o.caption, o.x + 30 * scale, y + h / 2);
+        ctx.textBaseline = 'alphabetic';
+      }
+    } else if (o.kind === 'wall'){
+      var wh = o.bottom - o.top;
+      ctx.globalAlpha = 0.14;
+      roundRect(ctx, o.x - 4 * scale, o.top - 4 * scale, o.w + 8 * scale, wh + 8 * scale, 8 * scale);
+      ctx.fillStyle = C.warm; ctx.fill();
+      ctx.globalAlpha = 1;
+      roundRect(ctx, o.x, o.top, o.w, wh, 4 * scale);
+      ctx.fillStyle = C.surface2; ctx.fill();
+      // Hazard stripe: the deliberately louder, more "do not touch" treatment
+      // that separates this from the plain-bordered duck pill, so the two
+      // are never confused even though both are warm — one is optional
+      // (jump or duck), this one only has the one way through.
+      ctx.save();
+      roundRect(ctx, o.x, o.top, o.w, wh, 4 * scale);
+      ctx.clip();
+      ctx.strokeStyle = C.warm; ctx.globalAlpha = 0.45; ctx.lineWidth = 7 * scale;
+      for (var sx = -wh; sx < o.w + wh; sx += 15 * scale){
+        ctx.beginPath();
+        ctx.moveTo(o.x + sx, o.top + wh); ctx.lineTo(o.x + sx + wh, o.top);
+        ctx.stroke();
+      }
+      ctx.restore();
+      ctx.strokeStyle = C.warm; ctx.lineWidth = 2.2;
+      roundRect(ctx, o.x, o.top, o.w, wh, 4 * scale); ctx.stroke();
+      drawWarningGlyph(o.x + o.w * 0.5, o.top + wh * 0.22, 4 * scale, C.warm);
+      drawWarningGlyph(o.x + o.w * 0.5, o.top + wh * 0.82, 4 * scale, C.warm);
+      if (W > 460){
+        ctx.save();
+        ctx.translate(o.x + o.w * 0.5, o.top + wh * 0.52);
+        ctx.rotate(-Math.PI / 2);
+        ctx.fillStyle = C.ink2;
+        ctx.font = (10.5 * scale) + 'px system-ui, -apple-system, sans-serif';
+        ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+        ctx.fillText(o.caption, 0, 0);
+        ctx.restore();
+        ctx.textAlign = 'start'; ctx.textBaseline = 'alphabetic';
+      }
+    } else {
+      roundRect(ctx, o.x, o.top, o.w, o.h, 5 * scale);
+      ctx.fillStyle = C.surface; ctx.fill();
+      ctx.strokeStyle = C.warm; ctx.lineWidth = 1.6; ctx.stroke();
+      ctx.fillStyle = C.warm;
+      ctx.fillRect(o.x, o.top, o.w, 3.5 * scale);
+      if (o.glyph === 'trophy'){
+        drawTrophyGlyph(o.x + o.w * 0.5, o.top + o.h * 0.58, 1.05 * scale, C.warm);
+      } else if (o.glyph === 'invite'){
+        drawEnvelopeGlyph(o.x + o.w * 0.5, o.top + o.h * 0.56, 0.85 * scale, C.warm);
+      } else if (o.glyph === 'ladder'){
+        drawLadderGlyph(o.top + 8 * scale, o.bottom - 4 * scale, o.x, o.w, C.warm);
+      } else {
+        // 'post': the one glyph that's still a mini version of the actual
+        // thing it's mocking, so it keeps the card-with-lines look.
+        ctx.fillStyle = C.rule2;
+        ctx.beginPath(); ctx.arc(o.x + o.w * 0.3, o.top + o.h * 0.32, 3.2 * scale, 0, Math.PI * 2); ctx.fill();
+        ctx.fillRect(o.x + o.w * 0.2, o.top + o.h * 0.55, o.w * 0.6, 2 * scale);
+        ctx.fillRect(o.x + o.w * 0.2, o.top + o.h * 0.68, o.w * 0.4, 2 * scale);
+      }
+    }
+  }
+  var COLLECTIBLE_EMOJI = { unicorn: '🦄', chart: '📈', coffee: '☕', treasure: '🪙' };
+  var COLLECTIBLE_RING = { unicorn: 'cool', chart: 'caution', coffee: 'ink3', treasure: 'caution' };
+  function drawCollectible(c){
+    var y = c.y + Math.sin(c.bob) * 4 * scale;
+    var col = accentColor(COLLECTIBLE_RING[c.kind]);
+    ctx.save();
+    // Same soft-glow treatment the obstacles now get, in the reward's own
+    // color instead of warm: "an accent-colored glow" reads as "notice
+    // this object," and which hue it is says whether noticing it is good
+    // news or bad news.
+    ctx.globalAlpha = 0.18;
+    ctx.beginPath(); ctx.arc(c.x, y, c.r + 5 * scale, 0, Math.PI * 2);
+    ctx.fillStyle = col; ctx.fill();
+    ctx.globalAlpha = 1;
+    ctx.beginPath(); ctx.arc(c.x, y, c.r, 0, Math.PI * 2);
+    ctx.fillStyle = C.surface2; ctx.fill();
+    ctx.strokeStyle = col; ctx.lineWidth = 2; ctx.stroke();
+    ctx.font = (c.r * 1.3) + 'px sans-serif';
+    ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    ctx.fillText(COLLECTIBLE_EMOJI[c.kind], c.x, y + 1);
+    ctx.restore();
+    ctx.textAlign = 'start'; ctx.textBaseline = 'alphabetic';
+  }
+  function drawPlayer(){
+    var p = player, h = p.visualHeight, w = PLAYER_W;
+    var footY = groundY - p.offsetY;
+    var idle = (state === STATE_IDLE) ? Math.sin(p.idleBob) * 3 * scale : 0;
+    var cx = PLAYER_X;
+
+    ctx.save();
+    var sx = 1 + p.squash * 0.22, sy = 1 - p.squash * 0.22;
+    ctx.translate(cx, footY - idle);
+    ctx.scale(sx, sy);
+    ctx.translate(-cx, -(footY - idle));
+
+    if (shield){
+      ctx.beginPath();
+      ctx.arc(cx, footY - idle - h * 0.5, h * 0.72, 0, Math.PI * 2);
+      ctx.strokeStyle = C.cool;
+      ctx.globalAlpha = 0.55 + Math.sin(elapsed * 8) * 0.15;
+      ctx.lineWidth = 2; ctx.stroke();
+      ctx.globalAlpha = 1;
+    }
+
+    var legSwing = (p.onGround && state === STATE_PLAY && !p.ducking) ? Math.sin(p.runPhase) * 0.55 : 0;
+    var hipY = footY - idle - h * 0.42;
+    ctx.strokeStyle = C.ink2; ctx.lineWidth = Math.max(2, w * 0.14); ctx.lineCap = 'round';
+    ctx.beginPath();
+    ctx.moveTo(cx - w * 0.08, hipY); ctx.lineTo(cx - w * 0.08 + Math.sin(legSwing) * w * 0.3, footY - idle);
+    ctx.moveTo(cx + w * 0.08, hipY); ctx.lineTo(cx + w * 0.08 - Math.sin(legSwing) * w * 0.3, footY - idle);
+    ctx.stroke();
+
+    ctx.save();
+    ctx.translate(cx, hipY);
+    ctx.rotate(p.ducking ? 0.5 : 0);
+    roundRect(ctx, -w * 0.34, -(h * 0.58), w * 0.68, h * 0.58, w * 0.22);
+    ctx.fillStyle = C.ink; ctx.fill();
+    ctx.fillStyle = C.cool;
+    ctx.fillRect(-w * 0.06, -(h * 0.58), w * 0.12, h * 0.2);
+    ctx.restore();
+
+    var headY = hipY - h * 0.58 - h * 0.22 * (p.ducking ? 0.6 : 1);
+    var headX = cx + (p.ducking ? w * 0.22 : 0);
+    ctx.beginPath();
+    ctx.arc(headX, headY, w * 0.26, 0, Math.PI * 2);
+    ctx.fillStyle = C.ink; ctx.fill();
+
+    // Pirate eyepatch: the same joke as the flag next to the title, just
+    // worn by the guy running from LinkedIn. C.ink3 rather than C.ink or
+    // C.surface2 on purpose — the head itself is drawn in C.ink, which is
+    // pure white in dark mode and near-black in light mode, so nothing
+    // fixed would read against it in both themes. A mid-tone always shows.
+    ctx.strokeStyle = C.ink3; ctx.lineWidth = Math.max(1.4, w * 0.045);
+    ctx.beginPath();
+    ctx.moveTo(headX - w * 0.24, headY - w * 0.05); ctx.lineTo(headX + w * 0.22, headY + w * 0.04);
+    ctx.stroke();
+    ctx.fillStyle = C.ink3;
+    ctx.beginPath();
+    ctx.ellipse(headX + w * 0.08, headY - w * 0.02, w * 0.1, w * 0.12, -0.35, 0, Math.PI * 2);
+    ctx.fill();
+
+    ctx.restore();
+
+    ctx.globalAlpha = 0.25; ctx.fillStyle = C.hair;
+    ctx.beginPath(); ctx.ellipse(cx, groundY + 3, w * 0.4, 3 * scale, 0, 0, Math.PI * 2); ctx.fill();
+    ctx.globalAlpha = 1;
+  }
+
+  /* ---------------- physics + collisions ---------------- */
+  function playerRect(){
+    var h = player.visualHeight, w = PLAYER_W * (player.ducking ? 1.25 : 1);
+    var top = groundY - player.offsetY - h;
+    return { x: PLAYER_X - w * 0.32, y: top + h * 0.08, w: w * 0.64, h: h * 0.86 };
+  }
+  function rectsOverlap(a, b){
+    return a.x < b.x + b.w && a.x + a.w > b.x && a.y < b.y + b.h && a.y + a.h > b.y;
+  }
+  function collectPickup(c){
+    var col;
+    if (c.kind === 'unicorn'){
+      bonus += 250; popText(c.x, c.y, '+250 · UNICORN SPOTTED', C.cool); col = C.cool;
+    } else if (c.kind === 'chart'){
+      multiplier = 2; multiplierT = 6; bonus += 60;
+      popText(c.x, c.y, '×2 IMPRESSIONS', C.caution); col = C.caution;
+    } else if (c.kind === 'treasure'){
+      bonus += 150; popText(c.x, c.y, '+150 · PLUNDER', C.caution); col = C.caution;
+    } else {
+      shield = true; popText(c.x, c.y, 'SHIELD READY', C.ink3); col = C.ink3;
+    }
+    spawnBurst(c.x, c.y, col, 16);
+  }
+  function checkCollisions(){
+    if (invulnT > 0) return;
+    var pr = playerRect();
+    for (var i = 0; i < obstacles.length; i++){
+      var o = obstacles[i];
+      // 'duck' and 'wall' both carry top/bottom; only 'ground' carries h
+      // (measured up from groundY instead), so it's the one that needs the
+      // different rect shape here, not 'duck' specifically anymore.
+      var orect = o.kind === 'ground'
+        ? { x: o.x + o.w * 0.12, y: o.top, w: o.w * 0.76, h: o.h }
+        : { x: o.x + o.w * 0.08, y: o.top, w: o.w * 0.84, h: o.bottom - o.top };
+      if (rectsOverlap(pr, orect)){
+        if (shield){
+          shield = false; invulnT = 0.5;
+          var midY = o.kind === 'ground' ? groundY - o.h / 2 : (o.top + o.bottom) / 2;
+          spawnBurst(o.x + o.w / 2, midY, C.cool, 14);
+          popText(o.x + o.w / 2, groundY - 100 * scale, 'SHIELD BLOCKED IT', C.cool);
+          obstacles.splice(i, 1);
+        } else {
+          gameOver();
+        }
+        return;
+      }
+    }
+    for (var j = collectibles.length - 1; j >= 0; j--){
+      var c = collectibles[j];
+      var cx2 = Math.max(pr.x, Math.min(c.x, pr.x + pr.w));
+      var cy2 = Math.max(pr.y, Math.min(c.y, pr.y + pr.h));
+      var dx = c.x - cx2, dy = c.y - cy2;
+      if (dx * dx + dy * dy < c.r * c.r){
+        collectPickup(c);
+        collectibles.splice(j, 1);
+      }
+    }
+  }
+
+  function update(dt){
+    elapsed += dt;
+    var gravity = 2400 * scale, diveAccel = 1800 * scale;
+    speed = 260 * scale + Math.min(340 * scale, elapsed * 9 * scale);
+    distance += speed * dt;
+    groundScroll += speed * dt;
+    // Score is banked incrementally, with whatever the multiplier is RIGHT
+    // NOW applied only to the distance covered in this frame, then added
+    // to a running total that never gets recomputed from scratch. This is
+    // the whole point of the chart pickup: distanceScore used to be thrown
+    // away every frame and rebuilt as floor(distance/6)*multiplier, which
+    // meant the ×2 was only ever a live preview, not a reward. The instant
+    // multiplierT hit zero, multiplier went back to 1 and the formula
+    // recomputed the ENTIRE run's distance at ×1, silently erasing every
+    // point the boost had appeared to earn. Banking the gain permanently,
+    // frame by frame, is what makes "grab it while it's active" mean
+    // anything at all.
+    distanceScore += (speed * dt / 6) * multiplier;
+    score = Math.floor(distanceScore) + bonus;
+
+    if (multiplierT > 0){ multiplierT -= dt; if (multiplierT <= 0){ multiplier = 1; multiplierT = 0; } }
+    if (invulnT > 0) invulnT -= dt;
+
+    var p = player;
+    if (!p.onGround){
+      p.vy -= gravity * dt;
+      if (duckHeld) p.vy -= diveAccel * dt;
+      p.offsetY += p.vy * dt;
+      if (p.offsetY <= 0){ p.offsetY = 0; p.vy = 0; p.onGround = true; p.squash = 1; }
+    }
+    p.ducking = p.onGround && duckHeld;
+    var targetH = p.ducking ? DUCK_H : STAND_H;
+    p.visualHeight += (targetH - p.visualHeight) * Math.min(1, dt * 16);
+    if (p.squash > 0) p.squash = Math.max(0, p.squash - dt * 4.5);
+    if (p.onGround && !p.ducking) p.runPhase += dt * (6 + speed * 0.01);
+    if (p.onGround && !p.ducking && Math.random() < dt * 18) spawnDust();
+
+    obstacleTimer -= dt;
+    if (obstacleTimer <= 0){
+      spawnObstacle();
+      var prog = Math.min(1, elapsed / 45);
+      var minGap = 1.5 - prog * 0.75, maxGap = 2.5 - prog * 1.0;
+      obstacleTimer = minGap + Math.random() * (maxGap - minGap);
+    }
+    for (var i = obstacles.length - 1; i >= 0; i--){
+      var o = obstacles[i];
+      o.x -= speed * dt;
+      if (o.kind === 'duck') o.bob += dt * 4;
+      if (o.x + o.w < -20) obstacles.splice(i, 1);
+    }
+
+    collectibleTimer -= dt;
+    if (collectibleTimer <= 0){
+      var tooClose = obstacles.some(function(ob){ return ob.x > W - 40 && ob.x < W + 140; });
+      if (!tooClose) spawnCollectible();
+      collectibleTimer = 2.6 + Math.random() * 2.4;
+    }
+    for (var j = collectibles.length - 1; j >= 0; j--){
+      var c = collectibles[j];
+      c.x -= speed * dt;
+      c.bob += dt * 3;
+      if (c.x < -30) collectibles.splice(j, 1);
+    }
+
+    checkCollisions();
+  }
+
+  function idleAnim(dt){
+    if (state === STATE_IDLE && !reduceMotion) player.idleBob += dt * 2.2;
+  }
+
+  /* ---------------- render ---------------- */
+  function render(){
+    ctx.save();
+    if (shakeT > 0){
+      ctx.translate((Math.random() * 2 - 1) * shakeMag, (Math.random() * 2 - 1) * shakeMag * 0.6);
+    }
+    ctx.clearRect(-10, -10, W + 20, H + 20);
+    drawCards(cardsBack, 0.55);
+    drawCards(cardsFront, 0.8);
+    drawGround();
+    obstacles.forEach(drawObstacle);
+    collectibles.forEach(drawCollectible);
+    drawPlayer();
+    drawParticles();
+    ctx.restore();
+
+    if (flashT > 0){
+      ctx.save();
+      ctx.globalAlpha = Math.max(0, flashT / flashDur) * 0.35;
+      ctx.fillStyle = C.warm;
+      ctx.fillRect(0, 0, W, H);
+      ctx.restore();
+    }
+    if (multiplierT > 0){
+      ctx.save();
+      ctx.font = '700 ' + (11 * scale) + 'px ui-monospace, monospace';
+      ctx.fillStyle = C.caution;
+      ctx.textAlign = 'right';
+      ctx.globalAlpha = Math.min(1, multiplierT);
+      ctx.fillText('×2 IMPRESSIONS · ' + multiplierT.toFixed(1) + 's', W - 10, 42);
+      ctx.restore();
+      ctx.textAlign = 'start';
+    }
+  }
+  function updateHud(){
+    if (state !== STATE_PLAY) return;
+    var s = Math.floor(score);
+    if (s !== lastDisplayedScore){ lastDisplayedScore = s; if (scoreEl) scoreEl.textContent = s; }
+    if (scoreEl) scoreEl.classList.toggle('boosted', multiplierT > 0);
+  }
+
+  /* ---------------- game over / start ---------------- */
+  // No distance-in-meters here anymore: it used to run alongside the score
+  // in its own unrelated unit (distance/12 here vs. distance/6 times
+  // whatever the multiplier happened to be, plus flat pickup bonuses, for
+  // the score above), so the two numbers looked like they ought to convert
+  // into each other and never did. One number on this screen means the
+  // score, full stop; these lines are commentary, not a second stat.
+  var GAMEOVER_LINES = [
+    'The Algorithm caught you mid-scroll.',
+    'Engagement: still zero.',
+    'Caught mid-humblebrag. Tragic.',
+    'The feed never forgets. Neither does this scoreboard.',
+    'Pure thought leadership, then gravity.',
+    'LinkedIn thanks you for your continued participation.',
+    'Keelhauled by the algorithm.',
+    'Walked the plank. The feed doesn\'t do closure.'
+  ];
+  function pickGameoverLine(){
+    return GAMEOVER_LINES[(Math.random() * GAMEOVER_LINES.length) | 0];
+  }
+  function triggerShake(mag, dur){ shakeMag = mag; shakeT = dur; }
+
+  function gameOver(){
+    state = STATE_OVER;
+    if (!reduceMotion){
+      triggerShake(6 * scale, 0.35);
+      flashT = flashDur;
+    }
+    spawnBurst(PLAYER_X, groundY - STAND_H * 0.5, C.warm, 20);
+    var isBest = score > best;
+    if (isBest){ best = score; try { localStorage.setItem(BEST_KEY, String(best)); } catch (e) {} }
+    if (bestEl) bestEl.textContent = best;
+
+    if (kickerEl) kickerEl.textContent = 'Game over';
+    if (titleEl) titleEl.innerHTML = '<span class="game-score-big">' + Math.floor(score) + '</span>';
+    if (subEl) subEl.innerHTML = esc(pickGameoverLine()) + (isBest ? '<br><span class="game-score-tag">New best</span>' : '');
+    startBtn.textContent = 'Run it back';
+    panel.hidden = false;
+    if (liveEl) liveEl.textContent = 'Game over. ' + Math.floor(score) + ' impressions' + (isBest ? ', a new best.' : '.');
+  }
+
+  function startGame(){
+    resetGame();
+    state = STATE_PLAY;
+    panel.hidden = true;
+    // From here on the stage is a real control: tabbable, focused, and
+    // allowed to intercept Space and the arrows.
+    armed = true;
+    stage.tabIndex = 0;
+    try { stage.focus({ preventScroll: true }); } catch (e) { stage.focus(); }
+    if (liveEl) liveEl.textContent = 'Running.';
+    if (rafId === null){ lastT = 0; rafId = requestAnimationFrame(frame); }
+  }
+
+  /* ---------------- input: scoped to the stage element itself, so Space and
+     the arrow keys only get hijacked while the game actually has focus and
+     never interfere with scrolling the page or typing in the textarea above */
+  function doJump(){
+    if (state !== STATE_PLAY || !player.onGround) return;
+    player.vy = 850 * scale;
+    player.onGround = false;
+    player.squash = 1;
+  }
+  function setDuck(v){ duckHeld = v; }
+
+  stage.addEventListener('keydown', function(e){
+    // Nothing is intercepted before an explicit Start: the keys keep their
+    // page meaning until the reader has asked for a game.
+    if (!armed && state !== STATE_PLAY) return;
+    if (e.code === 'Space' || e.code === 'ArrowUp'){
+      e.preventDefault();
+      if (state === STATE_PLAY) doJump(); else startGame();
+    } else if (e.code === 'ArrowDown'){
+      e.preventDefault();
+      setDuck(true);
+    }
+  });
+  stage.addEventListener('keyup', function(e){
+    if (e.code === 'ArrowDown') setDuck(false);
+  });
+  stage.addEventListener('pointerdown', function(e){
+    if (e.target !== canvas) return; // panel buttons handle their own clicks
+    if (state === STATE_PLAY){ stage.focus(); doJump(); }
+  });
+  startBtn.addEventListener('click', function(){ startGame(); });
+  if (jumpBtn) jumpBtn.addEventListener('click', function(){ if (state === STATE_PLAY){ stage.focus(); doJump(); } else startGame(); });
+  if (duckBtn){
+    duckBtn.addEventListener('pointerdown', function(){ setDuck(true); });
+    duckBtn.addEventListener('pointerup', function(){ setDuck(false); });
+    duckBtn.addEventListener('pointerleave', function(){ setDuck(false); });
+    duckBtn.addEventListener('pointercancel', function(){ setDuck(false); });
+    // Hold Space or Enter to duck from the keyboard, same as holding the
+    // button with a pointer.
+    duckBtn.addEventListener('keydown', function(e){
+      if (e.code !== 'Space' && e.code !== 'Enter') return;
+      e.preventDefault();
+      setDuck(true);
+    });
+    duckBtn.addEventListener('keyup', function(e){
+      if (e.code !== 'Space' && e.code !== 'Enter') return;
+      e.preventDefault();
+      setDuck(false);
+    });
+    duckBtn.addEventListener('blur', function(){ setDuck(false); });
+  }
+
+  /* ---------------- main loop: paused via IntersectionObserver whenever the
+     stage scrolls off screen, so this doesn't spend battery on a page that
+     is, first and foremost, a text tool */
+  // One frame, no loop: what the stage shows under reduced motion whenever
+  // the game is not actually being played.
+  function drawStatic(){
+    resize();
+    shakeT = 0; flashT = 0; particles = [];
+    render();
+  }
+
+  function frame(t){
+    if (!visible){ rafId = null; return; }
+    if (!lastT) lastT = t;
+    var dt = Math.min(0.033, (t - lastT) / 1000);
+    lastT = t;
+
+    if (state === STATE_PLAY) update(dt); else idleAnim(dt);
+    updateParticles(dt);
+    if (shakeT > 0) shakeT = Math.max(0, shakeT - dt);
+    if (flashT > 0) flashT = Math.max(0, flashT - dt);
+    updateCards(dt, state === STATE_PLAY ? speed : 40 * scale);
+
+    render();
+    updateHud();
+    // Reduced motion: once the run is over the picture stops moving. The
+    // loop only comes back when Start is pressed again.
+    if (reduceMotion && state !== STATE_PLAY){ rafId = null; drawStatic(); return; }
+    rafId = requestAnimationFrame(frame);
+  }
+
+  function wake(){
+    if (!visible) return;
+    if (reduceMotion && state !== STATE_PLAY){ drawStatic(); return; }
+    if (rafId === null){ lastT = 0; rafId = requestAnimationFrame(frame); }
+  }
+
+  if (window.IntersectionObserver){
+    new IntersectionObserver(function(entries){
+      visible = entries[0].isIntersecting;
+      if (visible) wake();
+    }, { threshold: 0.05 }).observe(stage);
+  }
+  // The section starts hidden and is revealed by the first report; the
+  // canvas was sized at zero until then, so redraw once it has a width.
+  if (window.ResizeObserver) new ResizeObserver(debounce(function(){ if (reduceMotion && state !== STATE_PLAY) drawStatic(); }, 100)).observe(stage);
+
+  resetGame();
+  wake();
+})();
+</script>
+</body>
+</html>

@@ -1,0 +1,87 @@
+name = "yourpost-sucks"
+main = "src/worker.js"
+compatibility_date = "2026-08-18"
+
+# Workers Logs: keeps a real, queryable record of requests and console output
+# in the dashboard (Workers & Pages -> yourpost-sucks -> Logs). Without this,
+# a one-off failure a visitor reports ("it just didn't work") leaves no trace
+# to diagnose after the fact.
+[observability]
+enabled = true
+
+[assets]
+directory = "./public"
+binding = "ASSETS"
+# The Worker handles /api/* itself; everything else is served as a static file.
+run_worker_first = ["/api/*"]
+
+[vars]
+# Hard ceiling on model spend per UTC day. When this is reached the site keeps
+# working and silently stops calling the model. This is the only number that
+# stands between you and a surprise bill — set it to an amount you would not
+# mind losing every single day.
+# Raised from 10 to 30 for the launch (2026-09-18). Bring it back down once the
+# announcement traffic has passed.
+DAILY_BUDGET_USD = "30"
+
+# Per-IP analyses per hour that are allowed to reach the model. Everyone gets
+# unlimited rule-based analyses regardless; this only gates the expensive path.
+# Raised from 12 to 30 for the launch (2026-09-18), so a shared office or carrier
+# address does not run dry in the first hour. Bring it back down afterwards.
+RATE_LIMIT_PER_HOUR = "30"
+
+# Check current IDs at https://platform.claude.com/docs/en/about-claude/models/overview
+MODEL = "claude-haiku-4-5"
+
+# Bot check (optional). Leave blank and the site behaves exactly as it does
+# today: no widget loads, no check runs, nothing changes. To turn it on:
+#   1. Create a Turnstile widget at https://dash.cloudflare.com -> Turnstile.
+#      Widget mode doesn't matter here — the page renders it with
+#      appearance:"execute", so it stays invisible unless Cloudflare
+#      decides a real challenge is needed, regardless of which mode you pick.
+#   2. Paste its SITE key below. This one is public by design — it's meant
+#      to sit in the page source, safe to commit.
+#   3. Set its SECRET key the other way, since that one isn't public:
+#      npx wrangler secret put TURNSTILE_SECRET
+# Setting only one half does nothing: the client won't render a widget
+# without a site key here, and the server won't enforce anything without
+# the secret. Either alone is the same as neither.
+TURNSTILE_SITE_KEY = "0x4AAAAAAE7C5mS-FYHtDQa7"
+
+# "report" verifies every token and writes the result to Workers Logs
+# ("turnstile: ok" / "turnstile: no_token") but never withholds AI commentary
+# over it. Use it to watch a new widget work on the live site first; switch
+# to "enforce" once the logs show real visitors verifying.
+TURNSTILE_MODE = "enforce"
+
+# Prose cache. Also the FALLBACK home of the budget counter and the rate
+# limiter when the COUNTERS binding below is missing; KV is eventually
+# consistent, so in that mode a burst of simultaneous requests can all read
+# the same stale count and all be let through. Fine for a KV-only dev
+# setup, not for production.
+#   npx wrangler kv namespace create YPS
+# then paste the id below.
+[[kv_namespaces]]
+binding = "KV"
+id = "bc542d5c89ad4b6585474b73dd04d0c0"
+
+# Budget counter + rate limiter, done properly. A Durable Object handles one
+# request at a time, so "is there room, and if so charge it" is a single
+# atomic step: forty requests arriving in the same instant against a budget
+# with room for two produce exactly two model calls, where the KV version
+# above could produce forty. The class lives in src/worker.js (Counters); no
+# separate script, no extra namespace to create. The migration below tells
+# Cloudflare the class exists and is SQLite-backed; the first deploy that
+# carries it is an ordinary `wrangler deploy`. Do not rename or remove the
+# tag once deployed: later schema changes get their own [[migrations]] entry.
+[[durable_objects.bindings]]
+name = "COUNTERS"
+class_name = "Counters"
+
+[[migrations]]
+tag = "v1"
+new_sqlite_classes = ["Counters"]
+
+# Secrets — never put these in this file:
+#   npx wrangler secret put ANTHROPIC_API_KEY
+#   npx wrangler secret put TURNSTILE_SECRET   (optional; skipped if unset)

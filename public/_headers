@@ -1,0 +1,32 @@
+# Response headers for every static asset the Worker serves from ./public
+# (Workers Assets reads this file; the /api/* routes set their own headers
+# in src/worker.js). The CSP is built from what shell.html actually loads:
+# inline scripts and styles (the engine is inlined by build.mjs), JetBrains
+# Mono from Google Fonts, the canvas share-card exported as data:/blob:
+# images, fetch() to the same-origin /api, and Cloudflare Turnstile when a
+# site key is configured. Anything not on that list is blocked by default,
+# so a new third-party script or CDN needs a line here before it will run.
+# Cloudflare Web Analytics IS switched on for this zone, and its beacon is
+# injected at the edge: static.cloudflareinsights.com/beacon.min.js never
+# appears in shell.html or in a default curl, only in what a real browser
+# (or curl with a browser User-Agent) receives. Do not remove these two hosts
+# on the strength of a grep. It was done once and analytics went dark.
+/*
+  X-Content-Type-Options: nosniff
+  Referrer-Policy: strict-origin-when-cross-origin
+  Permissions-Policy: camera=(), microphone=(), geolocation=()
+  Strict-Transport-Security: max-age=31536000; includeSubDomains
+  Content-Security-Policy: default-src 'self'; script-src 'self' 'unsafe-inline' https://challenges.cloudflare.com https://static.cloudflareinsights.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; img-src 'self' data: blob:; connect-src 'self' https://cloudflareinsights.com; frame-src https://challenges.cloudflare.com; frame-ancestors 'none'; base-uri 'self'; form-action 'self'
+# The page inlines the whole engine, so a deploy that changes a rule must
+# reach visitors on their next load, not after a CDN TTL.
+/
+  Cache-Control: no-cache
+/index.html
+  Cache-Control: no-cache
+# Everything else in ./public only changes on a deploy. A day of cache saves
+# the revalidation round trip on every link preview; the ETag is still there
+# as the backstop if a file is ever swapped without a rename.
+/og-card.png
+  Cache-Control: public, max-age=86400
+/robots.txt
+  Cache-Control: public, max-age=86400
