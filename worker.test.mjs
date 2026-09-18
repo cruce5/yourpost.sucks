@@ -1350,6 +1350,28 @@ console.log('\n=== machine tells are dropped, one piece at a time ===');
   llmBehaviour = 'good';
 }
 
+console.log('\n=== the model is told how the score works ===');
+{
+  // A near-perfect post was roasted as "useless" because the model was handed
+  // "0.4/10" with no direction and no verdict. These pin what it is told now.
+  const sys = COSTS.prompts.report;
+  check('the system prompt says low is good and gives the scale ends', /LOW IS GOOD/.test(sys) && /0 \(immaculate\)/.test(sys) && /10 \(unsalvageable\)/.test(sys));
+  const edges = []; let last = null;
+  for (let v = 0; v <= 100; v++) { const b = ENGINE.bandFor(v / 10).label; if (b !== last) { edges.push(b); last = b; } }
+  check('every band the engine has is named in the prompt, in the engine\'s words', edges.length >= 3 && edges.every(l => sys.includes('"' + l + '"')), edges.join(' | '));
+  const clean = ENGINE.analyze(NEUTRAL, {});
+  const msg = COSTS.build.report(NEUTRAL, clean, false);
+  check('the per-post message states the verdict in words, not as a mark out of ten', msg.includes('Verdict: "' + clean.band.label + '"') && /Low is good/.test(msg) && !/Overall suckiness: [\d.]+\/10/.test(msg), msg.split('\n')[1]);
+  // and the construction that roast used is now dropped if it comes back
+  const env = baseEnv(); llmBehaviour = 'custom';
+  customPayload = { one_liner: 'A clean post.', brutal: 'Nothing here is desperate.', advice: [], changes: [],
+    roasts: [{ label: 'Self-test transparency', text: 'The tool is not just useless, it is usefully self-aware about how useless it is willing to be.' },
+             { label: 'The decimal', text: 'You scored your own post and published the number. It was a good number.' }] };
+  const r = await (await worker.fetch(post({ post: NEUTRAL + ' I ran it through the tool first.' }), env, ctx)).json();
+  check('"not just X, it is Y" drops that roast and keeps the plain one', r.mode === 'llm' && r.report.roasts.map(x => x.label).join('|') === 'The decimal', JSON.stringify(r.report.roasts.map(x => x.label)));
+  llmBehaviour = 'good';
+}
+
 console.log('\n=== the pre-charge covers what the call can actually bill ===');
 {
   // The pre-charge is the only number that can trip the daily breaker.

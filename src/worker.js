@@ -41,16 +41,18 @@ const CHARS_PER_TOKEN = 4;
  * breaker trips early rather than late. Recalibrate if you change model or
  * prompt. The arithmetic:
  *   output   1200 tokens x 5                            =  6,000
- *   system   15,787 chars / 4 = 3,947 tokens x 1.25      =  4,934  (cache write, the dearest input there is)
+ *   system   16,317 chars / 4 = 4,080 tokens x 1.25      =  5,100  (cache write, the dearest input there is)
  *   tools    2,512 chars / 4 = 628 tokens x 1.25         =    785  (the report tool schema, cached with the system block)
- *   user     1,800 tokens x 1                            =  1,800  (measured over fixtures/max-prompt-post.txt)
- *   total                                                = 13,532
- * Rounded up to 13,600, which leaves 68. (It was 13,000 until the voice
- * section of the prompt was rewritten from the owner's own voice guide.) That is thin on purpose to see:
+ *   user     1,824 tokens x 1                            =  1,824  (measured over fixtures/max-prompt-post.txt)
+ *   total                                                = 13,722
+ * Set to 14,000, which leaves 278: deliberate headroom, because this prompt
+ * is being tuned and every sentence added to it costs about 0.3 micros a
+ * character. (13,000 before the voice section was rewritten from the owner's
+ * own voice guide, 13,600 before the model was told how the score works.) That is thin on purpose to see:
  * worker.test.mjs measures all three lines on every run, so the next sentence
  * added to the prompt fails the suite, and someone chooses between trimming the prompt and raising this. The cache-read path is far cheaper, but the reserve
  * has to hold for the first call in every 5-minute cache window. */
-const COST_MICROS_PER_CALL = 13600; // $0.0136: roasts + craft edits + headline/credits/notes, one call, 1200-token cap
+const COST_MICROS_PER_CALL = 14000; // $0.014: roasts + craft edits + headline/credits/notes, one call, 1200-token cap
 
 /* The tone-classification call (see "tone gate" below) is a single yes/no
  * question with a 200-token cap, called on a minority of posts. Much cheaper
@@ -507,6 +509,20 @@ async function turnstileOK(env, token, ip) {
  * the model call
  * ------------------------------------------------------------------ */
 
+/* The model was never told how the score works. It was handed "Overall
+ * suckiness: 0.4/10" and read it the way anyone reads a mark out of ten: a
+ * near-perfect post got roasted as "useless". The scale is described here from
+ * the engine's own bandFor(), scanned once at load, so the prompt cannot say
+ * one thing while the page says another. */
+const SCALE_TEXT = (() => {
+  const bands = [];
+  for (let v = 0; v <= 100; v++) {
+    const b = ENGINE.bandFor(v / 10);
+    if (!bands.length || bands[bands.length - 1].label !== b.label) bands.push({ from: v / 10, label: b.label });
+  }
+  return bands.map((b, i) => (i + 1 < bands.length ? `${b.from} to ${bands[i + 1].from}` : `${b.from} and up`) + ` is "${b.label}"`).join(', ');
+})();
+
 const SYSTEM_PROMPT = `You write the prose for yourpost.sucks, a tool that analyses LinkedIn posts and reports on them in the register of a clinical analytics report written by someone who has read too many LinkedIn posts.
 
 VOICE
@@ -533,6 +549,9 @@ MACHINE TELLS. He never writes these and neither do you:
 - Abstract aphorisms where a noun does something profound: "The neutrality is the sell", "vagueness dies first", "the absurdity is earned", "the difference is now academic".
 - Lists of three for rhythm, and mirrored sentence pairs built to sound wise.
 - Compliment essays. If the post is good, say so once, flatly, in one or two short roasts, and stop. Do not write an appreciation of it.
+
+THE SCORE
+Suckiness runs from 0 (immaculate) to 10 (unsalvageable). LOW IS GOOD. ${SCALE_TEXT}. Most real posts land in the lowest band. It measures cliché and craft in the text, never reach. Match your tone to the band you are given: a post that barely sucks gets a dry nod and little else, and only a post that sucks a lot gets the full treatment. If the post itself quotes a suckiness score, read it on this scale.
 
 HARD RULES
 1. Never predict reach, impressions, virality, or algorithmic performance. You cannot know it. Write about the reader's experience instead.
@@ -639,7 +658,7 @@ function buildUserMessage(post, report, hasImage) {
     : '- none: nothing the rule engine flagged had a literal phrase to highlight.';
 
   return `Fixed scores (do not restate the numbers, do not contradict them):
-Overall suckiness: ${report.overall}/10${report.volumeBonus ? ` (includes a rule-density adjustment of ${report.volumeBonus >= 0 ? '+' : ''}${report.volumeBonus})` : ''}
+Overall suckiness: ${report.overall} on a scale where 0 is immaculate and 10 is unsalvageable. Verdict: "${report.band ? report.band.label : ''}". Low is good.${report.volumeBonus ? ` (includes a rule-density adjustment of ${report.volumeBonus >= 0 ? '+' : ''}${report.volumeBonus})` : ''}
 ${cats}
 
 What the rule engine detected (use as raw material; you may go further):
@@ -694,7 +713,8 @@ const MACHINE_TELLS = [
   /\bis the (?:sell|flex|point|move|play)\b/i,           // "the neutrality is the sell"
   /\b(?:is|was|are) earned\b|\bearns it\b/i,            // "the absurdity is earned"
   /\bsomeone who (?:learned|knows|understands)\b/i,      // psychoanalysing the author
-  /\b(?:masterclass|testament to|tapestry|delve)\b/i
+  /\b(?:masterclass|testament to|tapestry|delve)\b/i,
+  /\bnot (?:just|only|merely|simply)\b/i                  // "not just X, it is Y": the engine roasts posts for this one
 ];
 const sounds = v => !MACHINE_TELLS.some(re => re.test(String(v)));
 
@@ -1649,7 +1669,9 @@ export const COSTS = Object.freeze({
   image: { precharge: IMAGE_COST_MICROS_PER_CALL },
   // The real message builders, so the test measures the worst-case user
   // message over a maximal post rather than trusting a number typed once.
-  build: { report: buildUserMessage, reword: buildRewordUserMessage, rewordFeedback: rewordFeedback }
+  build: { report: buildUserMessage, reword: buildRewordUserMessage, rewordFeedback: rewordFeedback },
+  // The prompt text itself, so a test can pin what the model is told.
+  prompts: { report: SYSTEM_PROMPT, reword: REWORD_SYSTEM_PROMPT }
 });
 
 export default {
