@@ -138,10 +138,11 @@ add the DS record it gives you back at Porkbun.
 
 Haiku 4.5 is **$1/MTok in, $5/MTok out**. The budget breaker reserves a true
 worst case before every call, then refunds the difference once the API reports
-what the call really used. For the main analysis that reserve is **$0.013**:
-the 1,200-token output cap ($0.006), the system prompt billed as a cache write
-($0.0044; it is large, since it carries the craft reference), and a
-4,000-character post with every rule firing ($0.0017), rounded up. Inside the
+what the call really used. For the main analysis that reserve is **$0.0136**:
+the 1,200-token output cap ($0.006), the system prompt and tool schema billed
+as a cache write ($0.0057; it is large, since it carries the voice guide and the
+craft reference), and the longest user message a 4,000-character post can
+produce ($0.0018), rounded up. Inside the
 5-minute cache window the system prompt is billed as a cache read instead and
 a call settles well under the reserve. The reserve has to hold for the first
 call in every window, so that is the number the breaker uses.
@@ -156,11 +157,11 @@ drops below what its own call can bill.
 
 | Daily cap | Model-written analyses/day, worst case (every one pays for the main call and the tone call) | Same, with an image on every one |
 |---|---|---|
-| $1 | ~64 | ~51 |
-| $5 (the fallback if unset) | ~320 | ~255 |
-| $10 | ~640 | ~510 |
-| $25 | ~1,600 | ~1,275 |
-| $30 (shipped in `wrangler.toml` for the launch) | ~1,900 | ~1,500 |
+| $1 | ~61 | ~49 |
+| $5 (the fallback if unset) | ~310 | ~245 |
+| $10 | ~615 | ~495 |
+| $25 | ~1,540 | ~1,240 |
+| $30 (shipped in `wrangler.toml` for the launch) | ~1,850 | ~1,485 |
 
 These are floors, not forecasts. Every settled call refunds what it did not
 use, so a real day runs well past them.
@@ -486,7 +487,7 @@ context (every category's contribution and weight, the rule engine's own
 `credits` list, the literal highlighted spans, and the full stats line), but
 no new round-trip was added. `COST_MICROS_PER_CALL` moved from $0.0052 to $0.0068 to reflect the larger cap,
 and later to $0.013 when all three reserves were recalibrated to a true worst
-case (see "The money").
+case, then to $0.0136 when the prompt's voice section was rewritten (see "The money").
 
 **Every field degrades independently, and never invents a number.** Unlike
 `roasts`/`brutal`, none of the five are load-bearing. A rejected or omitted

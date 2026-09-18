@@ -556,7 +556,7 @@ console.log('\n=== tone gate (satire detection) ===');
   // but not for report+tone should degrade a tone-eligible post to rules,
   // while a non-tone-eligible post at the same spend level still gets an LLM
   // response — proving the breaker actually accounts for the extra call.
-  const spent = String(5 * 1e6 - 14000); // room for +13000, not for +13000+2600
+  const spent = String(5 * 1e6 - (COSTS.report.precharge + 1000)); // room for the report call, not for report + tone
   const env1 = baseEnv(); llmBehaviour = 'good'; toneBehaviour = 'no';
   await env1.KV.put(`b:${new Date().toISOString().slice(0, 10)}`, spent);
   const nonEligible = await (await worker.fetch(post({ post: NEUTRAL }), env1, ctx)).json();
@@ -1063,10 +1063,10 @@ console.log('\n=== status endpoint ===');
   // Answering on the main call alone told the page there was room for an
   // analysis the breaker was about to refuse.
   const env = baseEnv();
-  await env.KV.put(todayKey(), String(5000000 - 14000));
+  await env.KV.put(todayKey(), String(5000000 - (COSTS.report.precharge + 1000)));
   const r = await (await worker.fetch(new Request('https://yourpost.sucks/api/status'), env, ctx)).json();
   check('budgetRemaining answers for the largest reservation, not the cheapest call', r.budget.budgetRemaining === false, JSON.stringify(r.budget));
-  await env.KV.put(todayKey(), String(5000000 - 19600));
+  await env.KV.put(todayKey(), String(5000000 - (COSTS.report.precharge + COSTS.tone.precharge + COSTS.image.precharge)));
   const r2 = await (await worker.fetch(new Request('https://yourpost.sucks/api/status'), env, ctx)).json();
   check('  ...and is true again with exactly that much room left', r2.budget.budgetRemaining === true, JSON.stringify(r2.budget));
 }
@@ -1167,14 +1167,14 @@ check('the concurrency fixture is not tone-eligible (one model call per analysis
   // (2 x 13000 micros). Read-then-write against a 5ms KV would let all forty
   // read "0 spent" and all forty call the model. Through the Durable Object
   // the check and the charge are one step: exactly two get through.
-  const env = { KV: mockKV({ latencyMs: 5 }), COUNTERS: mockCounters(), ANTHROPIC_API_KEY: 'sk-test', DAILY_BUDGET_USD: '0.026', RATE_LIMIT_PER_HOUR: '1000' };
+  const env = { KV: mockKV({ latencyMs: 5 }), COUNTERS: mockCounters(), ANTHROPIC_API_KEY: 'sk-test', DAILY_BUDGET_USD: String(2 * COSTS.report.precharge / 1e6), RATE_LIMIT_PER_HOUR: '1000' };
   llmBehaviour = 'good'; toneBehaviour = 'no'; llmCalls = 0; toneCalls = 0;
   const responses = await Promise.all(Array.from({ length: 40 }, (_, i) => worker.fetch(post({ post: PITCHY + ' v' + i }), env, ctx).then(r => r.json())));
   const served = responses.filter(r => r.mode === 'llm').length;
   const refused = responses.filter(r => r.mode === 'rules' && r.reason === 'budget').length;
   check('40 concurrent analyzes against a 2-call budget make exactly 2 model calls', llmCalls === 2 && toneCalls === 0, llmCalls + ' report calls, ' + toneCalls + ' tone calls');
   check('  ...2 served by the model, 38 degraded on budget, none errored', served === 2 && refused === 38, served + ' llm, ' + refused + ' budget, ' + (40 - served - refused) + ' other');
-  check('  ...and the counter shows exactly two calls charged', await spentMicros(env) === 26000, await spentMicros(env) + ' micros');
+  check('  ...and the counter shows exactly two calls charged', await spentMicros(env) === 2 * COSTS.report.precharge, await spentMicros(env) + ' micros');
 }
 {
   // Same shape for the rate limit: one IP, thirty simultaneous requests,
@@ -1185,7 +1185,7 @@ check('the concurrency fixture is not tone-eligible (one model call per analysis
   const served = responses.filter(r => r.mode === 'llm').length;
   const limited = responses.filter(r => r.mode === 'rules' && r.reason === 'rate_limited').length;
   check('30 concurrent requests from one IP against a limit of 12 allow exactly 12', llmCalls === 12 && served === 12 && limited === 18, llmCalls + ' calls, ' + served + ' served, ' + limited + ' limited');
-  check('  ...and the 18 refused requests were refunded, so only 12 calls are on the budget', await spentMicros(env) === 12 * 13000, await spentMicros(env) + ' micros');
+  check('  ...and the 18 refused requests were refunded, so only 12 calls are on the budget', await spentMicros(env) === 12 * COSTS.report.precharge, await spentMicros(env) + ' micros');
 }
 {
   // A budget-exhausted request must not also consume a rate slot: the
@@ -1266,20 +1266,20 @@ for (const withDO of [false, true]) {
     // worst-case constants remain the only numbers that can trip the breaker.
     modelUsage = { input_tokens: 2000, output_tokens: 5000 };
     await worker.fetch(post({ post: PITCHY }), env, ctx);
-    check(`${label}: usage above the pre-charge stays at the pre-charge`, await spentMicros(env) === 13000, await spentMicros(env) + ' micros');
+    check(`${label}: usage above the pre-charge stays at the pre-charge`, await spentMicros(env) === COSTS.report.precharge, await spentMicros(env) + ' micros');
     modelUsage = null;
   }
   {
     const env = baseEnv(); if (withDO) env.COUNTERS = mockCounters(); llmBehaviour = 'good';
     await worker.fetch(post({ post: PITCHY }), env, ctx);
-    check(`${label}: a response with no usage block keeps the worst-case charge`, await spentMicros(env) === 13000, await spentMicros(env) + ' micros');
+    check(`${label}: a response with no usage block keeps the worst-case charge`, await spentMicros(env) === COSTS.report.precharge, await spentMicros(env) + ' micros');
   }
   {
     // Tone-eligible post, tone call fails, report call succeeds: the tone
     // slice (2600) comes back, the report slice (13000) stays.
     const env = baseEnv(); if (withDO) env.COUNTERS = mockCounters(); llmBehaviour = 'good'; toneBehaviour = 'error';
     const r = await (await worker.fetch(post({ post: PARODY }), env, ctx)).json();
-    check(`${label}: a failed tone call refunds only its own slice of the pre-charge`, r.mode === 'llm' && await spentMicros(env) === 13000, await spentMicros(env) + ' micros (pre-charged 15600)');
+    check(`${label}: a failed tone call refunds only its own slice of the pre-charge`, r.mode === 'llm' && await spentMicros(env) === COSTS.report.precharge, await spentMicros(env) + ' micros (pre-charged 15600)');
     toneBehaviour = 'no';
   }
   {
@@ -1322,6 +1322,31 @@ console.log('\n=== an emoji in a name is part of the name ===');
   check('a rewrite that renames the author (name kept, emoji gone) loses the rewrite, not the change', !!tighten && tighten.rewrite === null, JSON.stringify(tighten));
   const kept = rep.changes.find(c => c.type === 'Tighten the close again');
   check('a rewrite that keeps the name whole is served', !!kept && /Bill/.test(kept.rewrite) && kept.rewrite.includes('\u{1F3F4}\u200D\u2620\uFE0F'), JSON.stringify(kept));
+  llmBehaviour = 'good';
+}
+
+console.log('\n=== machine tells are dropped, one piece at a time ===');
+{
+  // The four roasts the owner got back on his own launch post, as served. Every
+  // one carries a tell he flagged. A fifth, plain one is the control.
+  const out = {
+    one_liner: 'A clean post that says what the thing does.', brutal: 'Nothing here is desperate.',
+    roasts: [
+      { label: 'The ultimate flex', text: 'He ran his own product against itself. Then he posted the result. This is either obsessive or genius and the difference is now academic.' },
+      { label: 'Structural honesty', text: 'Every claim is checkable. This is not confidence speaking. It is someone who learned that vagueness dies first.' },
+      { label: 'Institutional tone: defeated', text: 'Notice what is missing. No call to action. The neutrality is the sell.' },
+      { label: 'The closer earns it', text: 'This one ends on a decimal. The absurdity is earned because the preceding sentence was true.' },
+      { label: 'The closer', text: 'You ended on a decimal. It is the most specific thing in the post.' }
+    ],
+    advice: [], changes: [],
+    credits: ['Notice what is missing: a call to action.', 'No ask at the end.']
+  };
+  const env = baseEnv(); llmBehaviour = 'custom'; customPayload = out;
+  const r = await (await worker.fetch(post({ post: NEUTRAL + ' It scored well and I have never been prouder of a decimal.' }), env, ctx)).json();
+  const labels = r.report.roasts.map(x => x.label);
+  check('third-person narration, psychoanalysis, stage directions, colon labels and "is earned" are all dropped', r.mode === 'llm' && labels.join('|') === 'The closer', JSON.stringify(labels));
+  check('  ...and the plain roast in his register is served untouched', r.report.roasts[0].text === 'You ended on a decimal. It is the most specific thing in the post.');
+  check('  ...and a credit with a stage direction is dropped too', !(r.report.credits || []).some(c => /notice/i.test(c)), JSON.stringify(r.report.credits));
   llmBehaviour = 'good';
 }
 
