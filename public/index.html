@@ -331,6 +331,8 @@ button{
   font-family:var(--mono);font-size:14px;color:var(--ink-3);
   margin-left:auto;font-variant-numeric:tabular-nums;
 }
+/* While something is being dragged over the panel. */
+.panel.dropping{outline:2px dashed var(--cool);outline-offset:4px}
 .specimens{margin-top:14px;display:flex;gap:8px;flex-wrap:wrap;align-items:center}
 .specimens .cap{
   font-family:var(--mono);font-size:14px;letter-spacing:.09em;
@@ -1044,7 +1046,7 @@ ul.cg-list li::before{content:"\2022";position:absolute;left:0;color:var(--ink-4
     </label>
     <p class="media-note">Turns off the checks that assume the text is the whole post. The report says so when it did.</p>
     <div class="media-upload">
-      <button type="button" class="media-upload-btn" id="mediabtn">Attach image (optional)</button>
+      <button type="button" class="media-upload-btn" id="mediabtn">Attach image, or paste one</button>
       <input type="file" id="mediafile" accept="image/jpeg,image/png,image/webp,image/gif,image/heic,image/heif" hidden>
       <div class="media-preview" id="mediapreview" hidden>
         <img id="mediapreview-img" alt="" hidden>
@@ -1055,6 +1057,7 @@ ul.cg-list li::before{content:"\2022";position:absolute;left:0;color:var(--ink-4
   </div>
   <div class="controls">
     <button class="btn-primary" id="run" aria-disabled="false">Analyze</button>
+    <button class="btn-ghost" id="pastebtn" type="button" hidden>Paste</button>
     <button class="btn-ghost" id="clear">Clear</button>
     <span class="meta" id="counter">0 words</span>
     <span class="busy-note" id="busynote" hidden>Still going. The AI takes a few seconds longer than the checklist does.</span>
@@ -5539,15 +5542,22 @@ ul.cg-list li::before{content:"\2022";position:absolute;left:0;color:var(--ink-4
     var input = this;
     var file = input.files && input.files[0];
     if (!file) return;
+    attachImageFile(file, function(){ input.value = ''; });
+  });
+
+  /* One way in for an image, whatever brought it: the file picker, the
+     clipboard (Ctrl+V anywhere, or the Paste button), or a drop. onReject
+     lets the file picker clear itself when the file is refused. */
+  function attachImageFile(file, onReject){
     // iOS reports HEIC as image/heic (and sometimes as no type at all);
     // Safari transcodes it on the way in, other browsers may not decode it,
     // and that failure surfaces as the error toast below.
     var typeOk = /^image\/(jpeg|png|webp|gif|heic|heif)$/.test(file.type) || (!file.type && /\.hei[cf]$/i.test(file.name));
     if (!typeOk){
-      toast('Unsupported image type', { error: true }); input.value = ''; return;
+      toast('Unsupported image type', { error: true }); if (onReject) onReject(); return;
     }
     if (file.size > MEDIA_MAX_SOURCE_BYTES){
-      toast('Image too large. 12MB max', { error: true }); input.value = ''; return;
+      toast('Image too large. 12MB max', { error: true }); if (onReject) onReject(); return;
     }
     // Say so straight away: a large photo can take a second or two to
     // decode and a silent gap reads as "nothing happened".
@@ -5563,14 +5573,14 @@ ul.cg-list li::before{content:"\2022";position:absolute;left:0;color:var(--ink-4
       if (!$('#hasmedia').checked){ $('#hasmedia').checked = true; mediaCheckedByAttach = true; }
       var img = $('#mediapreview-img');
       img.src = dataUrl; img.hidden = false;
-      $('#mediapreview-name').textContent = file.name;
+      $('#mediapreview-name').textContent = file.name || 'Pasted image';
       $('#mediapreview').hidden = false;
-      var liveM = $('#live'); if (liveM) liveM.textContent = 'Image attached: ' + file.name + '.';
+      var liveM = $('#live'); if (liveM) liveM.textContent = 'Image attached: ' + (file.name || 'pasted image') + '.';
     }).catch(function(){
       clearAttachedImage();
       toast('Could not read that image', { error: true });
     });
-  });
+  }
 
   $('#mediaremove').addEventListener('click', function(){ clearAttachedImage(); $('#mediabtn').focus(); });
 
@@ -5600,6 +5610,92 @@ ul.cg-list li::before{content:"\2022";position:absolute;left:0;color:var(--ink-4
   $('#post').addEventListener('paste', function(){
     setTimeout(hygiene, 0); // let the paste land first
   });
+
+  /* ---------------- getting a post in, the easy ways ----------------------
+     Text typed or pasted into the box was the only way in. Now: Ctrl+V or
+     Cmd+V anywhere on the page, a Paste button that reads the clipboard (the
+     long-press paste on a phone is the fiddliest step of the whole product),
+     an image on the clipboard attaches itself, and both can be dropped onto
+     the panel. None of it analyzes anything: that still takes a click, since
+     an analysis can cost money and a paste should never surprise anyone. */
+  function takeText(text){
+    text = String(text || '');
+    if (!text.trim()) return false;
+    var box = $('#post');
+    box.value = box.value.trim() ? box.value.replace(/\s+$/, '') + '\n\n' + text : text;
+    hygiene();
+    box.focus();
+    try { box.setSelectionRange(box.value.length, box.value.length); } catch (e) {}
+    return true;
+  }
+  function firstImage(files){
+    for (var i = 0; files && i < files.length; i++) if (/^image\//.test(files[i].type)) return files[i];
+    return null;
+  }
+  function isField(el){
+    return !!(el && (el.tagName === 'TEXTAREA' || el.tagName === 'INPUT' || el.isContentEditable));
+  }
+
+  document.addEventListener('paste', function(ev){
+    var cd = ev.clipboardData; if (!cd) return;
+    var img = firstImage(cd.files);
+    if (img){ attachImageFile(img); toast('Image attached from the clipboard'); }
+    if (isField(ev.target)){
+      // Inside the box the browser pastes the text itself. A lone image has
+      // no text to paste, so stop it dropping a filename in.
+      if (img && !cd.getData('text/plain')) ev.preventDefault();
+      return;
+    }
+    var text = cd.getData('text/plain');
+    if (takeText(text) || img) ev.preventDefault();
+  });
+
+  (function(){
+    var btn = $('#pastebtn');
+    if (!btn || !navigator.clipboard || !(navigator.clipboard.read || navigator.clipboard.readText)) return;
+    btn.hidden = false;
+    var blocked = function(){
+      var mac = /Mac|iPhone|iPad/.test(navigator.platform || '');
+      toast('The browser blocked clipboard access. Press ' + (mac ? 'Cmd' : 'Ctrl') + '+V instead.', { error: true });
+    };
+    btn.addEventListener('click', function(){
+      var viaText = function(){
+        if (!navigator.clipboard.readText) return blocked();
+        navigator.clipboard.readText().then(function(t){ if (!takeText(t)) toast('Nothing to paste on the clipboard'); }, blocked);
+      };
+      if (!navigator.clipboard.read) return viaText();
+      navigator.clipboard.read().then(function(items){
+        var jobs = [], got = false;
+        items.forEach(function(item){
+          var imgType = item.types.filter(function(t){ return /^image\//.test(t); })[0];
+          if (imgType) jobs.push(item.getType(imgType).then(function(blob){
+            got = true;
+            attachImageFile(new File([blob], 'Pasted image', { type: blob.type }));
+          }));
+          if (item.types.indexOf('text/plain') >= 0) jobs.push(item.getType('text/plain').then(function(blob){ return blob.text(); }).then(function(t){ if (takeText(t)) got = true; }));
+        });
+        return Promise.all(jobs).then(function(){ if (!got) toast('Nothing to paste on the clipboard'); });
+      }).catch(viaText);
+    });
+  })();
+
+  (function(){
+    var panel = $('#post').closest('.panel') || $('#post').parentElement;
+    var depth = 0;
+    var carries = function(ev){ var t = ev.dataTransfer && ev.dataTransfer.types; return !!t && (Array.prototype.indexOf.call(t, 'Files') >= 0 || Array.prototype.indexOf.call(t, 'text/plain') >= 0); };
+    panel.addEventListener('dragenter', function(ev){ if (!carries(ev)) return; depth++; panel.classList.add('dropping'); });
+    panel.addEventListener('dragleave', function(){ depth = Math.max(0, depth - 1); if (!depth) panel.classList.remove('dropping'); });
+    panel.addEventListener('dragover', function(ev){ if (carries(ev)) ev.preventDefault(); });
+    panel.addEventListener('drop', function(ev){
+      depth = 0; panel.classList.remove('dropping');
+      var dt = ev.dataTransfer; if (!dt) return;
+      var img = firstImage(dt.files), text = dt.getData('text/plain');
+      if (!img && !text) return;
+      ev.preventDefault();
+      if (img) attachImageFile(img);
+      if (text) takeText(text);
+    });
+  })();
   $('#post').addEventListener('input', function(){
     updateCounter();
     if ($('#notices').className && !$('#post').value.trim()) showNotices([]);

@@ -312,6 +312,32 @@ await p.goto(indexUrl + '?p=' + bigEnc);
 await p.waitForTimeout(400);
 check('over-limit permalink shows the inline limit error and no report', await p.evaluate(() => !document.getElementById('limit-err').hidden && document.getElementById('report').hidden && !document.getElementById('toast').classList.contains('on')));
 
+// --- getting a post in: paste anywhere, an image on the clipboard, a drop
+{
+  await p.goto(indexUrl);
+  const PNG = 'iVBORw0KGgoAAAANSUhEUgAAAAgAAAAICAIAAABLbSncAAAAFElEQVR4nGP8z4AdMOEQH2ESDAwAR0cBD8Pj4XkAAAAASUVORK5CYII=';
+  const firePaste = (sel, text, withImage) => p.evaluate(({ sel, text, withImage, PNG }) => {
+    const dt = new DataTransfer();
+    if (text) dt.setData('text/plain', text);
+    if (withImage) { const bin = atob(PNG), u = new Uint8Array(bin.length); for (let i = 0; i < bin.length; i++) u[i] = bin.charCodeAt(i); dt.items.add(new File([u], 'shot.png', { type: 'image/png' })); }
+    const ev = new ClipboardEvent('paste', { clipboardData: dt, bubbles: true, cancelable: true });
+    (sel ? document.querySelector(sel) : document.body).dispatchEvent(ev);
+    return ev.defaultPrevented;
+  }, { sel, text, withImage, PNG });
+  await firePaste(null, 'Pasted with the cursor nowhere in particular.', false);
+  check('text pasted anywhere on the page lands in the box, with focus', (await p.inputValue('#post')) === 'Pasted with the cursor nowhere in particular.' && await p.evaluate(() => document.activeElement.id === 'post'));
+  await firePaste(null, 'And a second paste.', false);
+  check('a second paste appends after a blank line, it never overwrites', (await p.inputValue('#post')) === 'Pasted with the cursor nowhere in particular.\n\nAnd a second paste.');
+  await firePaste(null, '', true); await p.waitForTimeout(700);
+  check('an image on the clipboard attaches itself and ticks the media box', await p.isVisible('#mediapreview') && await p.isChecked('#hasmedia'), (await p.textContent('#mediapreview-name')).trim());
+  await p.click('#mediaremove');
+  const before = await p.inputValue('#post');
+  const prevented = await firePaste('#post', '', true); await p.waitForTimeout(700);
+  check('an image pasted inside the box attaches and leaves the text alone', await p.isVisible('#mediapreview') && (await p.inputValue('#post')) === before && prevented === true);
+  check('no paste ever starts an analysis on its own', await p.evaluate(() => document.getElementById('report').hidden));
+  check('the attach button says an image can be pasted', /paste/i.test(await p.textContent('#mediabtn')));
+}
+
 // --- unscored report (French, offline): no bench, no meters, reword empty
 await p.goto(indexUrl);
 await p.fill('#post', FRENCH);
