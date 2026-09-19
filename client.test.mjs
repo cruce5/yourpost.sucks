@@ -577,6 +577,50 @@ check('error is above the kept rewrite, not replacing it', await api.evaluate(()
   return out.firstElementChild.classList.contains('reword-error') && out.querySelectorAll('.reword-error').length === 1 && !!out.querySelector('.reword-text');
 }));
 
+// 8b. the thank-you card (the /api/analyze route above still answers mode llm)
+{
+  const TA = 'yps_tipask_v1';
+  const setTA = v => api.evaluate(([k, v]) => localStorage.setItem(k, JSON.stringify(v)), [TA, v]);
+  const getTA = () => api.evaluate(k => JSON.parse(localStorage.getItem(k)), TA);
+  const runSpec = async () => { await api.click('[data-spec="0"]'); await api.waitForSelector('#report:not([hidden])', { timeout: 20000 }); };
+  await api.goto(httpUrl);
+  await setTA({ n: 3, shown: 0, done: false });
+  await api.goto(httpUrl);
+  await runSpec();
+  await api.waitForTimeout(3000);
+  check('thank-you card: not shown at the 4th AI report', await api.evaluate(() => document.getElementById('tipask').hidden) && (await getTA()).n === 4);
+  await api.goto(httpUrl);
+  await runSpec();
+  await api.waitForSelector('#tipask.on', { timeout: 6000 });
+  check('thank-you card: shown after the 5th, with the first copy', /Five reports in/.test(await api.textContent('#tipask-h')));
+  check('thank-you card: does not take focus', await api.evaluate(() => !document.getElementById('tipask').contains(document.activeElement)));
+  check('thank-you card: no em dash', !/—/.test(await api.textContent('#tipask')));
+  check('thank-you card: coffee link opens safely in a new tab', await api.evaluate(() => { const a = document.getElementById('tipask-go'); return a.href === 'https://buymeacoffee.com/billyost' && a.target === '_blank' && /noopener/.test(a.rel); }));
+  check('thank-you card: both actions are 44px tall', await api.evaluate(() => ['tipask-go', 'tipask-no'].every(id => document.getElementById(id).getBoundingClientRect().height >= 44)));
+  await api.click('#tipask-no');
+  await api.waitForTimeout(400);
+  check('thank-you card: Maybe later closes it', await api.evaluate(() => document.getElementById('tipask').hidden));
+  await api.goto(httpUrl);
+  await runSpec();
+  await api.waitForTimeout(3000);
+  check('thank-you card: not shown again at the 6th', await api.evaluate(() => document.getElementById('tipask').hidden));
+  await setTA({ n: 24, shown: 1, done: false });
+  await api.goto(httpUrl);
+  await runSpec();
+  await api.waitForSelector('#tipask.on', { timeout: 6000 });
+  check('thank-you card: back once at the 25th, with the second copy', /Twenty-five reports/.test(await api.textContent('#tipask-h')));
+  const [popup] = await Promise.all([api.context().waitForEvent('page'), api.click('#tipask-go')]);
+  await popup.close();
+  check('thank-you card: clicking the coffee link retires it for good', (await getTA()).done === true);
+  await setTA({ n: 49, shown: 1, done: true });
+  await api.goto(httpUrl);
+  await runSpec();
+  await api.waitForTimeout(3000);
+  check('thank-you card: never shown once retired', await api.evaluate(() => document.getElementById('tipask').hidden));
+  await api.evaluate(k => localStorage.removeItem(k), TA);
+}
+check('thank-you card: a rules-only report is not counted', await p.evaluate(() => localStorage.getItem('yps_tipask_v1') === null));
+
 // 9. image attach: preview shows while preparing, removal unticks the box it ticked
 await api.goto(httpUrl);
 const pngBase64 = 'iVBORw0KGgoAAAANSUhEUgAAAAIAAAACCAYAAABytg0kAAAAEklEQVQIW2NkYGD4z8DAwMgAAQAKGwEDHo8Z8QAAAABJRU5ErkJggg==';

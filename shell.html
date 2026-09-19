@@ -887,6 +887,24 @@ ol.changes .crewrite .lbl{
 .toast.on{opacity:1;transform:translateX(-50%) translateY(0)}
 .toast.error{border-left:4px solid var(--caution)}
 
+/* The thank-you card: after the 5th AI-written report, once more around the
+   25th if it was waved off, never again after the coffee link is clicked.
+   It never blocks the page and never takes focus. */
+.tipask{
+  position:fixed;left:16px;right:16px;bottom:calc(16px + env(safe-area-inset-bottom, 0px));
+  margin:0 auto;max-width:440px;z-index:20;
+  background:var(--surface);border:1px solid var(--rule-2);border-left:3px solid var(--cool);
+  border-radius:6px;padding:18px 18px 16px;box-shadow:0 10px 30px rgba(0,0,0,.28);
+  opacity:0;transform:translateY(14px);transition:opacity .22s,transform .22s;
+}
+.tipask[hidden]{display:none}
+.tipask.on{opacity:1;transform:none}
+@media (prefers-reduced-motion: reduce){.tipask{transition:none}}
+.tipask-h{margin:0 0 6px;font-size:17px;font-weight:600;color:var(--ink);line-height:1.35}
+.tipask-p{margin:0;font-size:15px;color:var(--ink-2);line-height:1.55}
+.tipask-actions{display:flex;gap:10px;flex-wrap:wrap;margin-top:14px}
+.tipask-actions .btn-primary{display:inline-flex;align-items:center;text-decoration:none}
+
 /* ---------- how this works ---------- */
 #panel-explain[hidden]{display:none}
 .explain-intro{font-size:15px;color:var(--ink-2);margin:0 0 26px;line-height:1.6}
@@ -988,7 +1006,7 @@ ul.cg-list li::before{content:"\2022";position:absolute;left:0;color:var(--ink-4
 @media print{
   body{background:#fff;color:#111}
   body::before{display:none}
-  .panel,.controls,.specimens,.share-actions,.share-more,.tabs,footer,.game-wrap,.toast{display:none}
+  .panel,.controls,.specimens,.share-actions,.share-more,.tabs,footer,.game-wrap,.toast,.tipask{display:none}
   .hero,.meter,ul.roasts li,.share-box{background:#fff;border-color:#ccc;color:#111}
   .hero .num{color:#111 !important}
   .meter-name,.meter-val,.brutal{color:#111}
@@ -1152,6 +1170,14 @@ ul.cg-list li::before{content:"\2022";position:absolute;left:0;color:var(--ink-4
 
 </div>
 <div class="toast" id="toast" role="status" aria-live="polite"></div>
+<aside class="tipask" id="tipask" aria-labelledby="tipask-h" hidden>
+  <p class="tipask-h" id="tipask-h"></p>
+  <p class="tipask-p" id="tipask-p"></p>
+  <div class="tipask-actions">
+    <a class="btn-primary" id="tipask-go" href="https://buymeacoffee.com/billyost" target="_blank" rel="noopener noreferrer">Buy me a coffee</a>
+    <button class="btn-ghost" id="tipask-no" type="button">Maybe later</button>
+  </div>
+</aside>
 
 <script>
 /*ENGINE*/
@@ -2155,6 +2181,51 @@ ul.cg-list li::before{content:"\2022";position:absolute;left:0;color:var(--ink-4
     no_improvement: 'Two attempts, neither beat your post. You will not be shown a worse version.'
   };
 
+  /* The thank-you card. Counts AI-written reports in this browser only.
+     Shown at most twice ever: at the 5th report, and at the 25th if the
+     first was waved off. Clicking the coffee link retires it for good.
+     No storage (private window, blocked site data) means it never shows,
+     which is the right failure: better unasked than asked every visit. */
+  var tipAsk = (function(){
+    var KEY = 'yps_tipask_v1', AT = [5, 25], DELAY_MS = 2500;
+    var COPY = [
+      ['Five reports in. Thank you for using this.',
+       'Each AI-written report costs me about a penny, and I am happy to keep paying. If you would like to chip in, one coffee covers the next 500 or so.'],
+      ['Twenty-five reports. You are my best customer.',
+       'Still about a penny each, still happy to pay it. One coffee keeps the lights on for everyone after you.']
+    ];
+    function load(){ try { var s = JSON.parse(localStorage.getItem(KEY)); if (s && typeof s.n === 'number') return s; } catch (e) {} return { n: 0, shown: 0, done: false }; }
+    function save(s){ try { localStorage.setItem(KEY, JSON.stringify(s)); return true; } catch (e) { return false; } }
+    function hide(){
+      var el = $('#tipask');
+      if (!el || el.hidden) return;
+      el.classList.remove('on');
+      setTimeout(function(){ el.hidden = true; }, 240);
+    }
+    function show(i){
+      var el = $('#tipask');
+      $('#tipask-h').textContent = COPY[i][0];
+      $('#tipask-p').textContent = COPY[i][1];
+      el.hidden = false;
+      void el.offsetWidth;
+      el.classList.add('on');
+    }
+    function count(){
+      var s = load();
+      if (s.done) return;
+      s.n++;
+      var due = s.shown < AT.length && s.n >= AT[s.shown];
+      var i = s.shown;
+      if (due) s.shown++;
+      if (!save(s) || !due) return;
+      setTimeout(function(){ show(i); }, DELAY_MS);
+    }
+    $('#tipask-no').addEventListener('click', hide);
+    $('#tipask-go').addEventListener('click', function(){ var s = load(); s.done = true; save(s); hide(); });
+    document.addEventListener('keydown', function(e){ if (e.key === 'Escape') hide(); });
+    return { count: count, hide: hide };
+  })();
+
   function tipLine(cost){
     return '<p class="tipline">' + cost + ' If it was worth more than that, <a href="https://buymeacoffee.com/billyost" target="_blank" rel="noopener noreferrer">buy me a coffee</a>.</p>';
   }
@@ -2400,7 +2471,7 @@ ul.cg-list li::before{content:"\2022";position:absolute;left:0;color:var(--ink-4
       // to show: the reader changed their mind while it was in flight.
       if ($('#post').value !== text) return;
       if (report && report.sensitive) renderDeclined();
-      else render(report, mode, reason, text);
+      else { render(report, mode, reason, text); if (mode === 'llm' || mode === 'cache') tipAsk.count(); }
     };
 
     var fallback = function(reason){
