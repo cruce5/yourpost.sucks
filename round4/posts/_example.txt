@@ -1,0 +1,9 @@
+author: Jane Doe
+reactions: 212
+group: target
+leads_with_logistics: yes
+ends_on_plug: no
+---
+Paste the whole post here, exactly as copied. Files whose names start with an
+underscore, like this one, are ignored. Copy this file to something like
+jane-webinar.txt and replace everything above.

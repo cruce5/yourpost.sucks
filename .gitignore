@@ -23,3 +23,8 @@ data/
 # Local audit reports and agent tooling
 .reconcilers/
 .claude/
+
+# Round 4 (see round4/README.md): real people's posts and the label lock.
+round4/posts/*
+!round4/posts/_example.txt
+round4/lock.json

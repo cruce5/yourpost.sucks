@@ -304,7 +304,9 @@ deterministic part of that: `promo-lede`, `hedging`, `question-opener`,
   alone these are indistinguishable from genuinely empty captions.
 - **Risk of overfitting.** `promo-lede` and `plug-signoff` were tuned against
   seven flops from one author. They encode real and general patterns, but they
-  have not been tested anywhere else.
+  have not been tested anywhere else. Round 4 exists to test exactly these
+  two on new authors, with the labels and the rules frozen before scoring:
+  see `round4/README.md` and `node round4.mjs`.
 
 ---
 

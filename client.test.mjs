@@ -129,6 +129,7 @@ check('report is focused after analyze', await p.evaluate(() => document.activeE
 check('#live announces the result', /^Report ready\./.test(await p.textContent('#live')));
 check('game section is visible after the first report', await p.evaluate(() => !document.getElementById('game-wrap').hidden));
 check('offline copy gets the offline badge and note', (await p.textContent('.mode')).trim() === 'offline' && /No internet connection/.test(await p.textContent('.mode-why')));
+check('no tip line when no model ran', (await p.$('.tipline')) === null);
 check('rules-only mode-why carries the badge clarifier', /not how your post was written/.test(await p.textContent('.mode-why')));
 check('no N/47 checks pill in the hero', (await p.$('.hero .pill')) === null);
 check('h2 keeps the N of 47 checks triggered count', /\d+ of \d+ checks triggered/.test(await p.textContent('#report h2.sec')));
@@ -553,10 +554,17 @@ await api.route('**/api/reword', async route => {
 await api.goto(httpUrl);
 await api.click('[data-spec="0"]');
 await api.waitForSelector('#rewordbtn', { timeout: 20000 });
+check('an AI report ends with one tip line', await api.evaluate(() => {
+  const rep = document.getElementById('report'), t = rep.lastElementChild;
+  return rep.querySelectorAll(':scope > .tipline').length === 1 && t.classList.contains('tipline') &&
+    !!t.querySelector('a[href="https://buymeacoffee.com/billyost"][target="_blank"][rel~="noopener"]');
+}));
+check('the tip line has no em dash', !/—/.test(await api.textContent('#report > .tipline')));
 check('reword progress bar is a labelled progressbar', await api.evaluate(() => document.getElementById('reword-progress').getAttribute('role') === 'progressbar'));
 await api.click('#rewordbtn');
 await api.waitForSelector('.reword-text', { timeout: 20000 });
 check('first reword renders the rewrite', /six-week test/.test(await api.textContent('.reword-text')));
+check('a rewrite ends with its own tip line', await api.evaluate(() => { const t = document.querySelector('#rewordresult .tipline'); return !!t && /rewrite cost me/.test(t.textContent) && !!t.querySelector('a[href="https://buymeacoffee.com/billyost"]'); }));
 await api.click('#rewordbtn');
 await api.waitForSelector('.reword-error', { timeout: 20000 });
 check('413 gets the too-long copy and keeps the previous rewrite', /too long to reword/.test(await api.textContent('.reword-error')) && (await api.$('.reword-text')) !== null);

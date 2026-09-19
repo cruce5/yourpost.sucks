@@ -301,6 +301,12 @@ section('7. credits vs roasts');
 }
 
 /* ------------------------------------------------------------------ */
+{
+  // "the pivot table" fired Career pivot vocabulary.
+  check('"the pivot table" is a spreadsheet, not career-pivot jargon', !E.analyze('I have spent three weeks trying to understand the pivot table in the Q3 budget file at Vanguard.').roasts.some(r => r.id === 'pivot-lang'));
+  check('  ...while "the pivot" as a career move still fires', E.analyze('Making the pivot into product management was the best decision. The pivot changed everything for me this year at Vanguard.').roasts.some(r => r.id === 'pivot-lang'));
+}
+
 section('8. threshold cliffs');
 {
   const a = E.analyze(withWc(44)), b = E.analyze(withWc(45));

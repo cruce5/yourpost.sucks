@@ -790,6 +790,9 @@ ol.changes .crewrite .lbl{
   padding:3px 8px;border-radius:2px;border:1px solid var(--rule);color:var(--ink-3);
 }
 .reword-actions-row{display:flex;gap:10px;margin-top:12px;flex-wrap:wrap}
+/* One line, after the thing it paid for, only when a model actually ran. */
+.tipline{margin:18px 0 0;font-size:14px;color:var(--ink-3);line-height:1.55}
+.tipline a{color:var(--cool-text)}
 .reword-error{
   background:var(--surface);border:1px solid var(--rule);border-left:3px solid var(--caution);
   border-radius:5px;padding:14px 16px;font-size:14px;color:var(--ink-2);
@@ -1144,6 +1147,7 @@ ul.cg-list li::before{content:"\2022";position:absolute;left:0;color:var(--ink-4
   <div class="credit">Built by <a href="https://www.linkedin.com/in/billyost/" target="_blank" rel="noopener noreferrer"><span aria-hidden="true">🏴‍☠️ </span>Bill Yost</a>, who is aware of the irony. <a class="tip" href="https://buymeacoffee.com/billyost" target="_blank" rel="noopener noreferrer">Buy him a coffee.</a></div>
   <div><span id="rulecount"></span> fixed checks decide the score. AI never touches that number. <a href="https://github.com/cruce5/yourpost.sucks" target="_blank" rel="noopener noreferrer">Read the code.</a></div>
   <div>It measures the writing, not the reach.</div>
+  <div>More things nobody asked for: <a href="https://billyost.com/" target="_blank" rel="noopener noreferrer">billyost.com</a></div>
 </footer>
 
 </div>
@@ -2305,6 +2309,9 @@ ul.cg-list li::before{content:"\2022";position:absolute;left:0;color:var(--ink-4
         'my north star', 'intentional about', 'lean in', 'show up authentically',
         'bringing my whole self', 'my why', 'find your why', 'zone of genius',
         'next season of', 'answering the call']);
+      // "the pivot table" is a spreadsheet, not a career move. Drop the
+      // phrase "the pivot" when it is followed by table/chart/point/foot.
+      f = f.filter(function (x) { return !(x.phrase === 'the pivot' && /\bthe pivot (tables?|charts?|points?|foot)\b/.test(ctx.lower) && countPhrase(ctx.lower, 'the pivot') === (ctx.lower.match(/\bthe pivot (tables?|charts?|points?|foot)\b/g) || []).length); });
       if (!f.length) return null;
       var n = totalOf(f);
       return { n: n, vars: { n: n, p: f[0].phrase }, pen: { auth: clamp(1.0 * n, 0, 3.4), cring: clamp(0.6 * n, 0, 2.4) } };
@@ -4894,6 +4901,7 @@ ul.cg-list li::before{content:"\2022";position:absolute;left:0;color:var(--ink-4
         receipts +
       '</details>' +
     '</section>';
+    if (mode === 'llm' || mode === 'cache') html += tipLine('The AI part of this report cost me about a penny.');
 
     rep.innerHTML = html;
     rep.hidden = false;
@@ -5054,6 +5062,10 @@ ul.cg-list li::before{content:"\2022";position:absolute;left:0;color:var(--ink-4
     no_improvement: 'Two attempts, neither beat your post. You will not be shown a worse version.'
   };
 
+  function tipLine(cost){
+    return '<p class="tipline">' + cost + ' If it was worth more than that, <a href="https://buymeacoffee.com/billyost" target="_blank" rel="noopener noreferrer">buy me a coffee</a>.</p>';
+  }
+
   function renderReword(payload, out, r){
     if (payload.mode === 'declined'){
       out.innerHTML = '<div class="reword-error">A fresh check flagged this as sensitive content. Declining to generate a rewrite of it.</div>';
@@ -5089,7 +5101,8 @@ ul.cg-list li::before{content:"\2022";position:absolute;left:0;color:var(--ink-4
       '<div class="reword-actions-row">' +
         '<button class="btn-ghost" id="copyreword">Copy rewritten post</button>' +
         '<button class="btn-ghost" id="analyzereword">Analyze this rewrite</button>' +
-      '</div>';
+      '</div>' +
+      tipLine('That rewrite cost me about a penny.');
 
     $('#copyreword').addEventListener('click', function(){ copy(payload.rewritten); });
     // Closes the loop: without this, seeing the full report on the rewrite

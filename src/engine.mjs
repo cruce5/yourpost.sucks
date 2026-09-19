@@ -1154,6 +1154,9 @@
         'my north star', 'intentional about', 'lean in', 'show up authentically',
         'bringing my whole self', 'my why', 'find your why', 'zone of genius',
         'next season of', 'answering the call']);
+      // "the pivot table" is a spreadsheet, not a career move. Drop the
+      // phrase "the pivot" when it is followed by table/chart/point/foot.
+      f = f.filter(function (x) { return !(x.phrase === 'the pivot' && /\bthe pivot (tables?|charts?|points?|foot)\b/.test(ctx.lower) && countPhrase(ctx.lower, 'the pivot') === (ctx.lower.match(/\bthe pivot (tables?|charts?|points?|foot)\b/g) || []).length); });
       if (!f.length) return null;
       var n = totalOf(f);
       return { n: n, vars: { n: n, p: f[0].phrase }, pen: { auth: clamp(1.0 * n, 0, 3.4), cring: clamp(0.6 * n, 0, 2.4) } };
