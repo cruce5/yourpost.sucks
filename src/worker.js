@@ -328,35 +328,46 @@ async function readTipTotals(env) {
 /* ------------------------------------------------------------------ *
  * the ticker
  *
- * "The AI has been called in N times to make a post suck less", in the
- * footer, after the counter a certain kind of website has always had. N is
- * the number of calls to the model that were actually billed: reports, tone
- * checks, rewrites and their retries. A call that failed before the
- * provider billed it is not counted; neither is a cached or rules-only
- * report, because no model was called for it.
+ * "N posts have been made to suck less since this site launched", in the
+ * footer, after the counter a certain kind of website has always had.
  *
- * Calls and not posts, deliberately. Cloudflare has recorded every request
- * this Worker has made to api.anthropic.com since the day it launched, so
- * the part of the number from before this counter existed can be read off
- * a dashboard instead of guessed. That figure goes in TICKER_BASELINE in
- * wrangler.toml; it is added to the live count and never written back.
+ * It counts the two things a visitor can ask for: an Analyze that comes
+ * back with a scored report, and a Reword that comes back with a rewrite.
+ * One each, whoever wrote the prose (model, cache or rules), because the
+ * visitor's post got the treatment either way. Not counted: a declined
+ * post, an unscored one, a rejected request, a rewrite that could not be
+ * improved, and anything analysed offline in a browser, which never
+ * reaches here. One address can add at most TICKER_PER_HOUR an hour, so the
+ * number cannot be run up with a loop.
  *
- * Every call already passes through settleCharge() with a meter that knows
- * whether it was billed, so that is the one place this is counted, and no
- * call path can forget to. It needs no abuse guard of its own: a model call
- * is already behind the rate limit, Turnstile and the daily budget.
+ * Counting started three days after the launch. TICKER_BASELINE in
+ * wrangler.toml is a best guess at what came before, labelled as one; it
+ * is added to the live count and never written back.
  * ------------------------------------------------------------------ */
-const TICKER_KEY = 'n:calls';
+const TICKER_KEY = 'n:posts';
+const TICKER_PER_HOUR = 60;
 
-async function countCalls(env, n) {
+async function countPost(env, ip) {
   const ns = counters(env);
-  if (!ns || !(n > 0)) return;
-  try { await counterCall(ns, TICKER_KEY, '/hit', { key: TICKER_KEY, by: n, ttlSeconds: 315360000 }); }
-  catch (e) { console.warn('ticker: not counted', e && e.message); }
+  if (!ns) return;
+  const guard = `nc:${rateKey(ip)}:${hourBucket()}`;
+  try {
+    const r = await counterCall(ns, guard, '/hit', { key: guard, limit: TICKER_PER_HOUR, ttlSeconds: 3900 });
+    if (r.ok !== true) return;
+    await counterCall(ns, TICKER_KEY, '/hit', { key: TICKER_KEY, ttlSeconds: 315360000 });
+  } catch (e) {
+    console.warn('ticker: not counted', e && e.message);
+  }
+}
+/** Never awaited by a handler: a statistic must not add a millisecond to
+ *  anybody's report. waitUntil keeps it alive past the response. */
+function tick(env, ctx, request) {
+  const counted = countPost(env, clientIP(request));
+  if (ctx && typeof ctx.waitUntil === 'function') ctx.waitUntil(counted);
 }
 
 /** The number for the footer, or null when the counter is unreachable. */
-async function readCallCount(env) {
+async function readTicker(env) {
   const ns = counters(env);
   if (!ns) return null;
   try {
@@ -509,9 +520,6 @@ const meterActual = m => m.failed ? 0 : (usageCostMicros(m.usage) ?? m.estimate)
  *  the safe direction, and never worth turning a finished report into an
  *  error. */
 async function settleCharge(env, prechargedMicros, meters) {
-  // The footer ticker: every billed call, counted in the one place every
-  // call comes through. See "the ticker" below.
-  await countCalls(env, meters.filter(m => !m.failed).length);
   const actual = meters.reduce((sum, m) => sum + meterActual(m), 0);
   const refund = prechargedMicros - actual;
   if (refund <= 0) return;
@@ -1621,6 +1629,10 @@ async function handleAnalyze(request, env, ctx) {
   // over the engine's plain "not scored" line. Rules mode, no call, no cache.
   if (report.unscored) return json({ mode: 'rules', reason: 'unscored', report });
 
+  // From here on the visitor gets a scored report, whoever ends up writing
+  // the prose. That is one for the footer.
+  tick(env, ctx, request);
+
   const ip = clientIP(request);
   // hasMedia is in the key because it changes the report the prose was
   // written against (see MEDIA_SUPPRESS in engine.js): the same caption
@@ -1776,7 +1788,7 @@ async function handleReword(request, env, ctx) {
       // The checks change between deploys. A rewrite that was ahead when it
       // was cached but is not ahead now is treated as a miss and regenerated,
       // never served with a "scored worse" tag.
-      if (after.overall < before.overall) return json({ mode: 'cache', before, after, rewritten: hit.rewritten, summary: hit.summary });
+      if (after.overall < before.overall) { tick(env, ctx, request); return json({ mode: 'cache', before, after, rewritten: hit.rewritten, summary: hit.summary }); }
       console.warn('reword: cached rewrite no longer scores better under the current checks; regenerating');
     }
   }
@@ -1842,6 +1854,7 @@ async function handleReword(request, env, ctx) {
     ).catch(e => console.warn('cache: KV write failed', e && e.message)));
   }
 
+  tick(env, ctx, request);
   return json({ mode: 'reworded', before, after, rewritten: llm.rewritten, summary: llm.summary });
 }
 
@@ -1851,7 +1864,7 @@ async function handleStatus(env) {
   // it is three counts of clicks on a public link, about nobody in
   // particular, and the owner reads it with curl rather than a dashboard.
   const tips = await readTipTotals(env);
-  const aiCalls = await readCallCount(env);
+  const ticker = await readTicker(env);
   // null when the counter is unreachable: the page still gets its site key
   // and rate limit, and the two budget figures below read as unknown rather
   // than as zero (which would look like a fresh, fully-funded day).
@@ -1891,7 +1904,7 @@ async function handleStatus(env) {
     tipClicks: tips,
     // The footer ticker. Up to a minute stale at the edge, which is fine
     // for a number whose whole job is to be large.
-    aiCalls
+    ticker
     // Cacheable at the edge for a minute: one status fetch per page load
     // from a viral spike is a lot of counter reads for a number that is
     // allowed to be sixty seconds stale.

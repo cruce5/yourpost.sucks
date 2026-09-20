@@ -1622,54 +1622,64 @@ console.log('\n=== no report, in either register, remarks on who the writer is =
 }
 
 /* ------------------------------------------------------------------ *
- * the footer ticker: a real count of billed calls to the model
+ * the footer ticker: one for every Analyze and every Reword that delivers
  * ------------------------------------------------------------------ */
 console.log('\n=== the ticker ===');
 {
-  const count = env => env.COUNTERS._count('n:calls', 'n:calls');
+  const pending = [];
+  const tCtx = { waitUntil: p => { pending.push(p); return p; } };
+  const go = async (env, req) => { const res = await worker.fetch(req, env, tCtx); await Promise.all(pending.splice(0)); return res; };
+  const from = (path, body, ip) => new Request('https://yourpost.sucks' + path, { method: 'POST', headers: { 'content-type': 'application/json', 'cf-connecting-ip': ip || '5.5.5.5' }, body: JSON.stringify(body) });
+  const count = env => env.COUNTERS._count('n:posts', 'n:posts');
   const status = async env => (await worker.fetch(new Request('https://yourpost.sucks/api/status'), env, ctx)).json();
 
   const env = baseEnv(); env.COUNTERS = mockCounters(); llmBehaviour = 'good';
-  const first = await (await worker.fetch(post({ post: NEUTRAL }), env, ctx)).json();
-  check('ticker: a model-written report is one call', first.mode === 'llm' && count(env) === 1, 'mode=' + first.mode + ' n=' + count(env));
-  const again = await (await worker.fetch(post({ post: NEUTRAL }), env, ctx)).json();
-  check('ticker: a cached report called nothing, so counts nothing', again.mode === 'cache' && count(env) === 1, 'mode=' + again.mode + ' n=' + count(env));
+  const first = await (await go(env, from('/api/analyze', { post: NEUTRAL }))).json();
+  check('ticker: an Analyze that returns a model-written report is one', first.mode === 'llm' && count(env) === 1, 'mode=' + first.mode + ' n=' + count(env));
+  const again = await (await go(env, from('/api/analyze', { post: NEUTRAL }))).json();
+  check('ticker: a cached report is one too, it is still a post someone brought', again.mode === 'cache' && count(env) === 2, 'mode=' + again.mode + ' n=' + count(env));
   llmBehaviour = 'error';
-  const failedCall = await (await worker.fetch(post({ post: NEUTRAL + ' It held through the month.' }), env, ctx)).json();
-  check('ticker: a call the provider never billed is not counted', failedCall.mode === 'rules' && count(env) === 1, 'mode=' + failedCall.mode + ' n=' + count(env));
+  const rulesOnly = await (await go(env, from('/api/analyze', { post: NEUTRAL + ' It held through the month.' }))).json();
+  check('ticker: so is a rules-only report', rulesOnly.mode === 'rules' && count(env) === 3, 'mode=' + rulesOnly.mode + ' n=' + count(env));
   llmBehaviour = 'good';
-  const declined = await (await worker.fetch(post({ post: 'My mentor passed away last week. He hired me when nobody else would and I will miss him every day.' }), env, ctx)).json();
-  check('ticker: a declined post never reaches the model', declined.mode === 'declined' && count(env) === 1);
-
-  // A tone-eligible post is two calls: the tone check, then the report.
+  const declined = await (await go(env, from('/api/analyze', { post: 'My mentor passed away last week. He hired me when nobody else would and I will miss him every day.' }))).json();
+  check('ticker: a declined post is not counted', declined.mode === 'declined' && count(env) === 3);
+  const empty = await go(env, from('/api/analyze', { post: '   ' }));
+  check('ticker: an empty request is not counted', empty.status === 400 && count(env) === 3);
+  // A tone-eligible post is two model calls and still one post.
   toneBehaviour = 'no';
-  const toned = await (await worker.fetch(post({ post: BAD }), env, ctx)).json();
-  check('ticker: a tone check and a report are two calls', toned.mode === 'llm' && count(env) === 3, 'n=' + count(env));
+  await go(env, from('/api/analyze', { post: BAD }));
+  check('ticker: two model calls for one post is still one', count(env) === 4, 'n=' + count(env));
 
-  // A rewrite is a call; a rejected-then-retried rewrite is two.
   rewordBehaviour = 'good'; rewordQueue = null;
-  await worker.fetch(reword({ post: BAD }), env, ctx);
-  check('ticker: a rewrite is a call', count(env) === 4, 'n=' + count(env));
-  rewordQueue = ['toolong', 'good']; rewordCalls = 0;
-  await worker.fetch(reword({ post: BAD + ' Day one is Monday.' }), env, ctx);
-  check('ticker: a retried rewrite is two, because both were billed', rewordCalls === 2 && count(env) === 6, 'calls=' + rewordCalls + ' n=' + count(env));
+  const rw = await (await go(env, from('/api/reword', { post: BAD }))).json();
+  check('ticker: a Reword that returns a rewrite is one', rw.mode === 'reworded' && count(env) === 5, 'mode=' + rw.mode + ' n=' + count(env));
+  const rwCached = await (await go(env, from('/api/reword', { post: BAD }))).json();
+  check('ticker: a cached rewrite is one too', rwCached.mode === 'cache' && count(env) === 6, 'mode=' + rwCached.mode + ' n=' + count(env));
+  rewordQueue = ['toolong', 'good'];
+  await go(env, from('/api/reword', { post: BAD + ' Day one is Monday.' }));
+  check('ticker: a retried rewrite is one click, so one', count(env) === 7, 'n=' + count(env));
+  rewordQueue = ['worse', 'worse'];
+  const none = await (await go(env, from('/api/reword', { post: NEUTRAL }))).json();
+  check('ticker: a rewrite that could not be improved delivered nothing, so counts nothing', none.mode === 'unavailable' && count(env) === 7, 'mode=' + none.mode + ' n=' + count(env));
   rewordQueue = null;
 
-  check('/api/status reports the count', (await status(env)).aiCalls === 6, String((await status(env)).aiCalls));
-  env.TICKER_BASELINE = '3100';
-  check('  ...with the pre-counter baseline added, never written back', (await status(env)).aiCalls === 3106 && count(env) === 6);
+  check('/api/status reports the count', (await status(env)).ticker === 7, String((await status(env)).ticker));
+  env.TICKER_BASELINE = '3000';
+  check('  ...with the best-guess baseline added, never written back', (await status(env)).ticker === 3007 && count(env) === 7);
   env.TICKER_BASELINE = 'lots';
-  check('  ...and a nonsense baseline is zero, not NaN', (await status(env)).aiCalls === 6);
+  check('  ...and a nonsense baseline is zero, not NaN', (await status(env)).ticker === 7);
+
+  // One address in a loop cannot run the number up.
+  const flood = baseEnv(); flood.COUNTERS = mockCounters(); flood.RATE_LIMIT_PER_HOUR = '100000';
+  for (let i = 0; i < 75; i++) await go(flood, from('/api/analyze', { post: NEUTRAL }, '6.6.6.6'));
+  check('ticker: capped per address per hour', count(flood) === 60, 'n=' + count(flood));
+  await go(flood, from('/api/analyze', { post: NEUTRAL }, '6.6.6.7'));
+  check('  ...and the cap is per address, not global', count(flood) === 61, 'n=' + count(flood));
 
   const noDO = baseEnv();
-  const r = await (await worker.fetch(post({ post: NEUTRAL }), noDO, ctx)).json();
-  check('ticker: no counter bound means no count, no error, and no number', r.mode === 'llm' && (await status(noDO)).aiCalls === null);
-
-  // The counter itself: by adds that many, and junk adds exactly one.
-  const c = mockCounters();
-  const hit = body => c.get(c.idFromName('x')).fetch('https://counters/hit', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ key: 'x', ...body }) }).then(r => r.json());
-  await hit({ by: 3 }); await hit({}); await hit({ by: -5 }); await hit({ by: 2.5 }); await hit({ by: 'many' });
-  check('Counters /hit: by adds that many, anything else adds one', c._count('x', 'x') === 7, String(c._count('x', 'x')));
+  const r = await (await go(noDO, from('/api/analyze', { post: NEUTRAL }))).json();
+  check('ticker: no counter bound means no count, no error, and no number', r.mode === 'llm' && (await status(noDO)).ticker === null);
 }
 
 const failed = results.filter(r => !r.pass);

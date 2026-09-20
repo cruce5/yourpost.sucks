@@ -635,18 +635,55 @@ check('error is above the kept rewrite, not replacing it', await api.evaluate(()
 // 8a1. the footer ticker
 {
   check('ticker: offline there is no line at all, not a zero', await p.evaluate(() => document.getElementById('ticker').hidden));
-  await api.route('**/api/status', route => route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ ok: true, aiCalls: 12345, turnstileSiteKey: null }) }));
+  await api.route('**/api/status', route => route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ ok: true, ticker: 12345, turnstileSiteKey: null }) }));
   await api.goto(httpUrl);
   await api.waitForTimeout(1400);
   check('ticker: shows the number the server gave, with thousands separators', await api.evaluate(() => !document.getElementById('ticker').hidden && document.getElementById('ticker-n').textContent === '12,345'), await api.textContent('#ticker'));
-  check('ticker: says what the number is', /The AI has been called in 12,345 times to make a post suck less since this site launched\./.test((await api.textContent('#ticker')).replace(/\s+/g, ' ')));
+  check('ticker: says what the number is', /12,345 posts have been made to suck less since this site launched\./.test((await api.textContent('#ticker')).replace(/\s+/g, ' ')));
   check('ticker: sits in the footer, above the credit', await api.evaluate(() => { const f = document.querySelector('footer'); return f.firstElementChild.id === 'ticker'; }));
   await api.click('[data-spec="0"]');
   await api.waitForSelector('#report:not([hidden])', { timeout: 20000 });
   await api.waitForTimeout(1300);
-  check('ticker: a report the model just wrote moves it by exactly one', (await api.textContent('#ticker-n')) === '12,346', await api.textContent('#ticker-n'));
+  check('ticker: clicking Analyze moves it by exactly one, at once', (await api.textContent('#ticker-n')) === '12,346', await api.textContent('#ticker-n'));
+  // Reword ticks it too. The mocked rewrite route answers the first click with a rewrite.
+  await api.route('**/api/reword', async route => {
+    const post = route.request().postDataJSON().post;
+    const rewritten = 'We ran a six-week test on 41,000 users. My pick lost by 3 points.';
+    const after = await api.evaluate(x => window.YourPostSucks.analyze(x), rewritten);
+    const before = await api.evaluate(x => window.YourPostSucks.analyze(x), post);
+    await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ mode: 'reworded', rewritten, summary: 'Shorter.', before, after }) });
+  });
+  await api.click('#rewordbtn');
+  await api.waitForSelector('.reword-text', { timeout: 20000 });
+  await api.waitForTimeout(1300);
+  check('ticker: clicking Reword moves it by one more', (await api.textContent('#ticker-n')) === '12,347', await api.textContent('#ticker-n'));
+  await api.unroute('**/api/reword');
+
+  // Everybody else's posts arrive by asking again. The page asks once a
+  // minute; the test runs the clock forward rather than waiting for it.
   await api.unroute('**/api/status');
-  await api.route('**/api/status', route => route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ ok: true, aiCalls: null, turnstileSiteKey: null }) }));
+  let statusAsks = 0;
+  await api.route('**/api/status', route => { statusAsks++; return route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ ok: true, ticker: 12400, turnstileSiteKey: null }) }); });
+  await api.clock.install();
+  await api.goto(httpUrl);
+  await api.clock.runFor(2000);
+  const asksAtLoad = statusAsks;
+  await api.clock.runFor(61000);
+  await api.clock.runFor(1500);
+  check('ticker: the page asks again after a minute', statusAsks > asksAtLoad, asksAtLoad + ' then ' + statusAsks);
+  await api.unroute('**/api/status');
+  await api.route('**/api/status', route => route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ ok: true, ticker: 12466, turnstileSiteKey: null }) }));
+  await api.clock.runFor(61000);
+  await api.waitForTimeout(300);   // let the mocked answer arrive
+  await api.clock.runFor(3000);     // and the count-up finish
+  check('  ...and other people\'s posts tick it up while you watch', (await api.textContent('#ticker-n')) === '12,466', await api.textContent('#ticker-n'));
+  await api.unroute('**/api/status');
+  await api.route('**/api/status', route => route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ ok: true, ticker: 12000, turnstileSiteKey: null }) }));
+  await api.clock.runFor(61000);
+  await api.clock.runFor(1500);
+  check('  ...and a stale answer never takes it backwards', (await api.textContent('#ticker-n')) === '12,466', await api.textContent('#ticker-n'));
+  await api.unroute('**/api/status');
+  await api.route('**/api/status', route => route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ ok: true, ticker: null, turnstileSiteKey: null }) }));
   await api.goto(httpUrl);
   await api.waitForTimeout(900);
   check('ticker: no number from the server means no line', await api.evaluate(() => document.getElementById('ticker').hidden));
