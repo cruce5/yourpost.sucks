@@ -2798,14 +2798,24 @@ ul.cg-list li::before{content:"\2022";position:absolute;left:0;color:var(--ink-4
   var wasOver = false;
 
   /* ---------------- easter egg: click the flag, the site talks pirate --------
-     Only the site's own words change: the tagline, the intro, the tabs, the
-     report's commentary, the explainer, the footer. Never the visitor's post,
+     Only the site's own words change, and all of them do: the header, the
+     tabs, the input panel's labels, the report's commentary, the explainer,
+     the what's-new notes, the thank-you card, the footer. Never the visitor's post,
      the annotated copy of it, a rewrite, the share text, the card, or any
      number. It is a text-node filter with the originals kept, so switching
      it off puts every word back, and nothing is sent or stored. */
   var PIRATE = { on: false, originals: new Map(), timer: null };
   var PIRATE_SKIP = '#sharebox, canvas, .annotated, textarea, script, style, .num, #ticker-n, #run, #clear, #themetoggle, ' +
-    '#rewordbtn, #analyzereword, .reword-text, .game-wrap, #counter, #limit-err, [aria-live], .toast, #pirateflag';
+    '#rewordbtn, #analyzereword, .reword-text, .game-wrap, #counter, #limit-err, [aria-live], .toast, #pirateflag, ' +
+    // The name of a file the visitor attached is theirs, not the site's.
+    '#mediapreview-name';
+  /* Everywhere the site speaks. It used to be six places, from when the site
+     had six places; the input panel, the what's-new notes, the thank-you
+     card and the header link had all been added since and stayed in plain
+     English under a pirate flag. The skip list above is what keeps this
+     broad list safe: a root can be as wide as the page, because the
+     visitor's own words are excluded by what they are, not by where. */
+  var PIRATE_ROOTS = ['header .tagline', 'header .intro', 'header .head-actions', '.tabs', '#panel-tool', '#report', '#panel-explain', '#whatsnew', '#tipask', 'footer'];
   var PIRATE_PHRASES = [
     [/post quality assurance/gi, 'Plunder quality assurance'],
     [/unsympathetic/gi, 'no quarter given'],
@@ -2819,6 +2829,17 @@ ul.cg-list li::before{content:"\2022";position:absolute;left:0;color:var(--ink-4
     [/\bthe checklist\b/gi, "the ship's articles"],
     [/\bchecklist\b/gi, 'articles'],
     [/\bbuy him a coffee\b/gi, 'Buy him a grog'],
+    [/\bbuy me a coffee\b/gi, 'Buy me a grog'],
+    [/\bone coffee\b/gi, 'one grog'],
+    [/\bwhat's new\b/gi, 'What be new'],
+    [/\bbe meaner about it\b/gi, 'Make it walk the plank'],
+    [/\bno mercy\b/gi, 'no quarter'],
+    [/\bat your own risk\b/gi, 'at yer own peril'],
+    [/\bgot it\b/gi, 'Aye aye'],
+    [/\bmaybe later\b/gi, 'Mayhaps later'],
+    [/\bthank you\b/gi, 'Thankee'],
+    [/\bpaste the post\b/gi, 'Paste the plunder'],
+    [/\ba link, not a post\b/gi, 'a map, not the treasure'],
     [/\byou're\b/gi, 'ye be'], [/\byou are\b/gi, 'ye be'],
     [/\byours\b/gi, 'yers'], [/\byour\b/gi, 'yer'], [/\byou\b/gi, 'ye'],
     [/\bis not\b/gi, 'be not'], [/\bisn't\b/gi, "ain't"],
@@ -2838,7 +2859,7 @@ ul.cg-list li::before{content:"\2022";position:absolute;left:0;color:var(--ink-4
   }
   function pirateApply(){
     if (!PIRATE.on) return;
-    ['header .tagline', 'header .intro', '.tabs', '#report', '#panel-explain', 'footer'].forEach(function(sel){
+    PIRATE_ROOTS.forEach(function(sel){
       var root = $(sel); if (!root) return;
       var walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT, null), node, batch = [];
       while ((node = walker.nextNode())) batch.push(node);
@@ -2869,6 +2890,18 @@ ul.cg-list li::before{content:"\2022";position:absolute;left:0;color:var(--ink-4
       clearTimeout(PIRATE.timer);
       PIRATE.timer = setTimeout(pirateApply, 30);
     }).observe($('#report'), { childList: true, subtree: true });
+    // Three more places write their words late: the thank-you card when it
+    // appears, the link error on a bad paste, the paste notices. Observed one
+    // by one, not the whole panel, because the word counter in there is
+    // rewritten on every keystroke and is nobody's idea of pirate copy.
+    ['#tipask', '#link-err', '#notices'].forEach(function(sel){
+      var el = $(sel); if (!el) return;
+      new MutationObserver(function(){
+        if (!PIRATE.on) return;
+        clearTimeout(PIRATE.timer);
+        PIRATE.timer = setTimeout(pirateApply, 30);
+      }).observe(el, { childList: true, subtree: true, characterData: true });
+    });
   }
 
   $('#themetoggle').addEventListener('click', function(){

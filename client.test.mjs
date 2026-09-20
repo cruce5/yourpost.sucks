@@ -205,6 +205,29 @@ check('the three main share buttons sit in one row or one column, never two and 
   check('pirate mode never touches the post, the annotated copy or the share text', on.post === before.post && on.share === before.share && on.marks === before.marks);
   await p.click('#pirateflag'); await p.waitForTimeout(150);
   check('pirate mode off puts every word back', (await p.textContent('.tagline')) === before.tag);
+  // Every place the site speaks, not just the six it had when the flag was sewn.
+  const plain = await p.evaluate(() => ({
+    meaner: document.querySelector('label[for="meaner"]').textContent.trim(), note: document.querySelector('.meaner-row .media-note').textContent.trim(),
+    media: document.querySelector('label[for="hasmedia"]').textContent.trim(), wnBtn: document.getElementById('whatsnewbtn').textContent.trim(),
+    wn: document.getElementById('whatsnew').textContent, run: document.getElementById('run').textContent, theme: document.getElementById('themetoggle').textContent
+  }));
+  await p.click('#pirateflag'); await p.waitForTimeout(150);
+  const arr = await p.evaluate(() => ({
+    meaner: document.querySelector('label[for="meaner"]').textContent.trim(), note: document.querySelector('.meaner-row .media-note').textContent.trim(),
+    media: document.querySelector('label[for="hasmedia"]').textContent.trim(), wnBtn: document.getElementById('whatsnewbtn').textContent.trim(),
+    wn: document.getElementById('whatsnew').textContent, run: document.getElementById('run').textContent, theme: document.getElementById('themetoggle').textContent,
+    post: document.getElementById('post').value
+  }));
+  check('pirate mode reaches the input panel', /walk the plank/i.test(arr.meaner) && /no quarter/i.test(arr.note) && /yer own peril/i.test(arr.note) && arr.media !== plain.media, arr.meaner + ' | ' + arr.note);
+  check('pirate mode reaches the header link and the what\'s-new notes', /what be new/i.test(arr.wnBtn) && /buy me a grog/i.test(arr.wn) && /aye aye/i.test(arr.wn) && !/buy me a coffee/i.test(arr.wn), arr.wnBtn);
+  check('pirate mode leaves the working buttons and the visitor\'s post alone', arr.run === plain.run && arr.theme === plain.theme && arr.post === before.post);
+  // Words written after the flag went up get it too.
+  await p.evaluate(() => { document.getElementById('tipask-h').textContent = 'Five reports in. Thank you for using this.'; document.getElementById('tipask-p').textContent = 'If you would like to chip in, one coffee covers the next 500 or so.'; });
+  await p.waitForTimeout(200);
+  check('pirate mode catches the thank-you card when it is written late', /thankee/i.test(await p.textContent('#tipask-h')) && /one grog/i.test(await p.textContent('#tipask-p')), await p.textContent('#tipask-h'));
+  await p.click('#pirateflag'); await p.waitForTimeout(150);
+  const back = await p.evaluate(() => ({ meaner: document.querySelector('label[for="meaner"]').textContent.trim(), note: document.querySelector('.meaner-row .media-note').textContent.trim(), wnBtn: document.getElementById('whatsnewbtn').textContent.trim(), wn: document.getElementById('whatsnew').textContent }));
+  check('pirate mode off puts every one of those back too', back.meaner === plain.meaner && back.note === plain.note && back.wnBtn === plain.wnBtn && back.wn === plain.wn);
 }
 check('findings note shows exactly when roasts < rules fired', noteShown === (fired.stats.rulesFired > roastCount), roastCount + ' roasts, ' + fired.stats.rulesFired + ' fired');
 check('"In its defense" uses American spelling', !/defence/i.test(reportText));
