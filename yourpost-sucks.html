@@ -4874,6 +4874,10 @@ ul.cg-list li::before{content:"\2022";position:absolute;left:0;color:var(--ink-4
         '</div>' +
         '<p class="reason">' + YPS.esc(r.oneLiner) + '</p>' +
         (modeWhy(mode, reason) ? '<div class="mode-why">' + YPS.esc(modeWhy(mode, reason)) + '</div>' : '') +
+        // The server decides this, by pattern, before any model runs: posts
+        // about losing work, faith, age, family, origin, identity, health
+        // or money get the ordinary report whatever was ticked.
+        (r.meanerSkipped ? '<div class="mode-why">Meaner mode sat this one out. Some subjects get the ordinary report no matter what is ticked.</div>' : '') +
         (r.mediaAttached ? '<div class="context-note">You flagged an image or video, so the checklist went easier on short or vague text.</div>' : '') +
         (r.pitchDetected ? '<div class="context-note">A declared paid offer with a real number attached, so the ask was penalised less, not excused. It is still engagement bait, just not a trick.</div>' : '') +
         // No scale strip for an unscored post: a bar at 0.2 would be a

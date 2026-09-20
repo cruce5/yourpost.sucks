@@ -116,7 +116,9 @@ const MAX_BODY_BYTES = 3000000;
  * into every cache key, so prose written under the old prompt (or prose that
  * an old, looser guard let through) expires the moment the new Worker
  * deploys, instead of being replayed from the cache for up to 30 more days. */
-const CACHE_VERSION = 'v3';
+// v4: the identity filter in policed(). Cached prose written before it could
+// still say "you got cut" to someone who lost their job.
+const CACHE_VERSION = 'v4';
 
 /* Haiku 4.5 list prices, in micro-dollars per token: $1/MTok input is exactly
  * one micro-dollar per token, and the rest scale from there. The constants
@@ -899,7 +901,42 @@ function validateLLM(out, post, factsText, maxCredits, report) {
  * to touch anything personal or serious is repeated here because that is
  * exactly the guard a "be harsher" instruction would otherwise erode. */
 const MEANER_NOTE = `The reader has asked for the harsher edit of this report. Same findings, same facts, same structure, same score: only the register changes. Be drier, more exact, and less merciful about the writing. Shorter sentences. No softening clause at the end of a roast, no "but", no consolation the post did not earn.
-Hard limits, unchanged and not negotiable: never mock the person, their job, their employer, their appearance, their name, or anything they disclose about their life. Nothing about grief, illness, redundancy, or hardship is ever a target. You are ruthless about the writing and only the writing. If the post is genuinely good, say so plainly: the harsher register is not permission to invent faults.`;
+Hard limits, unchanged and not negotiable: never mock the person, their job, their employer, their appearance, their name, or anything they disclose about their life. Nothing about grief, illness, redundancy, or hardship is ever a target. You are ruthless about the writing and only the writing. If the post is genuinely good, say so plainly: the harsher register is not permission to invent faults.
+Never infer or remark on who the writer is from how they write or what they mention: not their first language, nationality, age, gender, religion, family, health, or whether they have a job. An error is an error in the sentence, never evidence about the person. Never mock an ask for help.`;
+
+/* Where the harsher register is never used, whatever the reader ticked.
+ * Decided here, by pattern, before any model is involved, because an
+ * instruction is a request and this has to be a guarantee: a sweep of the
+ * harsher register produced "here it just means please" about a laid-off
+ * writer's ask for an intro, "the errors are reading as non-native" about a
+ * writer's English, and a line about "crediting a deity". The ordinary
+ * register said none of that on the same posts. So a post that touches
+ * losing a job, faith, age, family, origin, language, identity, health or
+ * money trouble gets the ordinary report, and the response says so.
+ * Deliberately broad: a false match costs a reader some sharper jokes, a
+ * miss costs a person something real. */
+const MEANER_OFF = new RegExp('\\b(?:' + [
+  // losing work
+  'laid[ -]?off', 'lay[ -]?offs?', 'let go', 'redundan\\w*', 'restructur\\w*', 'downsiz\\w*', 'role was (?:eliminated|cut|impacted)', 'position was (?:eliminated|cut|impacted)', 'my last day', 'open to work', 'opentowork', 'unemploy\\w*', 'job(?:less| hunt\\w*| search\\w*| loss)', 'fired', 'terminated', 'severance', 'furlough\\w*',
+  // faith. Not the bare word "blessed": "#blessed" is the platform's most
+  // worn cliché and exactly what this tool is for. A post that means it
+  // also says god, prayer, faith or church, and those are all here.
+  'god', 'lord', 'jesus', 'christ\\w*', 'allah', 'pray\\w*', 'faith', 'church', 'mosque', 'temple', 'synagogue', 'blessed (?:me|us|by)', 'bible', 'quran', 'torah', 'ramadan', 'eid', 'diwali', 'hanukkah', 'muslim', 'jewish', 'hindu', 'sikh', 'buddhis\\w*', 'catholic', 'atheis\\w*',
+  // age
+  'at \\d{2}\\b', '\\d{2} years old', 'too old', 'too young', 'my age', 'ageis\\w*', 'retirement', 'boomer', 'gen ?z',
+  // family
+  'mom', 'mum', 'mother\\w*', 'dad', 'father\\w*', 'parent\\w*', 'pregnan\\w*', 'maternity', 'paternity', 'ivf', 'miscarr\\w*', 'caregiv\\w*', 'single (?:mom|mum|dad|parent)', 'widow\\w*', 'divorc\\w*',
+  // origin and language
+  'immigra\\w*', 'visa', 'h-?1b', 'green card', 'refugee', 'asylum', 'first[- ]generation', 'first[- ]gen', 'second language', 'my english', 'accent', 'my country', 'back home',
+  // identity
+  'as a (?:woman|man|black|latina?o?|asian|muslim|christian|jew|gay|lesbian|trans\\w*|queer|veteran|person of colou?r)', 'women in', 'woman in', 'lgbt\\w*', 'gay', 'lesbian', 'trans(?:gender)?', 'queer', 'non-?binary', 'pronouns', 'racis\\w*', 'sexis\\w*', 'discriminat\\w*', 'harass\\w*', 'veteran', 'military service',
+  // health and money
+  'disab\\w*', 'neurodiver\\w*', 'adhd', 'autis\\w*', 'dyslex\\w*', 'burn(?:ed|t)? ?out', 'burnout', 'therapy', 'therapist', 'sober', 'sobriety', 'in recovery', 'rehab', '(?:in|my|student|medical|credit card) debt', 'evict\\w*', 'homeless\\w*', 'food stamps'
+].join('|') + ')\\b', 'i');
+
+function meanerAllowed(post) {
+  return !MEANER_OFF.test(normalizeForPolicing(post));
+}
 
 async function callClaude(env, post, report, image, m, meaner) {
   const ctrl = new AbortController();
@@ -1244,6 +1281,12 @@ function policed(raw, source) {
   if (/ -- /.test(v)) return false;
   if (/\p{Pd}/u.test(v.replace(/-/g, ''))) return false;
   const low = v.toLowerCase();
+  // The report is about the writing and never about who wrote it. Any line
+  // that infers or remarks on the writer's language background, origin,
+  // faith, age, sex or health is discarded, in either register and whatever
+  // the post itself says: the writer may mention their faith, the report
+  // may not have an opinion on it.
+  if (/\b(?:non-?native|native (?:english )?speaker|second language|broken english|your (?:accent|english|grammar is (?:foreign|non))|foreigner|deity|deities|your (?:religion|god|faith|church|age|gender|race|ethnicity|nationality|disability|diagnosis|pregnancy|sexuality)|at your age|for (?:your age|a (?:woman|man|girl|mom|mother))|as a (?:woman|man|mom|mother|dad|father)|immigrant|you (?:lost your job|got (?:cut|fired|canned|axed|sacked))|unemployed)\b/.test(low)) return false;
   // A link is never something the report should be handing a reader: the
   // model has nowhere legitimate to have got one from, so any URL is either
   // hallucinated or smuggled in from the post.
@@ -1502,7 +1545,10 @@ async function handleAnalyze(request, env, ctx) {
   // Asked for in the comments ("Don Rickles level"), and deliberately not a
   // flag on the engine: it is read here, reaches the model, and nothing
   // else. A meaner report is the same report in a harder register.
-  const meaner = body.meaner === true;
+  const meanerAsked = body.meaner === true;
+  const meaner = meanerAsked && meanerAllowed(post);
+  // Told to the page so it can say why the report is not the one ticked for.
+  const meanerSkipped = meanerAsked && !meaner;
 
   // An attached image is optional and, unlike everything else on this
   // request, never touches the score: ENGINE.analyze() never sees it. It
@@ -1554,7 +1600,7 @@ async function handleAnalyze(request, env, ctx) {
     catch (e) { console.warn('cache: KV read failed, treating as miss', e && e.message); }
     if (hit) {
       const cachedReport = hit.satire ? ENGINE.analyze(post, { ...safeFlags, satire: true }) : report;
-      return json({ mode: 'cache', report: { ...cachedReport, ...hit } });
+      return json({ mode: 'cache', report: { ...cachedReport, ...hit, ...(meanerSkipped ? { meanerSkipped: true } : {}) } });
     }
   }
 
@@ -1635,7 +1681,7 @@ async function handleAnalyze(request, env, ctx) {
     ).catch(e => console.warn('cache: KV write failed', e && e.message)));
   }
 
-  return json({ mode: 'llm', report: merged });
+  return json({ mode: 'llm', report: meanerSkipped ? { ...merged, meanerSkipped: true } : merged });
 }
 
 async function handleReword(request, env, ctx) {

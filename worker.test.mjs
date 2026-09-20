@@ -90,6 +90,8 @@ const reword = body => new Request('https://yourpost.sucks/api/reword', {
  * canned behaviour, the same way real traffic would get two real answers. */
 const realFetch = globalThis.fetch;
 let customPayload = null;        // used when llmBehaviour is 'custom'
+let customBrutal = null;         // with 'custom' and no payload: the good payload, with this brutal line
+let lastSystem = null;           // the system blocks of the most recent report call
 let llmBehaviour = 'good';    // controls the "report" (prose) call
 let toneBehaviour = 'no';     // controls the "tone" (satire gate) call
 let rewordBehaviour = 'good'; // controls the "reword" call
@@ -213,6 +215,7 @@ globalThis.fetch = async (url, opts) => {
     }
 
     llmCalls++;
+    try { lastSystem = JSON.parse(opts.body).system; } catch { lastSystem = null; }
     if (llmBehaviour === 'error') return new Response('nope', { status: 500 });
     if (llmBehaviour === 'hang') { await new Promise(r => setTimeout(r, 30000)); }
     const payloads = {
@@ -371,7 +374,7 @@ globalThis.fetch = async (url, opts) => {
     };
     lastReportMessageContent = reqBody.messages[0].content;
     return new Response(JSON.stringify({
-      content: [{ type: 'tool_use', name: 'report', input: llmBehaviour === 'custom' ? customPayload : payloads[llmBehaviour] }],
+      content: [{ type: 'tool_use', name: 'report', input: llmBehaviour === 'custom' ? (customBrutal ? { ...payloads.good, brutal: customBrutal } : customPayload) : payloads[llmBehaviour] }],
       usage: modelUsage || undefined
     }), { status: 200, headers: { 'content-type': 'application/json' } });
   }
@@ -1567,6 +1570,55 @@ console.log('\n=== reword: keeping the writer\'s own words ===');
   const env = baseEnv(); rewordBehaviour = 'good'; rewordCalls = 0;
   const r = await (await worker.fetch(reword({ post: BAD }), env, ctx)).json();
   check('a heavily-flagged post keeps its bold rewrite, one call', r.mode === 'reworded' && rewordCalls === 1, `mode=${r.mode}, ${rewordCalls} calls`);
+}
+
+/* ------------------------------------------------------------------ *
+ * the harsher register: where it is never used, and what no report says
+ * ------------------------------------------------------------------ */
+console.log('\n=== meaner mode: the subjects it sits out ===');
+{
+  const SITS_OUT = {
+    'a layoff': 'After 7 years, today was my last day at Acme. My role was eliminated in the restructuring, and I am open to work in people analytics.',
+    'faith': 'God has blessed me with a new role at Horizon. Grateful to my church family for standing with me in the waiting.',
+    'age': 'At 58, I just finished my first data analytics certificate. They said I was too old to pivot.',
+    'family': 'Thrilled to announce I am joining Meridian as VP of People! As a working mom of three, this journey has not been easy.',
+    'origin': 'I came to this country on a visa with two suitcases, and English is my second language. Today I became a staff engineer.',
+    'identity': 'As a woman in data, I have been the only one in the room for ten years. This week that changed.'
+  };
+  for (const [label, text] of Object.entries(SITS_OUT)) {
+    const env = baseEnv(); llmBehaviour = 'good'; llmCalls = 0; lastSystem = null;
+    const r = await (await worker.fetch(post({ post: text, meaner: true }), env, ctx)).json();
+    const sentNote = Array.isArray(lastSystem) && lastSystem.length > 1;
+    check('meaner is ignored for a post about ' + label, r.mode === 'llm' && r.report.meanerSkipped === true && !sentNote, 'mode=' + r.mode + ' skipped=' + r.report.meanerSkipped + ' noteSent=' + sentNote);
+  }
+  {
+    const env = baseEnv(); llmBehaviour = 'good'; llmCalls = 0; lastSystem = null;
+    const r = await (await worker.fetch(post({ post: BAD, meaner: true }), env, ctx)).json();
+    check('an ordinary bad post does get the harsher note', r.mode === 'llm' && !r.report.meanerSkipped && Array.isArray(lastSystem) && lastSystem.length === 2, 'blocks=' + (lastSystem && lastSystem.length));
+    const plain = await (await worker.fetch(post({ post: BAD + ' ', meaner: false }), env, ctx)).json();
+    check('  ...and nothing is flagged when it was never asked for', !plain.report.meanerSkipped);
+  }
+  for (const s of ['We retired the old pipeline and paid down tech debt on a foreign key nobody understood.', 'Disaster recovery drills are the only meetings that should run long.']) {
+    const env = baseEnv(); llmBehaviour = 'good'; lastSystem = null;
+    const r = await (await worker.fetch(post({ post: s + ' It took three weeks and one very long Thursday at Vanguard.', meaner: true }), env, ctx)).json();
+    check('shop talk does not trip the gate: ' + s.slice(0, 32), !r.report.meanerSkipped, String(r.report.meanerSkipped));
+  }
+}
+console.log('\n=== no report, in either register, remarks on who the writer is ===');
+{
+  for (const line of [
+    'The errors are reading as non-native, which buries the win.',
+    'You are sincerely crediting a deity for your employment.',
+    'Not bad for a woman in analytics.',
+    'At your age this is a brave pivot.',
+    'You got fired and told everyone about it.',
+    'This reads like English is your second language.'
+  ]) {
+    const env = baseEnv(); llmBehaviour = 'custom'; customBrutal = line;
+    const r = await (await worker.fetch(post({ post: BAD }), env, ctx)).json();
+    check('a line like "' + line.slice(0, 38) + '" never reaches the page', r.mode === 'rules' || !JSON.stringify(r.report).includes(line), 'mode=' + r.mode);
+  }
+  llmBehaviour = 'good'; customBrutal = null;
 }
 
 const failed = results.filter(r => !r.pass);
