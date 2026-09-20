@@ -674,9 +674,31 @@ check('error is above the kept rewrite, not replacing it', await api.evaluate(()
   await api.click('#meaner');
   await api.waitForTimeout(600);
   check('meaner bar: shown, wiped across, in red', await api.evaluate(() => {
-    const b = document.getElementById('meanerbar'), cs = getComputedStyle(b);
-    return !b.hidden && b.classList.contains('on') && /gradient/.test(cs.backgroundImage) && /246, 84, 60|242, 84, 60/.test(cs.backgroundImage) && b.getBoundingClientRect().width > 200;
-  }), await api.evaluate(() => getComputedStyle(document.getElementById('meanerbar')).backgroundImage.slice(0, 80)));
+    const b = document.getElementById('meanerbar'), bg = getComputedStyle(b.querySelector('i'), '::before').backgroundImage;
+    return !b.hidden && b.classList.contains('on') && /gradient/.test(bg) && /242, 84, 60/.test(bg) && b.getBoundingClientRect().width > 200;
+  }), await api.evaluate(() => getComputedStyle(document.querySelector('#meanerbar i'), '::before').backgroundImage.slice(0, 80)));
+  check('meaner bar: pinned to the top of the window, full width, out of the way of clicks', await api.evaluate(() => {
+    const b = document.getElementById('meanerbar'), cs = getComputedStyle(b), r = b.getBoundingClientRect();
+    return cs.position === 'fixed' && Math.round(r.top) === 0 && Math.round(r.width) === window.innerWidth && Math.round(r.height) === 6 && cs.pointerEvents === 'none';
+  }));
+  check('meaner bar: full while there is nothing to scroll', await api.evaluate(() => {
+    const b = document.getElementById('meanerbar');
+    return Math.round(b.querySelector('i').getBoundingClientRect().width) === Math.round(b.getBoundingClientRect().width);
+  }));
+  // With a report on the page there is something to read, and the fill follows the reader down it.
+  await api.click('[data-spec="0"]');
+  await api.waitForSelector('#report:not([hidden])', { timeout: 20000 });
+  // The page scrolls itself to a new report; measure after that has landed.
+  await api.waitForTimeout(1500);
+  const fillAt = async y => { await api.evaluate(v => window.scrollTo(0, v), y); await api.waitForTimeout(350); return api.evaluate(() => document.querySelector('#meanerbar i').getBoundingClientRect().width / window.innerWidth); };
+  const atTop = await fillAt(0), midway = await fillAt(await api.evaluate(() => (document.documentElement.scrollHeight - innerHeight) / 2)), atEnd = await fillAt(await api.evaluate(() => document.documentElement.scrollHeight));
+  check('meaner bar: the fill is reading progress, empty at the top and full at the bottom', atTop < 0.03 && midway > 0.4 && midway < 0.6 && atEnd > 0.97, [atTop, midway, atEnd].map(n => n.toFixed(2)).join(' / '));
+  check('  ...and it stays in view while scrolled', await api.evaluate(() => Math.round(document.getElementById('meanerbar').getBoundingClientRect().top) === 0));
+  check('  ...over a faint track, so the mode still shows at the top of the page', await api.evaluate(() => {
+    const cs = getComputedStyle(document.getElementById('meanerbar'), '::before');
+    return /gradient/.test(cs.backgroundImage) && Number(cs.opacity) > 0.15 && Number(cs.opacity) < 0.5;
+  }));
+  await api.evaluate(() => window.scrollTo(0, 0));
   check('  ...and it is decoration, hidden from screen readers', await api.getAttribute('#meanerbar', 'aria-hidden') === 'true');
   await api.goto(httpUrl);
   await api.waitForTimeout(400);

@@ -221,17 +221,26 @@ header{border-bottom:1px solid var(--rule);padding-bottom:20px;margin-bottom:28p
 .head-link.flagged{color:var(--warm);border-color:var(--warm)}
 .head-link .hl-short{display:none}
 
-/* The meaner bar: the Cape Index spectrum rule, in one temper. Six pixels,
-   fully rounded, wiped on from the left so it reads as something that just
-   happened rather than something that was always there. */
+/* The meaner bar: the Cape Index reading bar, in one temper. Six pixels,
+   pinned to the top of the window so it stays in view down the whole
+   report. A faint full-width track says the mode is on; the bright fill is
+   how far down the page the reader is. The gradient on the fill is sized to
+   the viewport, not to the fill, so the colours stay where they are and
+   the fill reveals them instead of stretching them. Wiped on from the left
+   so it reads as something that just happened. */
 .meaner-bar{
-  height:6px;border-radius:999px;margin:14px 0 2px;
-  background:linear-gradient(90deg,#4a0d12 0%,#8e1d24 22%,#c62f2a 48%,#f2543c 74%,#ff8a5c 100%);
+  --mean:linear-gradient(90deg,#4a0d12 0%,#8e1d24 22%,#c62f2a 48%,#f2543c 74%,#ff8a5c 100%);
+  position:fixed;top:0;left:0;right:0;height:6px;z-index:60;
+  overflow:hidden;pointer-events:none;
   transform:scaleX(0);transform-origin:left center;
   transition:transform .45s cubic-bezier(.2,.7,.2,1);
 }
+.meaner-bar::before{content:"";position:absolute;inset:0;background:var(--mean);opacity:.3}
+.meaner-bar i{position:absolute;top:0;left:0;height:100%;width:var(--read,100%);overflow:hidden}
+.meaner-bar i::before{content:"";position:absolute;top:0;left:0;height:100%;width:100vw;background:var(--mean)}
 .meaner-bar[hidden]{display:none}
 .meaner-bar.on{transform:scaleX(1)}
+@media (prefers-reduced-motion: no-preference){.meaner-bar i{transition:width 90ms linear}}
 @media (prefers-reduced-motion: reduce){.meaner-bar{transition:none}}
 .tagline{
   font-family:var(--mono);
@@ -1082,7 +1091,7 @@ ul.cg-list li::before{content:"\2022";position:absolute;left:0;color:var(--ink-4
 @media print{
   body{background:#fff;color:#111}
   body::before{display:none}
-  .panel,.controls,.specimens,.share-actions,.share-more,.tabs,footer,.game-wrap,.toast,.tipask{display:none}
+  .panel,.controls,.specimens,.share-actions,.share-more,.tabs,footer,.game-wrap,.toast,.tipask,.meaner-bar{display:none}
   .hero,.meter,ul.roasts li,.share-box{background:#fff;border-color:#ccc;color:#111}
   .hero .num{color:#111 !important}
   .meter-name,.meter-val,.brutal{color:#111}
@@ -1127,7 +1136,7 @@ ul.cg-list li::before{content:"\2022";position:absolute;left:0;color:var(--ink-4
   <!-- Meaner mode says so on the page, not just in the checkbox: the
        register of the report changed, and the reader should be able to see
        that at a glance from the top of the page. -->
-  <div class="meaner-bar" id="meanerbar" hidden aria-hidden="true"></div>
+  <div class="meaner-bar" id="meanerbar" hidden aria-hidden="true"><i></i></div>
   <p class="tagline">Post quality assurance &middot; automated &middot; unsympathetic</p>
   <p class="intro">Paste a LinkedIn post. Get a suckiness score, the reasons, and a rewrite if it needs one. Free, no sign-up, never stored.</p>
 </header>
@@ -5799,11 +5808,32 @@ ul.cg-list li::before{content:"\2022";position:absolute;left:0;color:var(--ink-4
       setTimeout(function(){ if (!$('#meaner').checked) bar.hidden = true; }, 460);
     }
   }
+  /* How far down the page, as the width of the bright fill. A page with
+     nothing to scroll (no report yet) shows the bar full, so turning the
+     mode on is never answered with a nearly invisible strip. Cheap enough
+     to run on every scroll; rAF keeps it to one write per frame. */
+  var readQueued = false;
+  function paintRead(){
+    readQueued = false;
+    var doc = document.documentElement;
+    var max = doc.scrollHeight - window.innerHeight;
+    var pct = max <= 8 ? 100 : Math.min(100, Math.max(0, (window.scrollY || doc.scrollTop || 0) / max * 100));
+    $('#meanerbar').style.setProperty('--read', pct.toFixed(2) + '%');
+  }
+  function queueRead(){ if (!readQueued){ readQueued = true; requestAnimationFrame(paintRead); } }
+  window.addEventListener('scroll', queueRead, { passive: true });
+  window.addEventListener('resize', queueRead);
+  // The page grows when a report lands and shrinks when it is cleared;
+  // neither is a scroll or a resize.
+  if (window.ResizeObserver) new ResizeObserver(queueRead).observe(document.body);
+
   try { if (localStorage.getItem(MEANER_KEY) === '1') $('#meaner').checked = true; } catch (e) {}
   paintMeaner();
+  paintRead();
   $('#meaner').addEventListener('change', function(){
     try { localStorage.setItem(MEANER_KEY, this.checked ? '1' : '0'); } catch (e) {}
     paintMeaner();
+    queueRead();
   });
 
   /* ---------------- what's new ----------------
