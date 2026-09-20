@@ -119,6 +119,10 @@ globalThis.fetch = async (url, opts) => {
         // The prompt already tells the model never to do this; this fixture
         // proves it is also enforced, not just requested. An em dash in a
         // rewrite is the tool committing the exact sin it roasts posts for.
+        // An edit of NEUTRAL rather than a replacement for it: the writer's
+        // own sentences survive, which is what the keep-their-words floor
+        // is there to require.
+        closeEdit: { rewritten: 'Support tickets about billing dropped by a third in the first four days. We shipped the invoicing redesign this week, and that was the whole change.', summary: 'Led with the result instead of the logistics. Same sentences, reordered.' },
         emdash: { rewritten: 'I\'m joining TechCorp — no lead-up needed for this one.', summary: 'Cut the clichés, kept the actual news.' },
         // The same tell in two other spellings: the horizontal bar (U+2015),
         // which is not U+2014 but reads identically on the page, and the
@@ -847,7 +851,10 @@ console.log('  --- never worse ---');
   let poisoned = 0;
   for (const [k, v] of env.KV._m) if (k.startsWith('w:')) { env.KV._m.set(k, JSON.stringify({ rewritten: 'Excited to announce we shipped the invoicing redesign this week! Humbled and grateful. Thoughts?', summary: 'x' })); poisoned++; }
   const r = await (await worker.fetch(reword({ post: NEUTRAL }), env, ctx)).json();
-  check('a cached rewrite that scores worse now is regenerated instead of served', poisoned === 1 && r.mode === 'reworded' && rewordCalls === 2 && r.after.overall < r.before.overall, `poisoned=${poisoned} mode=${r.mode} calls=${rewordCalls}`);
+  // Four calls, not two: NEUTRAL trips one check, and the stand-in rewrite
+  // shares no words with it, so each generation also spends its one
+  // keep-their-words retry (see KEEP_MIN). Two generations, two calls each.
+  check('a cached rewrite that scores worse now is regenerated instead of served', poisoned === 1 && r.mode === 'reworded' && rewordCalls === 4 && r.after.overall < r.before.overall, `poisoned=${poisoned} mode=${r.mode} calls=${rewordCalls}`);
 }
 {
   const env = baseEnv(); rewordBehaviour = 'summaryCitesWordCount'; rewordCalls = 0;
@@ -876,7 +883,7 @@ console.log('  --- one retry, only for the model\'s own mistakes ---');
   check('a fabricated-number rejection gets exactly one retry, and the retry\'s clean rewrite is served', r.mode === 'reworded' && rewordCalls === 2, 'mode=' + r.mode + ', ' + rewordCalls + ' calls');
   check('  ...and the retry told the model which numbers it invented', /rejected automatically because it introduced numbers not present in the post \(in the rewrite: 3, 14\)/.test(lastRewordUserMessage || ''), (lastRewordUserMessage || '').slice(-260));
   const spent = Number(await env.KV.get(`b:${new Date().toISOString().slice(0, 10)}`));
-  check('  ...and both calls were charged to the budget', spent === 2 * 15600, spent + ' micros');
+  check('  ...and both calls were charged to the budget', spent === 2 * COSTS.reword.precharge, spent + ' micros');
   rewordQueue = null;
 }
 {
@@ -894,7 +901,7 @@ console.log('  --- one retry, only for the model\'s own mistakes ---');
 {
   // No room for a second call: the retry is skipped rather than overspending.
   const env = baseEnv(); rewordQueue = ['fabricatesNumber', 'good']; rewordCalls = 0;
-  await env.KV.put(`b:${new Date().toISOString().slice(0, 10)}`, String(5000000 - 15600 - 1)); // room for exactly one reword
+  await env.KV.put(`b:${new Date().toISOString().slice(0, 10)}`, String(5000000 - COSTS.reword.precharge - 1)); // room for exactly one reword
   const r = await (await worker.fetch(reword({ post: BAD }), env, ctx)).json();
   check('the retry respects the budget breaker: no second call when only one call\'s worth is left', r.mode === 'unavailable' && rewordCalls === 1, 'mode=' + r.mode + ', ' + rewordCalls + ' calls');
   rewordQueue = null;
@@ -1279,7 +1286,7 @@ for (const withDO of [false, true]) {
     // slice (2600) comes back, the report slice (13000) stays.
     const env = baseEnv(); if (withDO) env.COUNTERS = mockCounters(); llmBehaviour = 'good'; toneBehaviour = 'error';
     const r = await (await worker.fetch(post({ post: PARODY }), env, ctx)).json();
-    check(`${label}: a failed tone call refunds only its own slice of the pre-charge`, r.mode === 'llm' && await spentMicros(env) === COSTS.report.precharge, await spentMicros(env) + ' micros (pre-charged 15600)');
+    check(`${label}: a failed tone call refunds only its own slice of the pre-charge`, r.mode === 'llm' && await spentMicros(env) === COSTS.report.precharge, await spentMicros(env) + ' micros (pre-charged ' + COSTS.reword.precharge + ')');
     toneBehaviour = 'no';
   }
   {
@@ -1293,7 +1300,7 @@ for (const withDO of [false, true]) {
     // the tokens were generated and paid for.
     const env = baseEnv(); if (withDO) env.COUNTERS = mockCounters(); rewordQueue = ['fabricatesNumber', 'good'];
     await worker.fetch(reword({ post: BAD }), env, ctx);
-    check(`${label}: a rejected-then-retried reword is charged for both calls`, await spentMicros(env) === 31200, await spentMicros(env) + ' micros');
+    check(`${label}: a rejected-then-retried reword is charged for both calls`, await spentMicros(env) === 2 * COSTS.reword.precharge, await spentMicros(env) + ' micros');
     rewordQueue = null;
   }
 }
@@ -1522,6 +1529,44 @@ console.log('\n=== cache key: version, hasMedia, styled rounding ===');
   const quiet = await worker.fetch(tip('report'), noDO, ctx);
   const quietStatus = await (await worker.fetch(new Request('https://yourpost.sucks/api/status'), noDO, ctx)).json();
   check('/api/tip: no counter bound means no count and no error', quiet.status === 204 && quietStatus.tipClicks === null, String(quiet.status));
+}
+
+/* ------------------------------------------------------------------ *
+ * the rewrite has to sound like the person who wrote the post
+ * ------------------------------------------------------------------ */
+console.log('\n=== reword: keeping the writer\'s own words ===');
+{
+  const env = baseEnv(); rewordBehaviour = 'closeEdit'; rewordCalls = 0;
+  const r = await (await worker.fetch(reword({ post: NEUTRAL }), env, ctx)).json();
+  check('an edit that keeps the writer\'s sentences ships on the first call', r.mode === 'reworded' && rewordCalls === 1, `mode=${r.mode}, ${rewordCalls} calls`);
+}
+{
+  // Same post, a rewrite that shares nothing with it: one retry is spent
+  // asking for a closer edit.
+  const env = baseEnv(); rewordBehaviour = 'good'; rewordCalls = 0;
+  const r = await (await worker.fetch(reword({ post: NEUTRAL }), env, ctx)).json();
+  check('a wholesale re-say of a lightly-flagged post is asked for again', r.mode === 'reworded' && rewordCalls === 2, `mode=${r.mode}, ${rewordCalls} calls`);
+  check('  ...and the visitor still gets a rewrite, never an error', typeof r.rewritten === 'string' && r.rewritten.length > 0 && r.after.overall < r.before.overall);
+}
+{
+  // The second attempt comes back closer to the post: that one ships.
+  const env = baseEnv(); rewordQueue = ['good', 'closeEdit']; rewordCalls = 0;
+  const r = await (await worker.fetch(reword({ post: NEUTRAL }), env, ctx)).json();
+  check('the closer of the two attempts is the one shown', r.mode === 'reworded' && /invoicing redesign/.test(r.rewritten), r.rewritten && r.rewritten.slice(0, 60));
+  rewordQueue = null;
+}
+{
+  // The retry fails outright: the first attempt was valid, so it still ships.
+  const env = baseEnv(); rewordQueue = ['good', 'toolong']; rewordCalls = 0;
+  const r = await (await worker.fetch(reword({ post: NEUTRAL }), env, ctx)).json();
+  check('a failed retry never costs the visitor the valid first attempt', r.mode === 'reworded' && rewordCalls === 2 && /TechCorp/.test(r.rewritten), `mode=${r.mode}, ${rewordCalls} calls`);
+  rewordQueue = null;
+}
+{
+  // A post the checks tore apart is allowed to come back unrecognisable.
+  const env = baseEnv(); rewordBehaviour = 'good'; rewordCalls = 0;
+  const r = await (await worker.fetch(reword({ post: BAD }), env, ctx)).json();
+  check('a heavily-flagged post keeps its bold rewrite, one call', r.mode === 'reworded' && rewordCalls === 1, `mode=${r.mode}, ${rewordCalls} calls`);
 }
 
 const failed = results.filter(r => !r.pass);

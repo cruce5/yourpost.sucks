@@ -1064,8 +1064,9 @@ ul.cg-list li::before{content:"\2022";position:absolute;left:0;color:var(--ink-4
 <div id="panel-tool" role="tabpanel" aria-labelledby="tab-tool">
 <div class="panel">
   <label class="lbl" for="post">Paste the post</label>
-  <textarea id="post" spellcheck="false" placeholder="Excited to announce..." aria-describedby="counter limit-err"></textarea>
+  <textarea id="post" spellcheck="false" placeholder="Excited to announce..." aria-describedby="counter limit-err link-err"></textarea>
   <p id="limit-err" class="field-err" hidden></p>
+  <p id="link-err" class="field-err" hidden></p>
   <div class="media-row">
     <label class="media-toggle" for="hasmedia">
       <input type="checkbox" id="hasmedia">
@@ -1081,6 +1082,13 @@ ul.cg-list li::before{content:"\2022";position:absolute;left:0;color:var(--ink-4
         <button type="button" class="media-remove" id="mediaremove" aria-label="Remove attached image">&times;</button>
       </div>
     </div>
+  </div>
+  <div class="media-row meaner-row">
+    <label class="media-toggle" for="meaner">
+      <input type="checkbox" id="meaner">
+      Be meaner about it.
+    </label>
+    <p class="media-note">Same checks, same score, no mercy in the write-up. Never about you, only about the writing.</p>
   </div>
   <div class="controls">
     <button class="btn-primary" id="run" aria-disabled="false">Analyze</button>
@@ -4496,7 +4504,10 @@ ul.cg-list li::before{content:"\2022";position:absolute;left:0;color:var(--ink-4
     return '<div class="receipt">' +
       '<h3 class="sec">What\'s driving the score<b>points toward the ' + r.overall.toFixed(1) + '</b></h3>' +
       '<div class="breakdown">' + body + '</div>' +
-      '<p class="bd-note">Five weighted categories (' + weights + ') plus a tax for tripping many checks at once, a credit for tripping almost none. ' + (adjShown ? 'They sum to the number above.' : 'Each is rounded to a tenth, so they can miss the number above by 0.1.') + '</p>' +
+      '<p class="bd-note">Five weighted categories (' + weights + ') plus a tax for tripping many checks at once, a credit for tripping almost none. ' + (adjShown ? 'They sum to the number above.' : 'Each is rounded to a tenth, so they can miss the number above by 0.1.') +
+        // Asked in public more than anything else about the number: why a
+        // clean post lands on 0.4 and not 0.0, and why nobody can reach 10.
+        ' The scale stops at 0.2 and 9.9. Nothing written by a person is immaculate, and nothing is past saving.</p>' +
       (r.breakdownNote ? '<p class="ai-aside"><b>Aside</b>' + YPS.esc(r.breakdownNote) + '</p>' : '') +
     '</div>';
   }
@@ -5393,12 +5404,28 @@ ul.cg-list li::before{content:"\2022";position:absolute;left:0;color:var(--ink-4
     var text = $('#post').value;
     if (!text.trim()){ toast('Nothing to analyze'); $('#post').focus(); return; }
     if (text.length > MAX_CHARS){ updateCounter(); $('#post').focus(); return; }
+    // A pasted link is the commonest wrong first move: the reader hands over
+    // the post's URL, the checks read the URL as the writing, and the number
+    // that comes back is about nothing. Nothing here can fetch the page
+    // (LinkedIn does not allow it), so say what to paste instead of scoring
+    // a web address. A post that merely CONTAINS a link is scored as usual.
+    if (linkOnly(text)){
+      var le = $('#link-err');
+      le.textContent = 'That is a link, not a post. This cannot open it, so paste the words of the post instead.';
+      le.hidden = false;
+      $('#live').textContent = 'That is a link, not a post. Paste the words of the post instead.';
+      $('#post').focus();
+      return;
+    }
 
     // hygiene() just replaced pasteFlags wholesale (it owns the paste-only
     // flags), so the media checkbox, a separate, persistent, user-set
     // signal, is folded in fresh at call time rather than stored inside
     // pasteFlags, where it would get wiped out by the next paste.
     var flags = Object.assign({}, pasteFlags, { hasMedia: $('#hasmedia').checked });
+    // Read once, here, so a mid-flight tick cannot make the request and the
+    // report disagree about which register was asked for.
+    var meaner = $('#meaner').checked;
 
     inFlight = true;
     setBusy(true);
@@ -5453,7 +5480,7 @@ ul.cg-list li::before{content:"\2022";position:absolute;left:0;color:var(--ink-4
       fetch('api/analyze', {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ post: text, flags: flags, image: attachedImage || undefined, turnstileToken: turnstileToken }),
+        body: JSON.stringify({ post: text, flags: flags, meaner: meaner, image: attachedImage || undefined, turnstileToken: turnstileToken }),
         signal: ctrl ? ctrl.signal : undefined
       }).then(function(res){
         if (res.ok) return res.json();
@@ -5473,8 +5500,20 @@ ul.cg-list li::before{content:"\2022";position:absolute;left:0;color:var(--ink-4
     });
   }
 
+  /* Is this a web address and not a post? True when what is left after the
+     links come out is too little to score: under 12 words. Deliberately not
+     "contains a link": a post with a link in it is still a post. */
+  function linkOnly(text){
+    var t = String(text || '');
+    if (!/https?:\/\/|\b(?:www|lnkd)\.[a-z]/i.test(t)) return false;
+    var rest = t.replace(/(?:https?:\/\/|www\.|lnkd\.in)\S*/gi, ' ').replace(/[\s ]+/g, ' ').trim();
+    return (rest.match(/\S+/g) || []).length < 12;
+  }
+
   function updateCounter(){
     var v = $('#post').value;
+    var le = $('#link-err');
+    if (le && !le.hidden && !linkOnly(v)){ le.hidden = true; le.textContent = ''; }
     var w = (v.match(/\S+/g) || []).length;
     var over = v.length - MAX_CHARS;
     var counter = $('#counter'), err = $('#limit-err');
@@ -5629,6 +5668,15 @@ ul.cg-list li::before{content:"\2022";position:absolute;left:0;color:var(--ink-4
   // Keyboard-reachable stand-in for the hidden file input.
   $('#mediabtn').addEventListener('click', function(){ $('#mediafile').click(); });
   $('#hasmedia').addEventListener('change', function(){ mediaCheckedByAttach = false; });
+
+  /* The register is a preference, not a property of one post, so it is
+     remembered across visits in this browser. Storage can be unavailable or
+     blocked; then it simply starts off, which is the right default. */
+  var MEANER_KEY = 'yps_meaner_v1';
+  try { if (localStorage.getItem(MEANER_KEY) === '1') $('#meaner').checked = true; } catch (e) {}
+  $('#meaner').addEventListener('change', function(){
+    try { localStorage.setItem(MEANER_KEY, this.checked ? '1' : '0'); } catch (e) {}
+  });
 
   function loadViaImage(file){
     return new Promise(function(resolve, reject){

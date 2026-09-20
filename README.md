@@ -138,10 +138,10 @@ add the DS record it gives you back at Porkbun.
 
 Haiku 4.5 is **$1/MTok in, $5/MTok out**. The budget breaker reserves a true
 worst case before every call, then refunds the difference once the API reports
-what the call really used. For the main analysis that reserve is **$0.014**:
+what the call really used. For the main analysis that reserve is **$0.0146**:
 the 1,200-token output cap ($0.006), the system prompt and tool schema billed
-as a cache write ($0.0059; it is large, since it carries the voice guide, the
-scoring scale and the craft reference), and the longest user message a 4,000-character post can
+as a cache write ($0.0061; it is large, since it carries the voice guide, the
+scoring scale, the craft reference and the harsher-register note), and the longest user message a 4,000-character post can
 produce ($0.0018), rounded up with a little headroom. Inside the
 5-minute cache window the system prompt is billed as a cache read instead and
 a call settles well under the reserve. The reserve has to hold for the first
@@ -204,12 +204,35 @@ reader's link from opening. Counted clicks are capped at 10 per IP per hour,
 which only blunts someone curling the endpoint in a loop. The totals come
 back in `GET /api/status` as `tipClicks`.
 
+**A rewrite has to still sound like the writer.** Reader report, in public:
+"the proposed rewrite did little more than change the flow while scraping away
+my voice". So every rewrite is measured against the post it came from: the
+share of the writer's distinctive words that survived (`keptRatio` in
+`src/worker.js`). Under 45%, on a post the checks mostly liked (fewer than 5
+findings), the model is asked once more for a closer edit, and the closer of
+the two valid attempts is the one shown. Both attempts are kept, so the floor
+can never cost a visitor a rewrite they would otherwise have had. A post that
+tripped everything is exempt: there the writer asked for a rescue, not a trim.
+
+**"Be meaner about it."** A checkbox, off by default, remembered per browser.
+It sends one extra system block that turns up the register and nothing else:
+same checks, same findings, same score, same validators, and the same hard
+rule that nothing about the person, their job or their life is ever a target.
+It is part of the cache key, so a gentle report is never replayed to someone
+who asked for the harsh one.
+
+**A link is not a post.** Pasting the URL of a post used to score the URL, which
+is how at least one reader got a number about nothing (2.7 for the link, 0.7
+for the text). Text that is a web address with under 12 other words is refused
+in the page, before any call, with a line saying what to paste instead. A post
+that merely contains a link is analysed exactly as before.
+
 **The budget counter and the per-IP rate limiter live in a Durable Object** (the `Counters` class in `src/worker.js`, bound as `COUNTERS`). A Durable Object handles one request at a time, so "is there room, and if so charge it" is a single atomic step: a burst of simultaneous requests cannot all read the same stale count and all get through. If the binding is missing (a KV-only dev setup) the Worker falls back to KV counters, which are eventually consistent and can leak calls under a burst; do not run production that way. Either way, put a hard spend limit on the API key in the Anthropic Console as well. That cap holds even if this code is wrong.
 
 **The reword is a separate, explicitly opt-in third call**, priced and charged
-independently (reserved at **$0.0156** worst case, a larger output cap than the
+independently (reserved at **$0.0162** worst case, a larger output cap than the
 main call since it returns a full rewritten post rather than a diff list, and
-up to **$0.0312** for one click when the single retry fires, since each
+up to **$0.0324** for one click when the single retry fires, since each
 attempt is charged). It shares the same
 budget counter and per-IP limiter as everything else, but it is never
 triggered automatically. A visitor has to click for it, and it skips the

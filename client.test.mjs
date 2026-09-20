@@ -72,7 +72,7 @@ check('progress bar is an indeterminate progressbar, not aria-hidden', await p.e
   const el = document.getElementById('progress');
   return el.getAttribute('role') === 'progressbar' && !el.hasAttribute('aria-hidden') && !el.hasAttribute('aria-valuenow');
 }));
-check('textarea is described by the counter and the limit error', await p.getAttribute('#post', 'aria-describedby') === 'counter limit-err');
+check('textarea is described by the counter, the limit error and the link error', await p.getAttribute('#post', 'aria-describedby') === 'counter limit-err link-err');
 check('preamble is the tagline plus one intro sentence', await p.evaluate(() => {
   return document.querySelectorAll('header p').length === 2 && !document.querySelector('.tagline-sub') && !document.querySelector('.intro-more');
 }));
@@ -576,6 +576,50 @@ check('error is above the kept rewrite, not replacing it', await api.evaluate(()
   const out = document.getElementById('rewordresult');
   return out.firstElementChild.classList.contains('reword-error') && out.querySelectorAll('.reword-error').length === 1 && !!out.querySelector('.reword-text');
 }));
+
+// 8a. a pasted link is not a post, and the harsher register is a request
+{
+  let analyzeCalls = 0, lastBody = null;
+  await api.unroute('**/api/analyze');
+  await api.route('**/api/analyze', async route => {
+    analyzeCalls++;
+    lastBody = route.request().postDataJSON();
+    const report = await api.evaluate(t => window.YourPostSucks.analyze(t), lastBody.post);
+    await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ mode: 'llm', report }) });
+  });
+  await api.goto(httpUrl);
+  await api.fill('#post', 'https://www.linkedin.com/posts/billyost_i-built-a-website-activity-7506764692472799232-FK65');
+  await api.click('#run');
+  await api.waitForTimeout(700);
+  check('a pasted link is refused with an explanation, and costs no call', analyzeCalls === 0 && /link, not a post/.test(await api.textContent('#link-err')) && await api.evaluate(() => document.getElementById('report').hidden), analyzeCalls + ' calls');
+  check('  ...the message is tied to the textarea for screen readers', /link-err/.test(await api.getAttribute('#post', 'aria-describedby')));
+  await api.fill('#post', 'Read the thread here: https://example.com/x. We shipped the invoicing redesign this week and support tickets about billing dropped by a third in the first four days. The fix was three renamed fields.');
+  await api.click('#run');
+  await api.waitForSelector('#report:not([hidden])', { timeout: 20000 });
+  check('a post that merely contains a link is analyzed as usual', analyzeCalls === 1 && await api.evaluate(() => document.getElementById('link-err').hidden));
+
+  check('the harsher register is off by default', await api.evaluate(() => !document.getElementById('meaner').checked) && lastBody.meaner === false);
+  await api.click('#meaner');
+  await api.click('#run');
+  await api.waitForTimeout(900);
+  check('ticking it sends meaner with the request', analyzeCalls === 2 && lastBody.meaner === true, JSON.stringify({ calls: analyzeCalls, meaner: lastBody.meaner }));
+  await api.goto(httpUrl);
+  check('  ...and it is remembered on the next visit', await api.evaluate(() => document.getElementById('meaner').checked));
+  await api.click('#meaner');
+  await api.goto(httpUrl);
+  check('  ...and unticking it is remembered too', await api.evaluate(() => !document.getElementById('meaner').checked));
+  await api.fill('#post', 'Support tickets about billing dropped by a third in the first four days. We shipped the invoicing redesign this week, and renaming three fields was the whole change.');
+  await api.click('#run');
+  await api.waitForSelector('#report:not([hidden])', { timeout: 20000 });
+  check('the receipts explain why a clean post is not 0.0', /scale stops at 0\.2 and 9\.9/.test(await api.textContent('#report')));
+  // Hand the plain mode-llm route back to the blocks below, which count on
+  // an AI-written report arriving for every specimen click.
+  await api.unroute('**/api/analyze');
+  await api.route('**/api/analyze', async route => {
+    const report = await api.evaluate(t => window.YourPostSucks.analyze(t), route.request().postDataJSON().post);
+    await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ mode: 'llm', report }) });
+  });
+}
 
 // 8b. the thank-you card (the /api/analyze route above still answers mode llm)
 {
