@@ -283,7 +283,7 @@ function rateKey(ip) {
  * a missing counter binding, an unreachable object, a hostile body. Nobody's
  * coffee link should fail to open because a statistic could not be written.
  * ------------------------------------------------------------------ */
-const TIP_PLACES = ['report', 'card', 'footer'];
+const TIP_PLACES = ['report', 'card', 'footer', 'whatsnew'];
 /** Counted clicks per IP per hour. A click is one deliberate act, so this
  *  sits well above honest use and only blunts someone curling the endpoint
  *  in a loop to make a line look better than it is. */

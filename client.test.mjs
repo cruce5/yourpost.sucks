@@ -43,6 +43,10 @@ const errs = []; p.on('pageerror', e => errs.push(e.message));
 
 // file:// has no API, so this exercises the offline fallback path
 await p.goto(indexUrl);
+/* Same reason as the api page below: once this page writes a setting it
+ * looks like a returning visitor, and the what's-new notes open over the
+ * controls the blocks below are clicking. The notes get their own block. */
+await p.evaluate(v => { try { localStorage.setItem('yps_whatsnew_seen', v); } catch (e) {} }, await p.evaluate(() => window.YPSClient.whatsnewVersion));
 
 // --- static structure before anything runs
 check('game section is hidden before the first report', await p.evaluate(() => {
@@ -419,6 +423,13 @@ check('no em dashes in visible page text', emDashHits === 0, emDashHits + ' foun
 // Mocked API scenarios over http, where page.route() can see the request.
 // ======================================================================
 const api = await b.newPage({ viewport: { width: 900, height: 1200 } });
+/* The what's-new notes open by themselves, once, for a visitor who has been
+ * here before, which is what every block below looks like after the first
+ * one writes a setting. Mark them seen for this page; the block that tests
+ * the notes clears the marker itself and puts it back. */
+await api.goto(httpUrl);
+const WHATSNEW_VERSION = await api.evaluate(() => window.YPSClient.whatsnewVersion);
+await api.evaluate(([k, v]) => { try { localStorage.setItem(k, v); } catch (e) {} }, ['yps_whatsnew_seen', WHATSNEW_VERSION]);
 api.on('pageerror', e => errs.push(e.message));
 
 // 1. a slow success: live region, busy state, in-flight guard, Cancel label
@@ -621,6 +632,65 @@ check('error is above the kept rewrite, not replacing it', await api.evaluate(()
   });
 }
 
+// 8a2. what's new: the header link, the once-only pop-up, the meaner bar
+{
+  const SEEN = 'yps_whatsnew_seen';
+  await api.goto(httpUrl);
+  await api.evaluate(() => { try { localStorage.clear(); } catch (e) {} });
+  await api.goto(httpUrl);
+  await api.waitForTimeout(1200);
+  check("what's new: a first-time visitor is not interrupted", await api.evaluate(() => !document.getElementById('whatsnew').open));
+  check("  ...but the header link is flagged for them", await api.evaluate(() => document.getElementById('whatsnewbtn').classList.contains('flagged')));
+  await api.click('#whatsnewbtn');
+  check("what's new: the header link opens it as a modal", await api.evaluate(() => document.getElementById('whatsnew').open));
+  check('  ...and it says what changed in plain words', await api.evaluate(() => {
+    const t = document.getElementById('whatsnew').textContent;
+    return /meaner/i.test(t) && /link/i.test(t) && /rewrite keeps your voice/i.test(t) && /shouting/i.test(t);
+  }));
+  check('  ...and it asks for a coffee, labelled as its own place', await api.evaluate(() => {
+    const a = document.querySelector('#whatsnew a[data-tip="whatsnew"]');
+    return !!a && a.href === 'https://buymeacoffee.com/billyost' && /penny/.test(document.querySelector('.wn-tip').textContent);
+  }));
+  check('  ...no em dash in any of it', !/—/.test(await api.textContent('#whatsnew')));
+  await api.keyboard.press('Escape');
+  await api.waitForTimeout(300);
+  check('what\'s new: Escape closes it and marks it seen', await api.evaluate(() => !document.getElementById('whatsnew').open && !!localStorage.getItem('yps_whatsnew_seen')));
+  const seenValue = await api.evaluate(k => localStorage.getItem(k), SEEN);
+  await api.goto(httpUrl);
+  await api.waitForTimeout(1200);
+  check('  ...and it does not come back once seen', await api.evaluate(() => !document.getElementById('whatsnew').open && !document.getElementById('whatsnewbtn').classList.contains('flagged')));
+
+  // Someone who has been here before, on a version they have not seen.
+  await api.evaluate(k => { try { localStorage.removeItem(k); localStorage.setItem('yps_theme', 'dark'); } catch (e) {} }, SEEN);
+  await api.goto(httpUrl);
+  await api.waitForSelector('#whatsnew[open]', { timeout: 4000 });
+  check("what's new: a returning visitor gets it once, by itself", await api.evaluate(() => document.getElementById('whatsnew').open));
+  await api.click('#wn-done');
+  await api.waitForTimeout(300);
+  check('  ...and Got it closes it', await api.evaluate(() => !document.getElementById('whatsnew').open));
+
+  // The red bar tracks the checkbox.
+  check('meaner bar: hidden while the register is normal', await api.evaluate(() => document.getElementById('meanerbar').hidden));
+  await api.click('#meaner');
+  await api.waitForTimeout(600);
+  check('meaner bar: shown, wiped across, in red', await api.evaluate(() => {
+    const b = document.getElementById('meanerbar'), cs = getComputedStyle(b);
+    return !b.hidden && b.classList.contains('on') && /gradient/.test(cs.backgroundImage) && /246, 84, 60|242, 84, 60/.test(cs.backgroundImage) && b.getBoundingClientRect().width > 200;
+  }), await api.evaluate(() => getComputedStyle(document.getElementById('meanerbar')).backgroundImage.slice(0, 80)));
+  check('  ...and it is decoration, hidden from screen readers', await api.getAttribute('#meanerbar', 'aria-hidden') === 'true');
+  await api.goto(httpUrl);
+  await api.waitForTimeout(400);
+  check('  ...and it comes back on the next visit with the setting', await api.evaluate(() => !document.getElementById('meanerbar').hidden && document.getElementById('meaner').checked));
+  await api.click('#meaner');
+  await api.waitForTimeout(700);
+  check('  ...and goes away when the setting does', await api.evaluate(() => document.getElementById('meanerbar').hidden));
+  check('header: both header buttons keep a 44px target', await api.evaluate(() => ['whatsnewbtn', 'themetoggle'].every(id => document.getElementById(id).getBoundingClientRect().height >= 44)));
+  // Leave it marked seen. The blocks below click through the page, and a
+  // modal opening over them on load is exactly what it should do to a
+  // returning visitor and exactly what would break them here.
+  await api.evaluate(([k, v]) => { try { localStorage.clear(); localStorage.setItem(k, v); } catch (e) {} }, [SEEN, seenValue]);
+}
+
 // 8b. the thank-you card (the /api/analyze route above still answers mode llm)
 {
   const tipHits = [];
@@ -663,9 +733,9 @@ check('error is above the kept rewrite, not replacing it', await api.evaluate(()
   check('thank-you card: clicking the coffee link retires it for good', (await getTA()).done === true);
   await api.waitForTimeout(500);
   check('tip click: the card click is reported as "card", with nothing else in it', tipHits.some(b => b === '{"where":"card"}') && tipHits.every(b => !/post|text|id/i.test(b || '')), JSON.stringify(tipHits));
-  check('tip click: all three coffee links are labelled', await api.evaluate(() => {
+  check('tip click: every coffee link on the page is labelled', await api.evaluate(() => {
     const seen = Array.from(document.querySelectorAll('a[data-tip]')).map(a => a.getAttribute('data-tip'));
-    return seen.includes('footer') && seen.includes('card') && document.querySelectorAll('a[href*="buymeacoffee"]:not([data-tip])').length === 0;
+    return ['footer', 'card', 'whatsnew'].every(k => seen.includes(k)) && document.querySelectorAll('a[href*="buymeacoffee"]:not([data-tip])').length === 0;
   }));
   await setTA({ n: 49, shown: 1, done: true });
   await api.goto(httpUrl);

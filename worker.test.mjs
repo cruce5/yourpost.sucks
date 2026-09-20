@@ -1521,7 +1521,7 @@ console.log('\n=== cache key: version, hasMedia, styled rounding ===');
   check('  ...and one flooder does not block anybody else', other.status === 204 && total('card') <= 12);
 
   const status = await (await worker.fetch(new Request('https://yourpost.sucks/api/status'), env, ctx)).json();
-  check('/api/status reports the three totals', status.tipClicks && status.tipClicks.report === 1 && typeof status.tipClicks.card === 'number' && typeof status.tipClicks.footer === 'number', JSON.stringify(status.tipClicks));
+  check('/api/status reports a total for every place a coffee link sits', status.tipClicks && status.tipClicks.report === 1 && ['card', 'footer', 'whatsnew'].every(k => typeof status.tipClicks[k] === 'number'), JSON.stringify(status.tipClicks));
 
   // No Durable Object bound (a KV-only deploy, or a local run): the click
   // is simply not counted, and nothing anywhere fails.

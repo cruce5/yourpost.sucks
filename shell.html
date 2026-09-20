@@ -207,6 +207,32 @@ header{border-bottom:1px solid var(--rule);padding-bottom:20px;margin-bottom:28p
   flex-shrink:0;
 }
 .theme-toggle:hover{color:var(--ink-2);border-color:var(--rule-2)}
+.head-actions{display:flex;align-items:center;gap:8px;flex-shrink:0}
+/* Both header buttons are chrome, not the job. They were competing with
+   the masthead at full button size, so they sit at 13px with a quiet
+   border and keep a 44px touch target through padding. */
+.head-link{
+  font-family:var(--mono);font-size:13px;letter-spacing:.06em;text-transform:uppercase;
+  background:transparent;color:var(--ink-3);border:1px solid var(--rule);
+  border-radius:4px;padding:6px 10px;min-height:44px;cursor:pointer;flex-shrink:0;
+  transition:background .12s,border-color .12s,color .12s;
+}
+.head-link:hover{color:var(--ink-2);border-color:var(--rule-2)}
+.head-link.flagged{color:var(--warm);border-color:var(--warm)}
+.head-link .hl-short{display:none}
+
+/* The meaner bar: the Cape Index spectrum rule, in one temper. Six pixels,
+   fully rounded, wiped on from the left so it reads as something that just
+   happened rather than something that was always there. */
+.meaner-bar{
+  height:6px;border-radius:999px;margin:14px 0 2px;
+  background:linear-gradient(90deg,#4a0d12 0%,#8e1d24 22%,#c62f2a 48%,#f2543c 74%,#ff8a5c 100%);
+  transform:scaleX(0);transform-origin:left center;
+  transition:transform .45s cubic-bezier(.2,.7,.2,1);
+}
+.meaner-bar[hidden]{display:none}
+.meaner-bar.on{transform:scaleX(1)}
+@media (prefers-reduced-motion: reduce){.meaner-bar{transition:none}}
 .tagline{
   font-family:var(--mono);
   font-size:14px;
@@ -893,6 +919,43 @@ ol.changes .crewrite .lbl{
 .toast.on{opacity:1;transform:translateX(-50%) translateY(0)}
 .toast.error{border-left:4px solid var(--caution)}
 
+/* What's new: a plain-language changelog, opened from the header and, once
+   per set of changes, by itself for someone who has been here before. */
+.whatsnew{
+  width:min(560px, calc(100vw - 32px));max-height:min(80vh, 720px);
+  background:var(--surface);color:var(--ink-2);
+  border:1px solid var(--rule-2);border-radius:8px;padding:0;
+  box-shadow:0 18px 50px rgba(0,0,0,.45);
+  overflow:hidden;
+}
+/* Flex only while open: display on a closed <dialog> would show it. */
+.whatsnew[open]{display:flex;flex-direction:column}
+.whatsnew::backdrop{background:rgba(0,0,0,.6)}
+.whatsnew .wn-head{
+  display:flex;align-items:center;justify-content:space-between;gap:12px;
+  padding:18px 20px 10px;
+}
+.wn-title{margin:0;font-size:20px;font-weight:650;color:var(--ink);letter-spacing:-0.01em}
+.wn-x{
+  background:transparent;border:0;color:var(--ink-3);font-size:26px;line-height:1;
+  cursor:pointer;padding:0 6px;min-height:44px;min-width:44px;
+}
+.wn-x:hover{color:var(--ink)}
+.wn-intro{margin:0;padding:0 20px 4px;font-size:15px;color:var(--ink-3);line-height:1.55}
+.wn-list{list-style:none;margin:0;padding:12px 20px 0;overflow-y:auto;flex:1 1 auto;min-height:0}
+.wn-list li{
+  font-size:15px;line-height:1.6;color:var(--ink-2);
+  padding:0 0 14px 14px;position:relative;
+}
+.wn-list li::before{content:"";position:absolute;left:0;top:9px;width:5px;height:5px;border-radius:50%;background:var(--cool)}
+.wn-list b{color:var(--ink);font-weight:600;display:block}
+.wn-tip{
+  margin:0;padding:12px 20px;border-top:1px solid var(--hair);
+  font-size:14px;color:var(--ink-3);line-height:1.55;
+}
+.wn-tip a{color:var(--cool-text)}
+.wn-actions{display:flex;justify-content:flex-end;padding:0 20px 18px;flex:none}
+
 /* The thank-you card: after the 5th AI-written report, once more around the
    25th if it was waved off, never again after the coffee link is clicked.
    It never blocks the page and never takes focus. */
@@ -996,7 +1059,14 @@ ul.cg-list li::before{content:"\2022";position:absolute;left:0;color:var(--ink-4
   .masthead-row{flex-wrap:nowrap}
   .brand{font-size:21px}
   .brand-flag{margin-right:2px}
+  @media (max-width:419px){.brand{font-size:19px}}
   .theme-toggle{font-size:12px;padding:5px 9px;letter-spacing:.04em}
+  .head-link{font-size:12px;padding:5px 9px;letter-spacing:.04em}
+  .head-actions{gap:6px}
+  /* The masthead stays one row at phone width (see above), and two full
+     labels beside the logo do not fit in 343px. The link shortens. */
+  .head-link .hl-long{display:none}
+  .head-link .hl-short{display:inline}
   .tagline{margin-top:6px;font-size:14px}
   .intro{margin-top:12px;font-size:15px}
   .tabs{margin-top:14px}
@@ -1049,8 +1119,15 @@ ul.cg-list li::before{content:"\2022";position:absolute;left:0;color:var(--ink-4
       <button class="brand-flag" id="pirateflag" type="button" aria-pressed="false" aria-label="Pirate mode">🏴‍☠️</button>
       <h1 class="brand">yourpost<span>.sucks</span></h1>
     </div>
-    <button class="theme-toggle" id="themetoggle" type="button">Light mode</button>
+    <div class="head-actions">
+      <button class="head-link" id="whatsnewbtn" type="button" aria-label="What's new"><span class="hl-long">What's new</span><span class="hl-short" aria-hidden="true">New</span></button>
+      <button class="theme-toggle" id="themetoggle" type="button">Light mode</button>
+    </div>
   </div>
+  <!-- Meaner mode says so on the page, not just in the checkbox: the
+       register of the report changed, and the reader should be able to see
+       that at a glance from the top of the page. -->
+  <div class="meaner-bar" id="meanerbar" hidden aria-hidden="true"></div>
   <p class="tagline">Post quality assurance &middot; automated &middot; unsympathetic</p>
   <p class="intro">Paste a LinkedIn post. Get a suckiness score, the reasons, and a rewrite if it needs one. Free, no sign-up, never stored.</p>
 </header>
@@ -1184,6 +1261,40 @@ ul.cg-list li::before{content:"\2022";position:absolute;left:0;color:var(--ink-4
 
 </div>
 <div class="toast" id="toast" role="status" aria-live="polite"></div>
+<!-- What changed, in plain words. A real <dialog>, so Escape closes it,
+     focus is trapped while it is open and the page behind it is inert. -->
+<dialog class="whatsnew" id="whatsnew" aria-labelledby="wn-title">
+  <div class="wn-head">
+    <h2 class="wn-title" id="wn-title">What's new</h2>
+    <button class="wn-x" id="wn-close" type="button" aria-label="Close">&times;</button>
+  </div>
+  <p class="wn-intro">All of it came from things people said in the comments.</p>
+  <ul class="wn-list">
+    <li>
+      <b>You can ask for a meaner write-up.</b>
+      Tick <i>Be meaner about it</i> under the box. The score does not change and the checks do not change, only how bluntly the report talks about the writing. A red bar across the top tells you it is on.
+    </li>
+    <li>
+      <b>Pasting a link no longer gets you a nonsense score.</b>
+      Paste the words of the post, not its web address. If you paste a link, the page now says so instead of scoring the link.
+    </li>
+    <li>
+      <b>The rewrite keeps your voice.</b>
+      It used to re-say your whole post in smoother language. Now it changes only the parts a check flagged and leaves your sentences alone.
+    </li>
+    <li>
+      <b>An acronym in a citation is not shouting.</b>
+      Something like <i>SANER 2025</i> was being scored as if you were yelling. It is not any more.
+    </li>
+    <li>
+      <b>Small print.</b>
+      The report explains why a clean post scores 0.2 and not 0.0, and the site finally has its own icon.
+    </li>
+  </ul>
+  <p class="wn-tip">Every AI-written report costs me about a penny, and the site is free with no sign-up and no ads. If it has made one of your posts less bad, <a data-tip="whatsnew" href="https://buymeacoffee.com/billyost" target="_blank" rel="noopener noreferrer">buy me a coffee</a>.</p>
+  <div class="wn-actions"><button class="btn-ghost" id="wn-done" type="button">Got it</button></div>
+</dialog>
+
 <aside class="tipask" id="tipask" aria-labelledby="tipask-h" hidden>
   <p class="tipask-h" id="tipask-h"></p>
   <p class="tipask-p" id="tipask-p"></p>
@@ -2746,10 +2857,65 @@ ul.cg-list li::before{content:"\2022";position:absolute;left:0;color:var(--ink-4
      remembered across visits in this browser. Storage can be unavailable or
      blocked; then it simply starts off, which is the right default. */
   var MEANER_KEY = 'yps_meaner_v1';
+  function paintMeaner(){
+    var on = $('#meaner').checked, bar = $('#meanerbar');
+    if (on){
+      bar.hidden = false;
+      // A frame between display and the class, or the wipe never plays.
+      requestAnimationFrame(function(){ bar.classList.add('on'); });
+    } else {
+      bar.classList.remove('on');
+      setTimeout(function(){ if (!$('#meaner').checked) bar.hidden = true; }, 460);
+    }
+  }
   try { if (localStorage.getItem(MEANER_KEY) === '1') $('#meaner').checked = true; } catch (e) {}
+  paintMeaner();
   $('#meaner').addEventListener('change', function(){
     try { localStorage.setItem(MEANER_KEY, this.checked ? '1' : '0'); } catch (e) {}
+    paintMeaner();
   });
+
+  /* ---------------- what's new ----------------
+     Opened from the header, and once by itself for someone who has been
+     here before: a first-time visitor is told nothing about what changed,
+     because everything is new to them and a changelog is a worse welcome
+     than the tool itself. "Been here before" is read off the keys this
+     site has always written (theme, receipts, the tip counter, the
+     register), so it works for people who visited long before this
+     existed. The seen marker is the version: bump WHATSNEW_VERSION when
+     the list above changes and it shows once more, to everyone. */
+  var WHATSNEW_VERSION = '2026-09-20';
+  var WHATSNEW_KEY = 'yps_whatsnew_seen';
+  var VISITED_KEYS = ['yps_theme', 'yps_receipts_open', 'yps_tipask_v1', 'yps_meaner_v1', 'yps_outrun_best_v1'];
+  var wn = $('#whatsnew');
+  function wnSeen(){
+    try { localStorage.setItem(WHATSNEW_KEY, WHATSNEW_VERSION); } catch (e) {}
+    $('#whatsnewbtn').classList.remove('flagged');
+  }
+  function openWhatsNew(){
+    // showModal throws if it is already open, and is missing entirely on a
+    // browser without <dialog>; there the link falls back to nothing rather
+    // than to a broken page, and the header keeps working.
+    try { if (!wn.open && wn.showModal) wn.showModal(); } catch (e) {}
+    wnSeen();
+  }
+  function closeWhatsNew(){ try { if (wn.open) wn.close(); } catch (e) {} }
+  $('#whatsnewbtn').addEventListener('click', openWhatsNew);
+  $('#wn-close').addEventListener('click', closeWhatsNew);
+  $('#wn-done').addEventListener('click', closeWhatsNew);
+  // A click on the backdrop is a click on the dialog element itself.
+  wn.addEventListener('click', function(e){ if (e.target === wn) closeWhatsNew(); });
+  wn.addEventListener('close', wnSeen);
+  (function(){
+    var seen = null, returning = false;
+    try {
+      seen = localStorage.getItem(WHATSNEW_KEY);
+      for (var i = 0; i < VISITED_KEYS.length; i++) if (localStorage.getItem(VISITED_KEYS[i]) !== null) { returning = true; break; }
+    } catch (e) { return; } // no storage: never nag, never flag
+    if (seen === WHATSNEW_VERSION) return;
+    if (returning) setTimeout(openWhatsNew, 700);
+    else $('#whatsnewbtn').classList.add('flagged');
+  })();
 
   function loadViaImage(file){
     return new Promise(function(resolve, reject){
@@ -2987,7 +3153,9 @@ ul.cg-list li::before{content:"\2022";position:absolute;left:0;color:var(--ink-4
   // Test seam: client.test.mjs round-trips the permalink codec, checks the
   // band thresholds, and shortens the analyze killer through here. Nothing
   // on the page reads it except run(), which reads killerMs.
-  window.YPSClient = { encodePost: encodePost, decodePost: decodePost, bandFor: bandFor, killerMs: 32000 };
+  // whatsnewVersion is here so the browser test can mark the current notes
+  // as seen without hardcoding the date in two places.
+  window.YPSClient = { encodePost: encodePost, decodePost: decodePost, bandFor: bandFor, killerMs: 32000, whatsnewVersion: WHATSNEW_VERSION };
 
   /* Two tabs, no more, so switching is just "select the other one" rather
      than a general roving-tabindex implementation. Standard tab ARIA:
