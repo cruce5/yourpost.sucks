@@ -7,6 +7,12 @@
 <meta name="description" content="Paste a LinkedIn post. Receive an unsympathetic report.">
 <meta name="author" content="Bill Yost">
 <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>%F0%9F%92%80</text></svg>">
+<!-- Real files behind the data: URI above. Browsers ask for /favicon.ico
+     whatever a page declares, and iOS wants a PNG when the site is saved to
+     a home screen; without these the site answered both with a 404 (2.7k of
+     them in a week). Same skull, rendered onto the dark plane. -->
+<link rel="icon" href="/favicon.ico" sizes="32x32">
+<link rel="apple-touch-icon" href="/apple-touch-icon.png">
 <meta name="theme-color" content="#0d0d0d">
 <!-- The workers.dev URL still serves this same page (nothing stops it from
      being crawled or shared directly), so this points search engines at the
@@ -1162,7 +1168,7 @@ ul.cg-list li::before{content:"\2022";position:absolute;left:0;color:var(--ink-4
 </section>
 
 <footer>
-  <div class="credit">Built by <a href="https://www.linkedin.com/in/billyost/" target="_blank" rel="noopener noreferrer"><span aria-hidden="true">🏴‍☠️ </span>Bill Yost</a>, who is aware of the irony. <a class="tip" href="https://buymeacoffee.com/billyost" target="_blank" rel="noopener noreferrer">Buy him a coffee.</a></div>
+  <div class="credit">Built by <a href="https://www.linkedin.com/in/billyost/" target="_blank" rel="noopener noreferrer"><span aria-hidden="true">🏴‍☠️ </span>Bill Yost</a>, who is aware of the irony. <a class="tip" data-tip="footer" href="https://buymeacoffee.com/billyost" target="_blank" rel="noopener noreferrer">Buy him a coffee.</a></div>
   <div><span id="rulecount"></span> fixed checks decide the score. AI never touches that number. <a href="https://github.com/cruce5/yourpost.sucks" target="_blank" rel="noopener noreferrer">Read the code.</a></div>
   <div>It measures the writing, not the reach.</div>
   <div>More things nobody asked for: <a href="https://billyost.com/" target="_blank" rel="noopener noreferrer">billyost.com</a></div>
@@ -1174,7 +1180,7 @@ ul.cg-list li::before{content:"\2022";position:absolute;left:0;color:var(--ink-4
   <p class="tipask-h" id="tipask-h"></p>
   <p class="tipask-p" id="tipask-p"></p>
   <div class="tipask-actions">
-    <a class="btn-primary" id="tipask-go" href="https://buymeacoffee.com/billyost" target="_blank" rel="noopener noreferrer">Buy me a coffee</a>
+    <a class="btn-primary" id="tipask-go" data-tip="card" href="https://buymeacoffee.com/billyost" target="_blank" rel="noopener noreferrer">Buy me a coffee</a>
     <button class="btn-ghost" id="tipask-no" type="button">Maybe later</button>
   </div>
 </aside>
@@ -2227,8 +2233,26 @@ ul.cg-list li::before{content:"\2022";position:absolute;left:0;color:var(--ink-4
   })();
 
   function tipLine(cost){
-    return '<p class="tipline">' + cost + ' If it was worth more than that, <a href="https://buymeacoffee.com/billyost" target="_blank" rel="noopener noreferrer">buy me a coffee</a>.</p>';
+    return '<p class="tipline">' + cost + ' If it was worth more than that, <a data-tip="report" href="https://buymeacoffee.com/billyost" target="_blank" rel="noopener noreferrer">buy me a coffee</a>.</p>';
   }
+
+  /* Which of the three coffee links gets clicked, and nothing else: no
+     identifier, no post, no third-party script. One beacon to this site's
+     own Worker, fire and forget, so a blocked or failed send can never
+     delay or swallow the click itself. Delegated, because the report and
+     the card are written into the page after this runs. */
+  document.addEventListener('click', function(e){
+    var a = e.target && e.target.closest ? e.target.closest('a[data-tip]') : null;
+    if (!a) return;
+    var body = JSON.stringify({ where: a.getAttribute('data-tip') });
+    try {
+      if (navigator.sendBeacon && window.Blob) {
+        navigator.sendBeacon('/api/tip', new Blob([body], { type: 'application/json' }));
+      } else {
+        fetch('/api/tip', { method: 'POST', headers: { 'content-type': 'application/json' }, body: body, keepalive: true }).catch(function(){});
+      }
+    } catch (err) {}
+  });
 
   function renderReword(payload, out, r){
     if (payload.mode === 'declined'){

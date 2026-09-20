@@ -1470,6 +1470,60 @@ console.log('\n=== cache key: version, hasMedia, styled rounding ===');
   check('  ...styled 0 is its own entry, and a negative count clamps to it', zero.mode === 'llm' && negative.mode === 'cache' && llmCalls === 2, zero.mode + ', ' + negative.mode);
 }
 
+/* ------------------------------------------------------------------ *
+ * /api/tip: which coffee link was clicked, and nothing else
+ * ------------------------------------------------------------------ */
+{
+  const tip = (where, ip = '9.9.9.9', extra = {}) => new Request('https://yourpost.sucks/api/tip', {
+    method: 'POST',
+    headers: { 'content-type': 'application/json', 'cf-connecting-ip': ip, 'sec-fetch-site': 'same-origin', ...(extra.headers || {}) },
+    body: 'body' in extra ? extra.body : JSON.stringify({ where })
+  });
+  const env = baseEnv(); env.COUNTERS = mockCounters();
+  const total = where => env.COUNTERS._count('t:' + where, 't:' + where);
+  // The handler answers first and counts in the background, exactly as it
+  // should, so the test has to wait for the background work the way the
+  // platform does before reading a total.
+  const pending = [];
+  const tipCtx = { waitUntil: p => { pending.push(p); return p; } };
+  const click = async req => { const res = await worker.fetch(req, env, tipCtx); await Promise.all(pending.splice(0)); return res; };
+
+  const r = await click(tip('report'));
+  check('/api/tip: a click is accepted with no body to parse', r.status === 204, String(r.status));
+  check('  ...and counted against the place that was clicked', total('report') === 1 && total('card') === 0 && total('footer') === 0);
+  await click(tip('card'));
+  await click(tip('footer'));
+  check('  ...each place keeps its own total', total('card') === 1 && total('footer') === 1);
+  check('  ...and a per-day total is kept beside it', env.COUNTERS._count('t:report:' + new Date().toISOString().slice(0, 10), 't:report:' + new Date().toISOString().slice(0, 10)) === 1);
+
+  const bad = await click(tip('../../etc'));
+  check('/api/tip: an unknown place is refused, not counted', bad.status === 400 && total('report') === 1, String(bad.status));
+  const notJson = await click(tip('report', '9.9.9.9', { body: 'where=report', headers: { 'content-type': 'text/plain' } }));
+  check('/api/tip: a non-JSON body is refused', notJson.status === 400, String(notJson.status));
+  const getIt = await click(new Request('https://yourpost.sucks/api/tip'));
+  check('/api/tip: GET is not a click', getIt.status === 405, String(getIt.status));
+  const crossOrigin = await click(tip('report', '9.9.9.9', { headers: { 'sec-fetch-site': 'cross-site', origin: 'https://example.com' } }));
+  check('/api/tip: another site cannot inflate the count', crossOrigin.status === 403 && total('report') === 1, String(crossOrigin.status));
+
+  // Someone in a loop: the clicks stop counting, and the endpoint still
+  // answers, because the reader's link must open either way.
+  let last;
+  for (let i = 0; i < 40; i++) last = await click(tip('card', '7.7.7.7'));
+  check('/api/tip: a flood is capped per IP per hour', total('card') <= 11 && last.status === 204, 'card=' + total('card'));
+  const other = await click(tip('card', '8.8.8.8'));
+  check('  ...and one flooder does not block anybody else', other.status === 204 && total('card') <= 12);
+
+  const status = await (await worker.fetch(new Request('https://yourpost.sucks/api/status'), env, ctx)).json();
+  check('/api/status reports the three totals', status.tipClicks && status.tipClicks.report === 1 && typeof status.tipClicks.card === 'number' && typeof status.tipClicks.footer === 'number', JSON.stringify(status.tipClicks));
+
+  // No Durable Object bound (a KV-only deploy, or a local run): the click
+  // is simply not counted, and nothing anywhere fails.
+  const noDO = baseEnv();
+  const quiet = await worker.fetch(tip('report'), noDO, ctx);
+  const quietStatus = await (await worker.fetch(new Request('https://yourpost.sucks/api/status'), noDO, ctx)).json();
+  check('/api/tip: no counter bound means no count and no error', quiet.status === 204 && quietStatus.tipClicks === null, String(quiet.status));
+}
+
 const failed = results.filter(r => !r.pass);
 console.log(`\n${results.length - failed.length}/${results.length} passed`);
 if (failed.length) { console.log('FAILED:', failed.map(f => f.name).join(', ')); process.exit(1); }

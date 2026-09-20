@@ -579,6 +579,11 @@ check('error is above the kept rewrite, not replacing it', await api.evaluate(()
 
 // 8b. the thank-you card (the /api/analyze route above still answers mode llm)
 {
+  const tipHits = [];
+  await api.route('**/api/tip', async route => {
+    tipHits.push(route.request().postData());
+    await route.fulfill({ status: 204, body: '' });
+  });
   const TA = 'yps_tipask_v1';
   const setTA = v => api.evaluate(([k, v]) => localStorage.setItem(k, JSON.stringify(v)), [TA, v]);
   const getTA = () => api.evaluate(k => JSON.parse(localStorage.getItem(k)), TA);
@@ -612,6 +617,12 @@ check('error is above the kept rewrite, not replacing it', await api.evaluate(()
   const [popup] = await Promise.all([api.context().waitForEvent('page'), api.click('#tipask-go')]);
   await popup.close();
   check('thank-you card: clicking the coffee link retires it for good', (await getTA()).done === true);
+  await api.waitForTimeout(500);
+  check('tip click: the card click is reported as "card", with nothing else in it', tipHits.some(b => b === '{"where":"card"}') && tipHits.every(b => !/post|text|id/i.test(b || '')), JSON.stringify(tipHits));
+  check('tip click: all three coffee links are labelled', await api.evaluate(() => {
+    const seen = Array.from(document.querySelectorAll('a[data-tip]')).map(a => a.getAttribute('data-tip'));
+    return seen.includes('footer') && seen.includes('card') && document.querySelectorAll('a[href*="buymeacoffee"]:not([data-tip])').length === 0;
+  }));
   await setTA({ n: 49, shown: 1, done: true });
   await api.goto(httpUrl);
   await runSpec();

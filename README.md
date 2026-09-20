@@ -193,6 +193,17 @@ only gates the expensive path.
 The budget is charged *before* the call, so a crash mid-flight cannot
 double-spend. Check it any time: `GET /api/status`.
 
+**Which coffee link earns its keep.** There are three: a line under an
+AI-written report, the card that appears at the 5th AI report, and the one in
+the footer. `POST /api/tip` takes exactly one field, the name of the place
+that was clicked, and adds one to two counters in the same Durable Object (a
+lifetime total per place, and a per-UTC-day total kept 40 days). No
+identifier, no post text, no referrer, no third-party script; the beacon is
+same-origin and fire-and-forget, so a blocked or failed send can never keep a
+reader's link from opening. Counted clicks are capped at 10 per IP per hour,
+which only blunts someone curling the endpoint in a loop. The totals come
+back in `GET /api/status` as `tipClicks`.
+
 **The budget counter and the per-IP rate limiter live in a Durable Object** (the `Counters` class in `src/worker.js`, bound as `COUNTERS`). A Durable Object handles one request at a time, so "is there room, and if so charge it" is a single atomic step: a burst of simultaneous requests cannot all read the same stale count and all get through. If the binding is missing (a KV-only dev setup) the Worker falls back to KV counters, which are eventually consistent and can leak calls under a burst; do not run production that way. Either way, put a hard spend limit on the API key in the Anthropic Console as well. That cap holds even if this code is wrong.
 
 **The reword is a separate, explicitly opt-in third call**, priced and charged

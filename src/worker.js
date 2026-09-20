@@ -269,6 +269,74 @@ function rateKey(ip) {
   return full.slice(0, 4).map(h => h.padStart(4, '0')).join(':') + '::/64';
 }
 
+/* ------------------------------------------------------------------ *
+ * tip clicks
+ *
+ * Which of the three coffee links people actually click, and nothing else.
+ * No identifier, no post text, no referrer, no third party: three running
+ * totals and a per-day total, in the same Durable Object the budget uses.
+ * A click is worth knowing because the copy is guesswork otherwise, and it
+ * is the only number the money question needs.
+ *
+ * The count is a convenience, never a gate. Every failure here is swallowed:
+ * a missing counter binding, an unreachable object, a hostile body. Nobody's
+ * coffee link should fail to open because a statistic could not be written.
+ * ------------------------------------------------------------------ */
+const TIP_PLACES = ['report', 'card', 'footer'];
+/** Counted clicks per IP per hour. A click is one deliberate act, so this
+ *  sits well above honest use and only blunts someone curling the endpoint
+ *  in a loop to make a line look better than it is. */
+const TIP_CLICKS_PER_HOUR = 10;
+
+async function countTipClick(env, ip, where) {
+  const ns = counters(env);
+  if (!ns || TIP_PLACES.indexOf(where) < 0) return;
+  const guard = `tc:${rateKey(ip)}:${hourBucket()}`;
+  try {
+    const r = await counterCall(ns, guard, '/hit', { key: guard, limit: TIP_CLICKS_PER_HOUR, ttlSeconds: 3900 });
+    if (r.ok !== true) return;
+    // Two counters: one that never expires (the lifetime total per place)
+    // and one per UTC day (kept 40 days, enough to see a week over week).
+    await counterCall(ns, `t:${where}`, '/hit', { key: `t:${where}`, ttlSeconds: 315360000 });
+    await counterCall(ns, `t:${where}:${today()}`, '/hit', { key: `t:${where}:${today()}`, ttlSeconds: 3456000 });
+  } catch (e) {
+    console.warn('tip click: not counted', e && e.message);
+  }
+}
+
+/** The lifetime totals, or null when the counter is unreachable. Read-only:
+ *  a zero-cost charge is how this object reports a count without writing. */
+async function readTipTotals(env) {
+  const ns = counters(env);
+  if (!ns) return null;
+  try {
+    const out = {};
+    for (const where of TIP_PLACES) {
+      const r = await counterCall(ns, `t:${where}`, '/charge', { key: `t:${where}`, cost: 0, ttlSeconds: 315360000 });
+      out[where] = Number(r.spent) || 0;
+    }
+    return out;
+  } catch (e) {
+    console.warn('tip totals: unavailable', e && e.message);
+    return null;
+  }
+}
+
+async function handleTip(request, env, ctx) {
+  const rejected = rejectedByHeaders(request);
+  if (rejected) return rejected;
+  const body = await readJsonObject(request);
+  if (body instanceof Response) return body; // over MAX_BODY_BYTES with no content-length to say so
+  if (!body) return json({ error: 'bad_request' }, 400);
+  const where = typeof body.where === 'string' ? body.where : '';
+  if (TIP_PLACES.indexOf(where) < 0) return json({ error: 'bad_request' }, 400);
+  // The page has already opened the coffee link by now; the answer is not
+  // worth waiting for, and sendBeacon is not listening to it anyway.
+  const work = countTipClick(env, clientIP(request), where);
+  if (ctx && typeof ctx.waitUntil === 'function') ctx.waitUntil(work); else await work;
+  return new Response(null, { status: 204 });
+}
+
 /** Per-IP hourly cap. Fairness only: the global budget below is the money
  *  ceiling, so a failure here fails OPEN rather than turning one bad KV
  *  read into a site-wide outage of the model path. */
@@ -1612,6 +1680,10 @@ async function handleReword(request, env, ctx) {
 
 async function handleStatus(env) {
   const capMicros = budgetCapMicros(env);
+  // Which coffee line earns its keep. Public like the rest of this endpoint:
+  // it is three counts of clicks on a public link, about nobody in
+  // particular, and the owner reads it with curl rather than a dashboard.
+  const tips = await readTipTotals(env);
   // null when the counter is unreachable: the page still gets its site key
   // and rate limit, and the two budget figures below read as unknown rather
   // than as zero (which would look like a fresh, fully-funded day).
@@ -1647,7 +1719,8 @@ async function handleStatus(env) {
       // the page there was room for an analysis the breaker was about to
       // refuse.
       budgetRemaining: spent === null ? null : spent + callCostMicros(true, true) <= capMicros
-    }
+    },
+    tipClicks: tips
     // Cacheable at the edge for a minute: one status fetch per page load
     // from a viral spike is a lot of counter reads for a number that is
     // allowed to be sixty seconds stale.
@@ -1685,6 +1758,10 @@ export default {
     if (url.pathname === '/api/reword') {
       if (request.method !== 'POST') return json({ error: 'method' }, 405);
       return handleReword(request, env, ctx);
+    }
+    if (url.pathname === '/api/tip') {
+      if (request.method !== 'POST') return json({ error: 'method' }, 405);
+      return handleTip(request, env, ctx);
     }
     if (url.pathname === '/api/status') {
       if (request.method !== 'GET') return json({ error: 'method' }, 405);
