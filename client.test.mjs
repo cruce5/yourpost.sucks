@@ -669,43 +669,48 @@ check('error is above the kept rewrite, not replacing it', await api.evaluate(()
   await api.waitForTimeout(300);
   check('  ...and Got it closes it', await api.evaluate(() => !document.getElementById('whatsnew').open));
 
-  // The red bar tracks the checkbox.
-  check('meaner bar: hidden while the register is normal', await api.evaluate(() => document.getElementById('meanerbar').hidden));
-  await api.click('#meaner');
-  await api.waitForTimeout(600);
-  check('meaner bar: shown, wiped across, in red', await api.evaluate(() => {
-    const b = document.getElementById('meanerbar'), bg = getComputedStyle(b.querySelector('i'), '::before').backgroundImage;
-    return !b.hidden && b.classList.contains('on') && /gradient/.test(bg) && /242, 84, 60/.test(bg) && b.getBoundingClientRect().width > 200;
-  }), await api.evaluate(() => getComputedStyle(document.querySelector('#meanerbar i'), '::before').backgroundImage.slice(0, 80)));
-  check('meaner bar: pinned to the top of the window, full width, out of the way of clicks', await api.evaluate(() => {
-    const b = document.getElementById('meanerbar'), cs = getComputedStyle(b), r = b.getBoundingClientRect();
+  // The reading bar: always there, blue ordinarily, red in meaner mode.
+  const barState = () => api.evaluate(() => {
+    const b = document.getElementById('readbar'), bg = getComputedStyle(b.querySelector('i'), '::before').backgroundImage;
+    return { on: b.classList.contains('on'), mean: b.classList.contains('mean'), blue: /57, 135, 229/.test(bg), red: /242, 84, 60/.test(bg),
+      fill: b.querySelector('i').getBoundingClientRect().width / window.innerWidth, width: b.getBoundingClientRect().width };
+  });
+  await api.waitForTimeout(700);
+  let bar = await barState();
+  check('reading bar: on in the ordinary register, in blue', bar.on && !bar.mean && bar.blue && !bar.red && bar.width > 200, JSON.stringify(bar));
+  check('reading bar: only its faint track while there is nothing to scroll', bar.fill < 0.02, bar.fill.toFixed(2));
+  check('reading bar: pinned to the top of the window, full width, out of the way of clicks', await api.evaluate(() => {
+    const b = document.getElementById('readbar'), cs = getComputedStyle(b), r = b.getBoundingClientRect();
     return cs.position === 'fixed' && Math.round(r.top) === 0 && Math.round(r.width) === window.innerWidth && Math.round(r.height) === 6 && cs.pointerEvents === 'none';
   }));
-  check('meaner bar: full while there is nothing to scroll', await api.evaluate(() => {
-    const b = document.getElementById('meanerbar');
-    return Math.round(b.querySelector('i').getBoundingClientRect().width) === Math.round(b.getBoundingClientRect().width);
-  }));
+  await api.click('#meaner');
+  await api.waitForTimeout(700);
+  bar = await barState();
+  check('reading bar: meaner mode wipes it back on in red', bar.on && bar.mean && bar.red && !bar.blue, JSON.stringify(bar));
+  check('  ...and shows it full, so the switch is never answered with an empty strip', bar.fill > 0.98, bar.fill.toFixed(2));
   // With a report on the page there is something to read, and the fill follows the reader down it.
   await api.click('[data-spec="0"]');
   await api.waitForSelector('#report:not([hidden])', { timeout: 20000 });
   // The page scrolls itself to a new report; measure after that has landed.
   await api.waitForTimeout(1500);
-  const fillAt = async y => { await api.evaluate(v => window.scrollTo(0, v), y); await api.waitForTimeout(350); return api.evaluate(() => document.querySelector('#meanerbar i').getBoundingClientRect().width / window.innerWidth); };
+  const fillAt = async y => { await api.evaluate(v => window.scrollTo(0, v), y); await api.waitForTimeout(350); return api.evaluate(() => document.querySelector('#readbar i').getBoundingClientRect().width / window.innerWidth); };
   const atTop = await fillAt(0), midway = await fillAt(await api.evaluate(() => (document.documentElement.scrollHeight - innerHeight) / 2)), atEnd = await fillAt(await api.evaluate(() => document.documentElement.scrollHeight));
-  check('meaner bar: the fill is reading progress, empty at the top and full at the bottom', atTop < 0.03 && midway > 0.4 && midway < 0.6 && atEnd > 0.97, [atTop, midway, atEnd].map(n => n.toFixed(2)).join(' / '));
-  check('  ...and it stays in view while scrolled', await api.evaluate(() => Math.round(document.getElementById('meanerbar').getBoundingClientRect().top) === 0));
-  check('  ...over a faint track, so the mode still shows at the top of the page', await api.evaluate(() => {
-    const cs = getComputedStyle(document.getElementById('meanerbar'), '::before');
+  check('reading bar: the fill is reading progress, empty at the top and full at the bottom', atTop < 0.03 && midway > 0.4 && midway < 0.6 && atEnd > 0.97, [atTop, midway, atEnd].map(n => n.toFixed(2)).join(' / '));
+  check('  ...and it stays in view while scrolled', await api.evaluate(() => Math.round(document.getElementById('readbar').getBoundingClientRect().top) === 0));
+  check('  ...over a faint track in the same colours', await api.evaluate(() => {
+    const cs = getComputedStyle(document.getElementById('readbar'), '::before');
     return /gradient/.test(cs.backgroundImage) && Number(cs.opacity) > 0.15 && Number(cs.opacity) < 0.5;
   }));
   await api.evaluate(() => window.scrollTo(0, 0));
-  check('  ...and it is decoration, hidden from screen readers', await api.getAttribute('#meanerbar', 'aria-hidden') === 'true');
+  check('  ...and it is decoration, hidden from screen readers', await api.getAttribute('#readbar', 'aria-hidden') === 'true');
   await api.goto(httpUrl);
-  await api.waitForTimeout(400);
-  check('  ...and it comes back on the next visit with the setting', await api.evaluate(() => !document.getElementById('meanerbar').hidden && document.getElementById('meaner').checked));
+  await api.waitForTimeout(700);
+  bar = await barState();
+  check('reading bar: red again on the next visit, with the setting', bar.on && bar.mean && bar.red && await api.evaluate(() => document.getElementById('meaner').checked));
   await api.click('#meaner');
   await api.waitForTimeout(700);
-  check('  ...and goes away when the setting does', await api.evaluate(() => document.getElementById('meanerbar').hidden));
+  bar = await barState();
+  check('  ...and back to blue when the setting goes', bar.on && !bar.mean && bar.blue && !bar.red, JSON.stringify(bar));
   check('header: both header buttons keep a 44px target', await api.evaluate(() => ['whatsnewbtn', 'themetoggle'].every(id => document.getElementById(id).getBoundingClientRect().height >= 44)));
   // Leave it marked seen. The blocks below click through the page, and a
   // modal opening over them on load is exactly what it should do to a
