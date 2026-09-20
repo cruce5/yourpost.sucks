@@ -473,7 +473,27 @@
     var allCaps = [];
     var capRun = strippedProse.match(/\b[A-Z]{2,}(?:[ ,]+[A-Z]{2,})+\b/g) || [];
     for (var ac = 0; ac < capRun.length; ac++) allCaps.push(capRun[ac]);
-    var capLong = (strippedProse.match(/\b[A-Z]{5,}\b/g) || []).filter(function (w) { return !ACRONYMS.test(w); });
+    /* A long caps word is usually emphasis, but in a citation it is a name:
+       a conference, a body, a standard ("the SANER 2025 study", "an ASHRAE
+       standard", "the NHANES cohort"). Those were being scored as shouting,
+       which is the loudest thing the cringe category has, on a post whose
+       only sin was citing its source properly.
+       Two conditions, both required, so the exemption cannot swallow real
+       shouting: the word sits near citation furniture (a year, n=, et al, a
+       URL, a word like study or dataset), AND it is not one of the words
+       people actually shout. "The 2024 study was INSANE" still fires. */
+    var CITE_NEAR = /(\b(?:19|20)\d{2}\b|\bn\s*=\s*\d|\bet al\b|\b(?:stud(?:y|ies)|paper|papers|research|journal|conference|workshop|symposium|proceedings|dataset|corpus|cohort|benchmark|standard|protocol|framework|guidelines?|trial|survey|preprint|arxiv|doi|edition|revision|spec|specification)\b|https?:\/\/)/i;
+    var SHOUTED = /^(NEVER|ALWAYS|EVERY|EVERYONE|EVERYTHING|ANYONE|SOMEONE|NOTHING|PLEASE|STOP|LISTEN|ATTENTION|IMPORTANT|URGENT|BREAKING|ANNOUNCEMENT|HIRING|TODAY|FINALLY|THANK|THANKS|CONGRATS|CONGRATULATIONS|WINNER|LIMITED|MUST|SHOULD|ACTUALLY|LITERALLY|REALLY|SERIOUSLY|ABSOLUTELY|INSANE|CRAZY|AMAZING|INCREDIBLE|UNBELIEVABLE|MASSIVE|HUGE|EXCITED|PROUD|HONORED|HONOURED|HUMBLED|RIGHT|WRONG|TRUTH|FACTS|SHARE|REPOST|COMMENT|FOLLOW|APPLY|READ|WATCH|REMEMBER|UNDERSTAND|WORKING|LEARNING|BUILDING|GROWTH|MINDSET|PEOPLE|LEADERS|LEADERSHIP|BUSINESS|CULTURE|WINNING|WITHOUT|BECAUSE|MYSELF|YOURSELF)$/;
+    var capLong = (strippedProse.match(/\b[A-Z]{5,}\b/g) || []).filter(function (w) {
+      if (ACRONYMS.test(w)) return false;
+      if (SHOUTED.test(w)) return true;
+      // The window never includes the word being judged: a shouted
+      // "WORKSHOP" or "RESEARCH" is a citation word in capitals and would
+      // otherwise have excused itself.
+      var at = strippedProse.indexOf(w);
+      var near = strippedProse.slice(Math.max(0, at - 70), at) + ' ' + strippedProse.slice(at + w.length, at + w.length + 70);
+      return !CITE_NEAR.test(near);
+    });
     for (var al = 0; al < capLong.length; al++) {
       // skip a long caps word already counted inside a multi-word caps run
       var dup = false;

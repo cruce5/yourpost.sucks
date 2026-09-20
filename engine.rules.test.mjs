@@ -307,6 +307,31 @@ section('7. credits vs roasts');
   check('  ...while "the pivot" as a career move still fires', E.analyze('Making the pivot into product management was the best decision. The pivot changed everything for me this year at Vanguard.').roasts.some(r => r.id === 'pivot-lang'));
 }
 
+{
+  // Reader report: a comment citing a paper scored 1.1, and the heaviest
+  // weight was Shouting, for the conference name in the citation.
+  const CITED = 'In this n=6,720 SANER 2025 study, identical resumes were scored lower when the name was a woman\'s. The authors published the prompts, which is the part I keep coming back to.';
+  check('an acronym inside a citation is not shouting', !ids(E.analyze(CITED)).includes('allcaps'), ids(E.analyze(CITED)).join(','));
+  check('  ...and it still counts as a concrete reference', ctxOf(CITED).acronyms.includes('SANER'));
+  for (const s of [
+    'The ASHRAE standard says one thing and the building does another.',
+    'We ran it against the NHANES dataset from 2019 and the effect vanished.',
+    'Our paper is at https://example.org/x: the GENDER benchmark is the interesting half.'
+  ]) check('  ...same for: ' + s.slice(0, 34), !ids(E.analyze(s)).includes('allcaps'), ids(E.analyze(s)).join(','));
+
+  // The exemption must not become a way to shout near a citation.
+  const shoutNearCite = 'I read the 2024 study last night and it was INSANE. Everyone in this industry should be ASHAMED of themselves.';
+  check('a shouted word beside a citation still fires', ids(E.analyze(shoutNearCite)).includes('allcaps'));
+  for (const s of [
+    'This is FANTASTIC news and I am NEVER going back to the old way of working.',
+    'LISTEN to me for one second. This matters more than whatever else is in your feed.',
+    'PLEASE READ THIS before you write another word of your next performance review.',
+    // A citation word shouted is still shouting: it must not excuse itself.
+    'Join the WORKSHOP on Tuesday, it is the one thing that will change how your team plans.',
+    'The RESEARCH is clear and the people ignoring it are the ones running your company.'
+  ]) check('shouting still fires: ' + s.slice(0, 30), ids(E.analyze(s)).includes('allcaps'), ids(E.analyze(s)).join(','));
+}
+
 section('8. threshold cliffs');
 {
   const a = E.analyze(withWc(44)), b = E.analyze(withWc(45));
