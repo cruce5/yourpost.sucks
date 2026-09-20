@@ -30,6 +30,20 @@ DAILY_BUDGET_USD = "30"
 # address does not run dry in the first hour. Bring it back down afterwards.
 RATE_LIMIT_PER_HOUR = "30"
 
+# The footer ticker ("The AI has been called in N times to make a post suck
+# less"). The live count of billed model calls started on 2026-09-21, three
+# days after the launch. This carries the calls from before then, read off
+# Cloudflare: Workers & Pages > yourpost-sucks > Metrics > Subrequests, the
+# 2xx count for api.anthropic.com over a range that covers the launch. It is
+# added to the live count and never written back.
+# 3000 is what that page showed on 2026-09-21 for the last 30 days, which
+# covers the whole life of the site. Cloudflare rounds it to the nearest
+# thousand ("3k") and offers nothing finer, so the true figure is somewhere
+# between 2,500 and 3,499. The Anthropic Console has the exact count of
+# requests for the key; replace this with that number if the difference
+# matters to you.
+TICKER_BASELINE = "3000"
+
 # Check current IDs at https://platform.claude.com/docs/en/about-claude/models/overview
 MODEL = "claude-haiku-4-5"
 

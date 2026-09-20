@@ -632,6 +632,27 @@ check('error is above the kept rewrite, not replacing it', await api.evaluate(()
   });
 }
 
+// 8a1. the footer ticker
+{
+  check('ticker: offline there is no line at all, not a zero', await p.evaluate(() => document.getElementById('ticker').hidden));
+  await api.route('**/api/status', route => route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ ok: true, aiCalls: 12345, turnstileSiteKey: null }) }));
+  await api.goto(httpUrl);
+  await api.waitForTimeout(1400);
+  check('ticker: shows the number the server gave, with thousands separators', await api.evaluate(() => !document.getElementById('ticker').hidden && document.getElementById('ticker-n').textContent === '12,345'), await api.textContent('#ticker'));
+  check('ticker: says what the number is', /The AI has been called in 12,345 times to make a post suck less since this site launched\./.test((await api.textContent('#ticker')).replace(/\s+/g, ' ')));
+  check('ticker: sits in the footer, above the credit', await api.evaluate(() => { const f = document.querySelector('footer'); return f.firstElementChild.id === 'ticker'; }));
+  await api.click('[data-spec="0"]');
+  await api.waitForSelector('#report:not([hidden])', { timeout: 20000 });
+  await api.waitForTimeout(1300);
+  check('ticker: a report the model just wrote moves it by exactly one', (await api.textContent('#ticker-n')) === '12,346', await api.textContent('#ticker-n'));
+  await api.unroute('**/api/status');
+  await api.route('**/api/status', route => route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ ok: true, aiCalls: null, turnstileSiteKey: null }) }));
+  await api.goto(httpUrl);
+  await api.waitForTimeout(900);
+  check('ticker: no number from the server means no line', await api.evaluate(() => document.getElementById('ticker').hidden));
+  await api.unroute('**/api/status');
+}
+
 // 8a2. what's new: the header link, the once-only pop-up, the meaner bar
 {
   const SEEN = 'yps_whatsnew_seen';

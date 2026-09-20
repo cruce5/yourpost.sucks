@@ -193,6 +193,24 @@ only gates the expensive path.
 The budget is charged *before* the call, so a crash mid-flight cannot
 double-spend. Check it any time: `GET /api/status`.
 
+**The ticker.** The footer says how many times the AI has been called in to
+make a post suck less since the site launched, after the counter a certain
+kind of website has always had. It is a real count of calls to the model that
+were actually billed: reports, tone checks, rewrites and their retries. A
+cached or rules-only report called nothing and counts nothing; a call that
+failed before the provider billed it is not counted either. Every call already
+passes through `settleCharge()` with a meter that knows whether it was billed,
+so that is the one place it is counted, and it needs no abuse guard of its own:
+a model call is already behind the rate limit, Turnstile and the daily budget.
+
+Calls and not posts, deliberately: Cloudflare has recorded every request this
+Worker made to `api.anthropic.com` since launch, so the part of the number
+from before the counter existed can be read off a dashboard instead of
+guessed. That figure is `TICKER_BASELINE` in `wrangler.toml` (3000, which is
+Cloudflare's own rounding; the comment there says how to make it exact). The
+total comes back in `GET /api/status` as `aiCalls`, and the page shows no line
+at all when there is no number.
+
 **Which coffee link earns its keep.** There are three: a line under an
 AI-written report, the card that appears at the 5th AI report, and the one in
 the footer. `POST /api/tip` takes exactly one field, the name of the place

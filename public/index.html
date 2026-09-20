@@ -843,6 +843,12 @@ ol.changes .crewrite .lbl{
   padding:3px 8px;border-radius:2px;border:1px solid var(--rule);color:var(--ink-3);
 }
 .reword-actions-row{display:flex;gap:10px;margin-top:12px;flex-wrap:wrap}
+/* The ticker: the hit counter a certain kind of website has always had.
+   Mono, tabular figures so the digits do not jitter while it counts up. */
+.ticker{margin:0 0 14px;font-family:var(--mono);font-size:14px;letter-spacing:.02em;color:var(--ink-3);line-height:1.5}
+.ticker[hidden]{display:none}
+.ticker-n{color:var(--ink);font-weight:600;font-variant-numeric:tabular-nums}
+
 /* One line, after the thing it paid for, only when a model actually ran. */
 .tipline{margin:18px 0 0;font-size:14px;color:var(--ink-3);line-height:1.55}
 .tipline a{color:var(--cool-text)}
@@ -1275,6 +1281,9 @@ ul.cg-list li::before{content:"\2022";position:absolute;left:0;color:var(--ink-4
 </section>
 
 <footer>
+  <!-- The ticker. Hidden until the server has given a number: offline, or
+       with the counter unreachable, there is no line rather than a zero. -->
+  <p class="ticker" id="ticker" hidden>The AI has been called in <span class="ticker-n" id="ticker-n">0</span> times to make a post suck less since this site launched.</p>
   <div class="credit">Built by <a href="https://www.linkedin.com/in/billyost/" target="_blank" rel="noopener noreferrer"><span aria-hidden="true">🏴‍☠️ </span>Bill Yost</a>, who is aware of the irony. <a class="tip" data-tip="footer" href="https://buymeacoffee.com/billyost" target="_blank" rel="noopener noreferrer">Buy him a coffee.</a></div>
   <div><span id="rulecount"></span> fixed checks decide the score. AI never touches that number. <a href="https://github.com/cruce5/yourpost.sucks" target="_blank" rel="noopener noreferrer">Read the code.</a></div>
   <div>It measures the writing, not the reach.</div>
@@ -4282,8 +4291,39 @@ ul.cg-list li::before{content:"\2022";position:absolute;left:0;color:var(--ink-4
      domain a real deployment runs on. Worth one more smoke test with a real
      site key on the live domain once one exists, but nothing here should be
      held up waiting on that. */
+  /* The footer ticker. The number comes from the server and only from the
+     server: billed calls to the model. A report or a rewrite the model just
+     wrote moves it by one, because at least one call has in fact just been
+     made (a tone check or a retry makes it two, and the next page load
+     picks up the difference). Counts up from a little below the
+     real figure so it reads as a live counter, in under a second, and not
+     at all for anyone who has asked for less motion. */
+  var ticker = (function(){
+    var shown = null, raf = 0;
+    var fmt = function(n){ return Math.round(n).toLocaleString('en-US'); };
+    function paint(n){ var el = $('#ticker-n'); if (el) el.textContent = fmt(n); }
+    function set(n){
+      if (typeof n !== 'number' || !isFinite(n) || n < 0) return;
+      var el = $('#ticker'); if (!el) return;
+      el.hidden = false;
+      var reduce = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+      var from = shown === null ? Math.max(0, n - Math.min(n, 140)) : shown;
+      shown = n;
+      cancelAnimationFrame(raf);
+      if (reduce || from === n) { paint(n); return; }
+      var t0 = null, dur = 900;
+      raf = requestAnimationFrame(function step(t){
+        if (t0 === null) t0 = t;
+        var k = Math.min(1, (t - t0) / dur), e = 1 - Math.pow(1 - k, 3);
+        paint(from + (n - from) * e);
+        if (k < 1) raf = requestAnimationFrame(step);
+      });
+    }
+    return { set: set, bump: function(){ if (shown !== null) set(shown + 1); } };
+  })();
   var tsState = { widgetId: null, ready: false, pendingResolve: null };
   fetch('api/status').then(function(r){ return r.ok ? r.json() : null; }).then(function(s){
+    if (s && typeof s.aiCalls === 'number') ticker.set(s.aiCalls);
     var siteKey = s && s.turnstileSiteKey;
     if (!siteKey) return;
     var script = document.createElement('script');
@@ -5343,6 +5383,7 @@ ul.cg-list li::before{content:"\2022";position:absolute;left:0;color:var(--ink-4
       return;
     }
 
+    if (payload.mode === 'reworded') ticker.bump(); // written just now; a cached one was not
     var before = r.overall, after = payload.after.overall;
     var delta = Math.round((after - before) * 10) / 10;
     // The server only returns a rewrite that scored strictly better, fresh or
@@ -5625,6 +5666,8 @@ ul.cg-list li::before{content:"\2022";position:absolute;left:0;color:var(--ink-4
       }).then(function(payload){
         if (fell_back) return;
         if (!payload || !payload.report) return fallback('server');
+        // A report the model wrote, this minute, is a call the server counted.
+        if (payload.mode === 'llm') ticker.bump();
         fell_back = true;
         done(payload.report, payload.mode || 'rules', payload.reason);
       }).catch(function(err){
@@ -5678,7 +5721,7 @@ ul.cg-list li::before{content:"\2022";position:absolute;left:0;color:var(--ink-4
      number. It is a text-node filter with the originals kept, so switching
      it off puts every word back, and nothing is sent or stored. */
   var PIRATE = { on: false, originals: new Map(), timer: null };
-  var PIRATE_SKIP = '#sharebox, canvas, .annotated, textarea, script, style, .num, #run, #clear, #themetoggle, ' +
+  var PIRATE_SKIP = '#sharebox, canvas, .annotated, textarea, script, style, .num, #ticker-n, #run, #clear, #themetoggle, ' +
     '#rewordbtn, #analyzereword, .reword-text, .game-wrap, #counter, #limit-err, [aria-live], .toast, #pirateflag';
   var PIRATE_PHRASES = [
     [/post quality assurance/gi, 'Plunder quality assurance'],

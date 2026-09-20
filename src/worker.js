@@ -325,6 +325,49 @@ async function readTipTotals(env) {
   }
 }
 
+/* ------------------------------------------------------------------ *
+ * the ticker
+ *
+ * "The AI has been called in N times to make a post suck less", in the
+ * footer, after the counter a certain kind of website has always had. N is
+ * the number of calls to the model that were actually billed: reports, tone
+ * checks, rewrites and their retries. A call that failed before the
+ * provider billed it is not counted; neither is a cached or rules-only
+ * report, because no model was called for it.
+ *
+ * Calls and not posts, deliberately. Cloudflare has recorded every request
+ * this Worker has made to api.anthropic.com since the day it launched, so
+ * the part of the number from before this counter existed can be read off
+ * a dashboard instead of guessed. That figure goes in TICKER_BASELINE in
+ * wrangler.toml; it is added to the live count and never written back.
+ *
+ * Every call already passes through settleCharge() with a meter that knows
+ * whether it was billed, so that is the one place this is counted, and no
+ * call path can forget to. It needs no abuse guard of its own: a model call
+ * is already behind the rate limit, Turnstile and the daily budget.
+ * ------------------------------------------------------------------ */
+const TICKER_KEY = 'n:calls';
+
+async function countCalls(env, n) {
+  const ns = counters(env);
+  if (!ns || !(n > 0)) return;
+  try { await counterCall(ns, TICKER_KEY, '/hit', { key: TICKER_KEY, by: n, ttlSeconds: 315360000 }); }
+  catch (e) { console.warn('ticker: not counted', e && e.message); }
+}
+
+/** The number for the footer, or null when the counter is unreachable. */
+async function readCallCount(env) {
+  const ns = counters(env);
+  if (!ns) return null;
+  try {
+    const r = await counterCall(ns, TICKER_KEY, '/charge', { key: TICKER_KEY, cost: 0, ttlSeconds: 315360000 });
+    return Math.max(0, Math.round(Number(env.TICKER_BASELINE) || 0)) + (Number(r.spent) || 0);
+  } catch (e) {
+    console.warn('ticker: unavailable', e && e.message);
+    return null;
+  }
+}
+
 async function handleTip(request, env, ctx) {
   const rejected = rejectedByHeaders(request);
   if (rejected) return rejected;
@@ -466,6 +509,9 @@ const meterActual = m => m.failed ? 0 : (usageCostMicros(m.usage) ?? m.estimate)
  *  the safe direction, and never worth turning a finished report into an
  *  error. */
 async function settleCharge(env, prechargedMicros, meters) {
+  // The footer ticker: every billed call, counted in the one place every
+  // call comes through. See "the ticker" below.
+  await countCalls(env, meters.filter(m => !m.failed).length);
   const actual = meters.reduce((sum, m) => sum + meterActual(m), 0);
   const refund = prechargedMicros - actual;
   if (refund <= 0) return;
@@ -528,7 +574,10 @@ export class Counters {
       // Always counts the hit, even past the limit, so the response says how
       // far over a burst went; ok is the only field callers act on.
       const limit = Number(body.limit);
-      const n = current + 1;
+      // by: how many to add (the ticker settles several calls at once).
+      // Anything that is not a whole number of at least 1 adds exactly 1.
+      const by = Number.isInteger(body.by) && body.by > 1 ? body.by : 1;
+      const n = current + by;
       await this.state.storage.put(key, { n, expiresAt });
       return json({ ok: !Number.isFinite(limit) || n <= limit, n });
     }
@@ -1802,6 +1851,7 @@ async function handleStatus(env) {
   // it is three counts of clicks on a public link, about nobody in
   // particular, and the owner reads it with curl rather than a dashboard.
   const tips = await readTipTotals(env);
+  const aiCalls = await readCallCount(env);
   // null when the counter is unreachable: the page still gets its site key
   // and rate limit, and the two budget figures below read as unknown rather
   // than as zero (which would look like a fresh, fully-funded day).
@@ -1838,7 +1888,10 @@ async function handleStatus(env) {
       // refuse.
       budgetRemaining: spent === null ? null : spent + callCostMicros(true, true) <= capMicros
     },
-    tipClicks: tips
+    tipClicks: tips,
+    // The footer ticker. Up to a minute stale at the edge, which is fine
+    // for a number whose whole job is to be large.
+    aiCalls
     // Cacheable at the edge for a minute: one status fetch per page load
     // from a viral spike is a lot of counter reads for a number that is
     // allowed to be sixty seconds stale.

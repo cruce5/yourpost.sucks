@@ -1621,6 +1621,57 @@ console.log('\n=== no report, in either register, remarks on who the writer is =
   llmBehaviour = 'good'; customBrutal = null;
 }
 
+/* ------------------------------------------------------------------ *
+ * the footer ticker: a real count of billed calls to the model
+ * ------------------------------------------------------------------ */
+console.log('\n=== the ticker ===');
+{
+  const count = env => env.COUNTERS._count('n:calls', 'n:calls');
+  const status = async env => (await worker.fetch(new Request('https://yourpost.sucks/api/status'), env, ctx)).json();
+
+  const env = baseEnv(); env.COUNTERS = mockCounters(); llmBehaviour = 'good';
+  const first = await (await worker.fetch(post({ post: NEUTRAL }), env, ctx)).json();
+  check('ticker: a model-written report is one call', first.mode === 'llm' && count(env) === 1, 'mode=' + first.mode + ' n=' + count(env));
+  const again = await (await worker.fetch(post({ post: NEUTRAL }), env, ctx)).json();
+  check('ticker: a cached report called nothing, so counts nothing', again.mode === 'cache' && count(env) === 1, 'mode=' + again.mode + ' n=' + count(env));
+  llmBehaviour = 'error';
+  const failedCall = await (await worker.fetch(post({ post: NEUTRAL + ' It held through the month.' }), env, ctx)).json();
+  check('ticker: a call the provider never billed is not counted', failedCall.mode === 'rules' && count(env) === 1, 'mode=' + failedCall.mode + ' n=' + count(env));
+  llmBehaviour = 'good';
+  const declined = await (await worker.fetch(post({ post: 'My mentor passed away last week. He hired me when nobody else would and I will miss him every day.' }), env, ctx)).json();
+  check('ticker: a declined post never reaches the model', declined.mode === 'declined' && count(env) === 1);
+
+  // A tone-eligible post is two calls: the tone check, then the report.
+  toneBehaviour = 'no';
+  const toned = await (await worker.fetch(post({ post: BAD }), env, ctx)).json();
+  check('ticker: a tone check and a report are two calls', toned.mode === 'llm' && count(env) === 3, 'n=' + count(env));
+
+  // A rewrite is a call; a rejected-then-retried rewrite is two.
+  rewordBehaviour = 'good'; rewordQueue = null;
+  await worker.fetch(reword({ post: BAD }), env, ctx);
+  check('ticker: a rewrite is a call', count(env) === 4, 'n=' + count(env));
+  rewordQueue = ['toolong', 'good']; rewordCalls = 0;
+  await worker.fetch(reword({ post: BAD + ' Day one is Monday.' }), env, ctx);
+  check('ticker: a retried rewrite is two, because both were billed', rewordCalls === 2 && count(env) === 6, 'calls=' + rewordCalls + ' n=' + count(env));
+  rewordQueue = null;
+
+  check('/api/status reports the count', (await status(env)).aiCalls === 6, String((await status(env)).aiCalls));
+  env.TICKER_BASELINE = '3100';
+  check('  ...with the pre-counter baseline added, never written back', (await status(env)).aiCalls === 3106 && count(env) === 6);
+  env.TICKER_BASELINE = 'lots';
+  check('  ...and a nonsense baseline is zero, not NaN', (await status(env)).aiCalls === 6);
+
+  const noDO = baseEnv();
+  const r = await (await worker.fetch(post({ post: NEUTRAL }), noDO, ctx)).json();
+  check('ticker: no counter bound means no count, no error, and no number', r.mode === 'llm' && (await status(noDO)).aiCalls === null);
+
+  // The counter itself: by adds that many, and junk adds exactly one.
+  const c = mockCounters();
+  const hit = body => c.get(c.idFromName('x')).fetch('https://counters/hit', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ key: 'x', ...body }) }).then(r => r.json());
+  await hit({ by: 3 }); await hit({}); await hit({ by: -5 }); await hit({ by: 2.5 }); await hit({ by: 'many' });
+  check('Counters /hit: by adds that many, anything else adds one', c._count('x', 'x') === 7, String(c._count('x', 'x')));
+}
+
 const failed = results.filter(r => !r.pass);
 console.log(`\n${results.length - failed.length}/${results.length} passed`);
 if (failed.length) { console.log('FAILED:', failed.map(f => f.name).join(', ')); process.exit(1); }
