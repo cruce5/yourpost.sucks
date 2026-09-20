@@ -669,48 +669,57 @@ check('error is above the kept rewrite, not replacing it', await api.evaluate(()
   await api.waitForTimeout(300);
   check('  ...and Got it closes it', await api.evaluate(() => !document.getElementById('whatsnew').open));
 
-  // The reading bar: always there, blue ordinarily, red in meaner mode.
+  // The reading bar: a full rule in the page on load, a pinned progress bar once it scrolls away.
   const barState = () => api.evaluate(() => {
-    const b = document.getElementById('readbar'), bg = getComputedStyle(b.querySelector('i'), '::before').backgroundImage;
-    return { on: b.classList.contains('on'), mean: b.classList.contains('mean'), blue: /57, 135, 229/.test(bg), red: /242, 84, 60/.test(bg),
-      fill: b.querySelector('i').getBoundingClientRect().width / window.innerWidth, width: b.getBoundingClientRect().width };
+    const rule = document.getElementById('readrule'), bar = document.getElementById('readbar');
+    const ruleBg = getComputedStyle(rule).backgroundImage, barBg = getComputedStyle(bar.querySelector('i'), '::before').backgroundImage;
+    const rr = rule.getBoundingClientRect();
+    return {
+      ruleOn: rule.classList.contains('on'), ruleBlue: /57, 135, 229/.test(ruleBg), ruleRed: /242, 84, 60/.test(ruleBg),
+      ruleInView: rr.bottom > 0 && rr.top < innerHeight, ruleWidth: Math.round(rr.width), ruleHeight: Math.round(rr.height),
+      barBlue: /57, 135, 229/.test(barBg), barRed: /242, 84, 60/.test(barBg),
+      stuck: bar.classList.contains('stuck'), barOpacity: Number(getComputedStyle(bar).opacity),
+      fill: bar.querySelector('i').getBoundingClientRect().width / window.innerWidth
+    };
   });
-  await api.waitForTimeout(700);
+  await api.waitForTimeout(800);
   let bar = await barState();
-  check('reading bar: on in the ordinary register, in blue', bar.on && !bar.mean && bar.blue && !bar.red && bar.width > 200, JSON.stringify(bar));
-  check('reading bar: only its faint track while there is nothing to scroll', bar.fill < 0.02, bar.fill.toFixed(2));
-  check('reading bar: pinned to the top of the window, full width, out of the way of clicks', await api.evaluate(() => {
-    const b = document.getElementById('readbar'), cs = getComputedStyle(b), r = b.getBoundingClientRect();
-    return cs.position === 'fixed' && Math.round(r.top) === 0 && Math.round(r.width) === window.innerWidth && Math.round(r.height) === 6 && cs.pointerEvents === 'none';
-  }));
+  check('reading rule: on load the whole gradient is there, in blue, under the masthead', bar.ruleOn && bar.ruleBlue && !bar.ruleRed && bar.ruleInView && bar.ruleWidth > 300 && bar.ruleHeight === 6, JSON.stringify(bar));
+  check('reading bar: the pinned one stays out of sight while the rule is in view', !bar.stuck && bar.barOpacity === 0);
   await api.click('#meaner');
-  await api.waitForTimeout(700);
+  await api.waitForTimeout(800);
   bar = await barState();
-  check('reading bar: meaner mode wipes it back on in red', bar.on && bar.mean && bar.red && !bar.blue, JSON.stringify(bar));
-  check('  ...and shows it full, so the switch is never answered with an empty strip', bar.fill > 0.98, bar.fill.toFixed(2));
-  // With a report on the page there is something to read, and the fill follows the reader down it.
+  check('reading rule: meaner mode wipes it back on in red', bar.ruleOn && bar.ruleRed && !bar.ruleBlue && bar.barRed, JSON.stringify(bar));
+  // With a report on the page there is somewhere to scroll to.
   await api.click('[data-spec="0"]');
   await api.waitForSelector('#report:not([hidden])', { timeout: 20000 });
   // The page scrolls itself to a new report; measure after that has landed.
   await api.waitForTimeout(1500);
-  const fillAt = async y => { await api.evaluate(v => window.scrollTo(0, v), y); await api.waitForTimeout(350); return api.evaluate(() => document.querySelector('#readbar i').getBoundingClientRect().width / window.innerWidth); };
-  const atTop = await fillAt(0), midway = await fillAt(await api.evaluate(() => (document.documentElement.scrollHeight - innerHeight) / 2)), atEnd = await fillAt(await api.evaluate(() => document.documentElement.scrollHeight));
-  check('reading bar: the fill is reading progress, empty at the top and full at the bottom', atTop < 0.03 && midway > 0.4 && midway < 0.6 && atEnd > 0.97, [atTop, midway, atEnd].map(n => n.toFixed(2)).join(' / '));
-  check('  ...and it stays in view while scrolled', await api.evaluate(() => Math.round(document.getElementById('readbar').getBoundingClientRect().top) === 0));
+  const fillAt = async y => { await api.evaluate(v => window.scrollTo(0, v), y); await api.waitForTimeout(450); return barState(); };
+  const top = await fillAt(0);
+  check('reading bar: back at the top the rule has the job again', top.ruleInView && !top.stuck && top.barOpacity === 0, JSON.stringify({ stuck: top.stuck, o: top.barOpacity }));
+  const mid = await fillAt(await api.evaluate(() => (document.documentElement.scrollHeight - innerHeight) / 2));
+  check('reading bar: once the rule scrolls away the pinned bar takes over', !mid.ruleInView && mid.stuck && mid.barOpacity === 1 && mid.barRed, JSON.stringify({ stuck: mid.stuck, o: mid.barOpacity }));
+  const end = await fillAt(await api.evaluate(() => document.documentElement.scrollHeight));
+  check('  ...and its fill is reading progress: half way, then all the way', mid.fill > 0.4 && mid.fill < 0.6 && end.fill > 0.97, mid.fill.toFixed(2) + ' / ' + end.fill.toFixed(2));
+  check('  ...pinned to the top of the window, full width, out of the way of clicks', await api.evaluate(() => {
+    const b = document.getElementById('readbar'), cs = getComputedStyle(b), r = b.getBoundingClientRect();
+    return cs.position === 'fixed' && Math.round(r.top) === 0 && Math.round(r.width) === window.innerWidth && Math.round(r.height) === 6 && cs.pointerEvents === 'none';
+  }));
   check('  ...over a faint track in the same colours', await api.evaluate(() => {
     const cs = getComputedStyle(document.getElementById('readbar'), '::before');
     return /gradient/.test(cs.backgroundImage) && Number(cs.opacity) > 0.15 && Number(cs.opacity) < 0.5;
   }));
   await api.evaluate(() => window.scrollTo(0, 0));
-  check('  ...and it is decoration, hidden from screen readers', await api.getAttribute('#readbar', 'aria-hidden') === 'true');
+  check('  ...and both pieces are decoration, hidden from screen readers', await api.getAttribute('#readbar', 'aria-hidden') === 'true' && await api.getAttribute('#readrule', 'aria-hidden') === 'true');
   await api.goto(httpUrl);
-  await api.waitForTimeout(700);
+  await api.waitForTimeout(800);
   bar = await barState();
-  check('reading bar: red again on the next visit, with the setting', bar.on && bar.mean && bar.red && await api.evaluate(() => document.getElementById('meaner').checked));
+  check('reading rule: red again on the next visit, with the setting', bar.ruleOn && bar.ruleRed && await api.evaluate(() => document.getElementById('meaner').checked));
   await api.click('#meaner');
-  await api.waitForTimeout(700);
+  await api.waitForTimeout(800);
   bar = await barState();
-  check('  ...and back to blue when the setting goes', bar.on && !bar.mean && bar.blue && !bar.red, JSON.stringify(bar));
+  check('  ...and back to blue when the setting goes', bar.ruleOn && bar.ruleBlue && !bar.ruleRed && bar.barBlue, JSON.stringify(bar));
   check('header: both header buttons keep a 44px target', await api.evaluate(() => ['whatsnewbtn', 'themetoggle'].every(id => document.getElementById(id).getBoundingClientRect().height >= 44)));
   // Leave it marked seen. The blocks below click through the page, and a
   // modal opening over them on load is exactly what it should do to a

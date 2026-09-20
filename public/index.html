@@ -221,31 +221,39 @@ header{border-bottom:1px solid var(--rule);padding-bottom:20px;margin-bottom:28p
 .head-link.flagged{color:var(--warm);border-color:var(--warm)}
 .head-link .hl-short{display:none}
 
-/* The reading bar: the Cape Index one, in two tempers. Six pixels, pinned
-   to the top of the window so it stays in view down the whole report. A
-   faint full-width track, and a bright fill that is how far down the page
-   the reader is. The gradient on the fill is sized to the viewport, not to
-   the fill, so the colours stay where they are and the fill reveals them
-   instead of stretching them.
+/* The reading bar, built the way the Cape Index builds its own: two
+   elements handing off to each other.
+   .read-rule is a full six-pixel rule in the page, under the masthead. It
+   is what a visitor sees on load: the whole gradient, nothing to work out.
+   .read-bar is the same gradient pinned to the top of the window, as a
+   faint track with a bright fill for how far down the page the reader is.
+   It stays invisible until the rule has scrolled out of view, then takes
+   over, so the bar appears to lift off the page and follow the reader.
+   The fill's gradient is sized to the viewport, not to the fill, so the
+   colours stay put and the fill reveals them instead of stretching them.
    Blue is the ordinary register, the site's own --cool run from deep to
    pale. Red is meaner mode, and the change of colour is the whole signal:
-   a gradient cannot be transitioned, so the bar is wiped on again from the
-   left in its new colour, which reads as something that just happened. */
-.read-bar{
+   a gradient cannot be transitioned, so both are wiped on again from the
+   left in the new colour, which reads as something that just happened. */
+.read-rule,.read-bar{
   --grad:linear-gradient(90deg,#17497f 0%,#2467b3 24%,#3987e5 52%,#6fb0f2 78%,#a9d6ff 100%);
-  position:fixed;top:0;left:0;right:0;height:6px;z-index:60;
-  overflow:hidden;pointer-events:none;
   transform:scaleX(0);transform-origin:left center;
-  transition:transform .45s cubic-bezier(.2,.7,.2,1);
+  transition:transform .45s cubic-bezier(.2,.7,.2,1), opacity .2s;
 }
-.read-bar.mean{--grad:linear-gradient(90deg,#4a0d12 0%,#8e1d24 22%,#c62f2a 48%,#f2543c 74%,#ff8a5c 100%)}
+.read-rule.mean,.read-bar.mean{--grad:linear-gradient(90deg,#4a0d12 0%,#8e1d24 22%,#c62f2a 48%,#f2543c 74%,#ff8a5c 100%)}
+.read-rule{height:6px;border-radius:999px;margin:14px 0 2px;background:var(--grad)}
+.read-bar{
+  position:fixed;top:0;left:0;right:0;height:6px;z-index:60;
+  overflow:hidden;pointer-events:none;opacity:0;
+}
+.read-bar.stuck{opacity:1}
 .read-bar::before{content:"";position:absolute;inset:0;background:var(--grad);opacity:.3}
 .read-bar i{position:absolute;top:0;left:0;height:100%;width:var(--read,0%);overflow:hidden}
 .read-bar i::before{content:"";position:absolute;top:0;left:0;height:100%;width:100vw;background:var(--grad)}
-.read-bar.on{transform:scaleX(1)}
-.read-bar.snap{transition:none}
+.read-rule.on,.read-bar.on{transform:scaleX(1)}
+.read-rule.snap,.read-bar.snap{transition:none}
 @media (prefers-reduced-motion: no-preference){.read-bar i{transition:width 90ms linear}}
-@media (prefers-reduced-motion: reduce){.read-bar{transition:none}}
+@media (prefers-reduced-motion: reduce){.read-rule,.read-bar{transition:none}}
 .tagline{
   font-family:var(--mono);
   font-size:14px;
@@ -1095,7 +1103,7 @@ ul.cg-list li::before{content:"\2022";position:absolute;left:0;color:var(--ink-4
 @media print{
   body{background:#fff;color:#111}
   body::before{display:none}
-  .panel,.controls,.specimens,.share-actions,.share-more,.tabs,footer,.game-wrap,.toast,.tipask,.read-bar{display:none}
+  .panel,.controls,.specimens,.share-actions,.share-more,.tabs,footer,.game-wrap,.toast,.tipask,.read-bar,.read-rule{display:none}
   .hero,.meter,ul.roasts li,.share-box{background:#fff;border-color:#ccc;color:#111}
   .hero .num{color:#111 !important}
   .meter-name,.meter-val,.brutal{color:#111}
@@ -1140,6 +1148,7 @@ ul.cg-list li::before{content:"\2022";position:absolute;left:0;color:var(--ink-4
   <!-- The reading bar. Blue ordinarily, red in meaner mode, so the register
        of the report is visible at a glance from the top of the page and not
        just in a checkbox the reader has scrolled away from. -->
+  <div class="read-rule" id="readrule" aria-hidden="true"></div>
   <div class="read-bar" id="readbar" aria-hidden="true"><i></i></div>
   <p class="tagline">Post quality assurance &middot; automated &middot; unsympathetic</p>
   <p class="intro">Paste a LinkedIn post. Get a suckiness score, the reasons, and a rewrite if it needs one. Free, no sign-up, never stored.</p>
@@ -5801,33 +5810,38 @@ ul.cg-list li::before{content:"\2022";position:absolute;left:0;color:var(--ink-4
      remembered across visits in this browser. Storage can be unavailable or
      blocked; then it simply starts off, which is the right default. */
   var MEANER_KEY = 'yps_meaner_v1';
-  /* The bar is always there; the register picks its colour. Changing colour
-     collapses it without a transition and wipes it back on, because that is
-     the only way a gradient can be seen to change. */
+  /* Both pieces are always there; the register picks their colour.
+     Changing colour collapses them without a transition and wipes them
+     back on, because that is the only way a gradient can be seen to
+     change. */
   function paintMeaner(){
-    var on = $('#meaner').checked, bar = $('#readbar');
-    if (bar.classList.contains('mean') === on && bar.classList.contains('on')) return;
-    bar.classList.add('snap');
-    bar.classList.remove('on');
-    bar.classList.toggle('mean', on);
-    void bar.offsetWidth; // the collapse has to land before the wipe starts
-    bar.classList.remove('snap');
-    requestAnimationFrame(function(){ bar.classList.add('on'); });
+    var on = $('#meaner').checked;
+    [$('#readrule'), $('#readbar')].forEach(function(el){
+      if (el.classList.contains('mean') === on && el.classList.contains('on')) return;
+      el.classList.add('snap');
+      el.classList.remove('on');
+      el.classList.toggle('mean', on);
+      void el.offsetWidth; // the collapse has to land before the wipe starts
+      el.classList.remove('snap');
+      requestAnimationFrame(function(){ el.classList.add('on'); });
+    });
   }
-  /* How far down the page, as the width of the bright fill. With nothing
-     to scroll (no report yet, on a tall screen) the blue bar is only its
-     faint track, which is all an ordinary page needs to say; the red one
-     shows full, so turning meaner mode on is never answered with a strip
-     nobody can see. Cheap enough to run on every scroll; rAF keeps it to
-     one write per frame. */
+  /* The pinned bar takes over when the rule in the page has left the
+     window, and gives way when it comes back. */
+  function paintStuck(){
+    var r = $('#readrule').getBoundingClientRect();
+    $('#readbar').classList.toggle('stuck', r.bottom <= 0);
+  }
+  /* How far down the page, as the width of the bright fill. Cheap enough
+     to run on every scroll; rAF keeps it to one write per frame. */
   var readQueued = false;
   function paintRead(){
     readQueued = false;
     var doc = document.documentElement;
     var max = doc.scrollHeight - window.innerHeight;
-    var still = $('#meaner').checked ? 100 : 0;
-    var pct = max <= 8 ? still : Math.min(100, Math.max(0, (window.scrollY || doc.scrollTop || 0) / max * 100));
+    var pct = max <= 8 ? 0 : Math.min(100, Math.max(0, (window.scrollY || doc.scrollTop || 0) / max * 100));
     $('#readbar').style.setProperty('--read', pct.toFixed(2) + '%');
+    paintStuck();
   }
   function queueRead(){ if (!readQueued){ readQueued = true; requestAnimationFrame(paintRead); } }
   window.addEventListener('scroll', queueRead, { passive: true });
