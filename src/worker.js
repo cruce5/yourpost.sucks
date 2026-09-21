@@ -422,6 +422,43 @@ export async function readStats(env) {
     return Object.fromEntries(Object.entries(r.counts || {}).map(([k, n]) => [k.slice(2), n]));
   } catch (e) { console.warn('stats: unavailable', e && e.message); return null; }
 }
+/* ------------------------------------------------------------------ *
+ * the numbers, for anyone
+ *
+ * The public half of the tallies: what the posts were like, never how the
+ * site is doing. In: where the scores land, how often each check fires, how
+ * Reword ends and what it gains, how long the model took, and three flags.
+ * Out, on purpose: why a reader got the rules-only page, refused requests,
+ * AI failure reasons, the budget, the bot check. Those describe the
+ * operation, they change by the hour, and on a bad day they are a map.
+ * The list below is an allow-list: a new tally is private until it is named
+ * here. Counts only, and a minute or five stale at the edge.
+ * ------------------------------------------------------------------ */
+export const METRICS_SINCE = '2026-09-21';
+const METRICS_PUBLIC = ['band:', 'score:', 'rule:', 'flag:media', 'flag:satire', 'flag:narrative', 'reword:all', 'reword:mode:', 'reword:gain:', 'analyze:wait:', 'reword:wait:'];
+async function handleMetrics(env) {
+  const headers = { 'cache-control': 'public, s-maxage=300' };
+  const all = await readStats(env);
+  if (!all) return json({ ok: false, since: METRICS_SINCE }, 200, headers);
+  const s = Object.fromEntries(Object.entries(all).filter(([k]) => METRICS_PUBLIC.some(p => k === p || (p.endsWith(':') && k.startsWith(p)))));
+  const under = prefix => Object.fromEntries(Object.entries(s).filter(([k]) => k.startsWith(prefix)).map(([k, n]) => [k.slice(prefix.length), n]));
+  const bands = under('band:');
+  const fired = under('rule:');
+  const waitA = under('analyze:wait:'), waitR = under('reword:wait:');
+  return json({
+    ok: true, since: METRICS_SINCE,
+    scored: Object.values(bands).reduce((a, n) => a + n, 0),
+    bands,
+    scores: Array.from({ length: 10 }, (_, i) => s['score:' + i] || 0),
+    // Every check, fired or not: one that never fires is a finding too.
+    rules: ENGINE.RULES.map(r => ({ id: r.id, label: r.label, dim: r.dim, n: fired[r.id.toLowerCase()] || 0 })),
+    clean: fired.none || 0,
+    flags: { media: s['flag:media'] || 0, satire: s['flag:satire'] || 0, narrative: s['flag:narrative'] || 0 },
+    reword: { asked: s['reword:all'] || 0, modes: under('reword:mode:'), gain: under('reword:gain:') },
+    wait: Object.fromEntries(['lt5s', '5to10s', '10to20s', 'gt20s'].map(b => [b, (waitA[b] || 0) + (waitR[b] || 0)]))
+  }, 200, headers);
+}
+
 async function counted(kind, handler, request, env, ctx) {
   const t0 = Date.now();
   const res = await handler(request, env, ctx);
@@ -2172,6 +2209,10 @@ export default {
     if (url.pathname === '/api/status') {
       if (request.method !== 'GET') return json({ error: 'method' }, 405);
       return handleStatus(env);
+    }
+    if (url.pathname === '/api/metrics') {
+      if (request.method !== 'GET') return json({ error: 'method' }, 405);
+      return handleMetrics(env);
     }
 
     return env.ASSETS ? env.ASSETS.fetch(request) : new Response('Not found', { status: 404 });

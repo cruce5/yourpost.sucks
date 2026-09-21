@@ -939,6 +939,48 @@ await api.keyboard.press('ArrowRight');
 check('  ...and the first tab has no hash at all', await api.evaluate(() => location.hash === ''));
 check('Right from the last tab wraps to the first, and only one tab is in the Tab order', await api.evaluate(() => document.activeElement.id === 'tab-tool' && document.querySelectorAll('.tab-btn[tabindex="0"]').length === 1 && document.querySelectorAll('[role=tabpanel]:not([hidden])').length === 1));
 
+// 11a. the numbers
+{
+  const figures = (scored) => ({ ok: true, since: '2026-09-21', scored, clean: Math.round(scored * 0.1),
+    bands: { barely: Math.round(scored * 0.6), normal: Math.round(scored * 0.3), lot: Math.round(scored * 0.08), completely: Math.round(scored * 0.02) },
+    scores: [2, 20, 38, 18, 8, 4, 5, 3, 1, 1].map(p => Math.round(scored * p / 100)),
+    rules: [{ id: 'announce', label: 'Excited to announce', dim: 'auth', n: Math.round(scored * 0.44) }, { id: 'hashwall', label: 'A wall of hashtags', dim: 'bait', n: Math.round(scored * 0.2) }, { id: 'quiet', label: 'A check nobody trips', dim: 'clar', n: 0 }],
+    flags: { media: Math.round(scored * 0.25), satire: 3, narrative: 12 },
+    reword: { asked: 80, modes: { reworded: 50, unavailable: 20, clean: 10 }, gain: { under1: 10, '1to2': 25, '2plus': 15 } },
+    wait: { lt5s: 30, '5to10s': 50, '10to20s': 15, gt20s: 5 } });
+  let body = figures(500), hits = 0;
+  await api.route('**/api/metrics', route => { hits++; return route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(body) }); });
+  await api.goto(httpUrl + '#the-numbers');
+  await api.waitForSelector('#panel-metrics .mx-sec', { timeout: 5000 });
+  const seen = await api.evaluate(() => ({
+    selected: document.getElementById('tab-metrics').getAttribute('aria-selected'),
+    heads: [...document.querySelectorAll('#panel-metrics .mx-h')].map(h => h.textContent),
+    tiles: [...document.querySelectorAll('#panel-metrics .mx-tile .v')].map(v => v.textContent),
+    bars: document.querySelectorAll('#panel-metrics svg rect[rx="2"]').length,
+    rows: [...document.querySelectorAll('#panel-metrics .mx-sec:nth-of-type(2) .mx-bars li')].map(li => li.textContent),
+    text: document.getElementById('panel-metrics').textContent,
+    scroll: document.documentElement.scrollWidth <= innerWidth + 1
+  }));
+  check('the numbers: the address opens the tab, and it draws from api/metrics', seen.selected === 'true' && hits === 1 && seen.tiles[0] === '500' && seen.bars === 10, JSON.stringify(seen.tiles) + ' bars=' + seen.bars + ' hits=' + hits);
+  check('the numbers: every headline states a finding, written from the figures', /^Most posts barely suck$/.test(seen.heads[0]) && /"Excited to announce", in 44% of posts/.test(seen.heads[1]) && /71% of the times it tried/.test(seen.heads[2]) && /80% of AI write-ups arrive in under ten seconds/.test(seen.heads[3]), JSON.stringify(seen.heads));
+  check('the numbers: checks that fired are ranked, and one that never fired is kept out of the top list', seen.rows.length === 2 && /Excited to announce/.test(seen.rows[0]), JSON.stringify(seen.rows));
+  await api.click('#mx-more');
+  check('the numbers: "show all" lists the check that never fired, and says never', await api.evaluate(() => /A check nobody trips\s*never/.test(document.querySelector('#panel-metrics .mx-bars li.zero').textContent) && document.activeElement.id === 'mx-more' && document.activeElement.getAttribute('aria-expanded') === 'true'));
+  check('the numbers: no em dash, no sample notice off localhost data, no sideways scroll', !/\u2014/.test(seen.text) && !/Sample figures/.test(seen.text) && seen.scroll);
+  check('the numbers: the chart says what it shows to a screen reader', await api.evaluate(() => /Posts by score\. 0 to 0\.9: 2 percent/.test(document.querySelector('#panel-metrics svg').getAttribute('aria-label'))));
+
+  body = figures(12);
+  await api.goto(httpUrl + '#how-it-works'); await api.goto(httpUrl + '#the-numbers'); await api.reload();
+  await api.waitForSelector('#panel-metrics .mx-sec', { timeout: 5000 });
+  check('the numbers: under 30 posts the headlines refuse to generalise', await api.evaluate(() => /^Too few posts to say anything true yet: 12 so far$/.test(document.querySelector('#panel-metrics .mx-h').textContent)));
+
+  body = { ok: false };
+  await api.reload();
+  await api.waitForFunction(() => /could not be read/.test(document.getElementById('mx-live').textContent), null, { timeout: 5000 });
+  check('the numbers: when they cannot be read the tab says so and draws nothing', await api.evaluate(() => document.querySelectorAll('#panel-metrics .mx-sec').length === 0));
+  await api.unroute('**/api/metrics');
+}
+
 // 11b. the masthead at 320, the narrowest phone still in use
 {
   const narrow = await b.newPage({ viewport: { width: 320, height: 640 }, isMobile: true, hasTouch: true });

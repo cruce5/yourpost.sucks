@@ -288,6 +288,53 @@ header{border-bottom:1px solid var(--rule);padding-bottom:20px;margin-bottom:28p
 .tab-btn[aria-selected="true"]{color:var(--ink);border-bottom-color:var(--ink)}
 .tab-btn:focus-visible{outline:2px solid var(--cool);outline-offset:2px}
 
+/* ---------- the numbers ----------
+   Borrowed from two other things by the same hand: the section anatomy of
+   the Cape Index (a numbered eyebrow, a headline that states the finding, a
+   dek that says what the marks are) and the stat tiles and thin CSS bars of
+   the media kit. Text only ever wears an ink token; colour is for marks. */
+#panel-metrics{--mx-b1:var(--cool);--mx-b2:var(--caution);--mx-b3:#d9772f;--mx-b4:var(--warm)}
+.mx-intro{margin:22px 0 0;color:var(--ink-2);font-size:16px;line-height:1.55;max-width:44rem}
+.mx-sample{margin:14px 0 0;padding:8px 12px;border:1px dashed var(--caution);border-radius:6px;color:var(--ink-2);font:500 13px/1.4 var(--mono);letter-spacing:.04em}
+.mx-tiles{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px;margin:24px 0 0}
+@media (min-width:760px){.mx-tiles{grid-template-columns:repeat(4,minmax(0,1fr))}}
+.mx-tile{padding:16px 14px;border:1px solid var(--rule);border-radius:10px;background:var(--surface);min-width:0}
+.mx-tile .v{display:block;font:700 clamp(30px,5.4vw,44px)/1 var(--display);color:var(--ink);font-variant-numeric:tabular-nums;letter-spacing:-.01em}
+.mx-tile .k{display:block;margin-top:9px;font:500 12px/1.3 var(--mono);letter-spacing:.1em;text-transform:uppercase;color:var(--ink-2)}
+.mx-tile .n{display:block;margin-top:6px;font-size:14px;line-height:1.4;color:var(--ink-3);overflow-wrap:anywhere}
+.mx-sec{margin:44px 0 0;padding:34px 0 0;border-top:1px solid var(--hair)}
+.mx-num{display:block;font:500 12px/1 var(--mono);letter-spacing:.14em;text-transform:uppercase;color:var(--ink-3)}
+.mx-h{margin:10px 0 0;font:700 clamp(23px,3.4vw,31px)/1.12 var(--display);letter-spacing:-.01em;color:var(--ink);text-wrap:balance;max-width:40rem}
+.mx-dek{margin:11px 0 0;color:var(--ink-2);font-size:15.5px;line-height:1.55;max-width:42rem}
+.mx-card{margin:20px 0 0;padding:18px 16px 16px;border:1px solid var(--hair);border-radius:10px;background:var(--surface)}
+.mx-card svg{display:block;width:100%;height:auto;overflow:visible}
+.mx-card svg text{font-family:var(--mono);font-size:12.5px;fill:var(--ink-3)}
+.mx-card svg text.mx-val{fill:var(--ink-2)}
+.mx-card svg text.mx-top{fill:var(--ink);font-weight:600}
+.mx-legend{display:flex;flex-wrap:wrap;gap:8px 18px;margin:14px 0 0;padding:0;list-style:none;font-size:14px;color:var(--ink-2)}
+.mx-legend li{display:inline-flex;align-items:center;gap:7px}
+.mx-legend i{display:inline-block;width:11px;height:11px;border-radius:3px;background:var(--c)}
+.mx-legend b{font:500 13px/1 var(--mono);color:var(--ink-3);font-variant-numeric:tabular-nums}
+.mx-bars{list-style:none;margin:0;padding:0}
+.mx-bars li{display:grid;grid-template-columns:minmax(0,1fr) 3.6em;gap:3px 10px;align-items:baseline;padding:7px 0;border-bottom:1px solid var(--hair)}
+.mx-bars li:last-child{border-bottom:none}
+.mx-bars .t{font-size:14.5px;color:var(--ink);overflow-wrap:anywhere}
+.mx-bars .p{font:500 13px/1 var(--mono);color:var(--ink-2);text-align:right;font-variant-numeric:tabular-nums}
+.mx-bars .track{grid-column:1 / -1;height:6px;border-radius:3px;background:var(--hair);overflow:hidden}
+.mx-bars .fill{display:block;height:100%;width:calc(var(--w) * 1%);min-width:2px;border-radius:0 3px 3px 0;background:var(--c, var(--cool))}
+.mx-bars li.zero .t,.mx-bars li.zero .p{color:var(--ink-3)}
+.mx-bars li.zero .fill{display:none}
+.mx-more{margin:12px 0 0;font:500 13px/1 var(--mono);letter-spacing:.06em;text-transform:uppercase;color:var(--ink-3);background:transparent;border:1px solid var(--rule);border-radius:4px;padding:6px 12px;min-height:44px;cursor:pointer}
+.mx-more:hover{border-color:var(--cool);color:var(--ink)}
+.mx-stack{display:flex;height:22px;border-radius:4px;overflow:hidden;background:var(--hair);gap:2px}
+.mx-stack span{display:block;height:100%;background:var(--c);min-width:3px}
+.mx-cardlabel{margin:0 0 12px;font:500 12px/1.3 var(--mono);letter-spacing:.1em;text-transform:uppercase;color:var(--ink-3)}
+.mx-cardlabel + .mx-stack{margin-top:0}
+.mx-gap{margin-top:22px}
+.mx-foot{margin:44px 0 0;padding:20px 0 0;border-top:1px dashed var(--rule-2);color:var(--ink-3);font-size:14.5px;line-height:1.55;max-width:44rem}
+.mx-foot a{color:var(--ink-2)}
+.mx-wait{color:var(--ink-3);font-size:15px;margin:26px 0 0}
+
 /* ---------- input ---------- */
 .panel{
   background:var(--surface);
@@ -1200,6 +1247,7 @@ ul.cg-list li::before{content:"\2022";position:absolute;left:0;color:var(--ink-4
 <div class="tabs" role="tablist" aria-label="Site sections">
   <button class="tab-btn" id="tab-tool" role="tab" type="button" aria-selected="true" aria-controls="panel-tool">Roast my post</button>
   <button class="tab-btn" id="tab-explain" role="tab" type="button" aria-selected="false" tabindex="-1" aria-controls="panel-explain">How this works</button>
+  <button class="tab-btn" id="tab-metrics" role="tab" type="button" aria-selected="false" tabindex="-1" aria-controls="panel-metrics">The numbers</button>
   <button class="tab-btn" id="tab-lab" role="tab" type="button" aria-selected="false" tabindex="-1" aria-controls="panel-lab"><span class="lab-ico" id="lab-ico" aria-hidden="true">&#128274;</span> Soon</button>
 </div>
 
@@ -1265,6 +1313,13 @@ ul.cg-list li::before{content:"\2022";position:absolute;left:0;color:var(--ink-4
      over by the server only to someone it has let in (see /api/lab/ui).
      The password is checked on the server against a secret that exists
      nowhere but there, so reading this source gets nobody any closer. -->
+<!-- The numbers: what the posts were like, never how the site is doing. -->
+<div id="panel-metrics" role="tabpanel" aria-labelledby="tab-metrics" tabindex="-1" hidden>
+  <p class="mx-intro">What everyone's posts have in common, counted. A score, which checks it tripped, how long the write-up took. No post text is in any of it, because no post text is kept.</p>
+  <div id="mx-live" aria-live="off"><p class="mx-wait">Counting.</p></div>
+  <p class="mx-foot" id="mx-foot" hidden>Counted since <span id="mx-since"></span>, which is when the counting started, not when the site did. Counts only: a score, the checks that fired, a rewrite's gain, a wait. Nothing that says what a post said or who pasted it. Shares are of scored posts unless a chart says otherwise, and under <span id="mx-min"></span> posts a share is an anecdote, so the headlines stay quiet until then. The raw figures are at <a href="api/metrics">api/metrics</a>.</p>
+</div>
+
 <div id="panel-lab" role="tabpanel" aria-labelledby="tab-lab" tabindex="-1" hidden>
   <div class="panel lab-lock" id="lab-lock">
     <div class="lab-pad" aria-hidden="true">&#128274;</div>
@@ -5816,6 +5871,8 @@ ul.cg-list li::before{content:"\2022";position:absolute;left:0;color:var(--ink-4
     '#rewordbtn, #analyzereword, .reword-text, .game-wrap, #counter, #limit-err, [aria-live], .toast, #pirateflag, ' +
     // The name of a file the visitor attached is theirs, not the site's.
     '#mediapreview-name, ' +
+    // Figures and the names of checks are data, not site copy.
+    '#mx-live, ' +
     // An address has to stay an address: "hello" is a word the pirate knows.
     '#contactmail';
   /* Everywhere the site speaks. It used to be six places, from when the site
@@ -5824,7 +5881,7 @@ ul.cg-list li::before{content:"\2022";position:absolute;left:0;color:var(--ink-4
      English under a pirate flag. The skip list above is what keeps this
      broad list safe: a root can be as wide as the page, because the
      visitor's own words are excluded by what they are, not by where. */
-  var PIRATE_ROOTS = ['header .tagline', 'header .intro', 'header .head-actions', '.tabs', '#panel-tool', '#report', '#panel-explain', '#lab-lock', '#whatsnew', '#tipask', 'footer'];
+  var PIRATE_ROOTS = ['header .tagline', 'header .intro', 'header .head-actions', '.tabs', '#panel-tool', '#report', '#panel-explain', '#panel-metrics', '#lab-lock', '#whatsnew', '#tipask', 'footer'];
   var PIRATE_PHRASES = [
     [/post quality assurance/gi, 'Plunder quality assurance'],
     [/unsympathetic/gi, 'no quarter given'],
@@ -6359,7 +6416,7 @@ ul.cg-list li::before{content:"\2022";position:absolute;left:0;color:var(--ink-4
   /* A roving tablist over however many tabs the page has, in DOM order:
      the selected tab is the only one in the Tab order, Left and Right wrap,
      Home and End jump, and only the selected panel is shown. */
-  var TAB_KEYS = ['tool', 'explain', 'lab'];
+  var TAB_KEYS = ['tool', 'explain', 'metrics', 'lab'];
   var tabShown = {};
   function selectTab(which){
     if (TAB_KEYS.indexOf(which) < 0) which = 'tool';
@@ -6373,7 +6430,7 @@ ul.cg-list li::before{content:"\2022";position:absolute;left:0;color:var(--ink-4
     // the tab that was showing and not on whichever one loaded first.
     // replaceState, not a hash assignment: no history entry per tab press, and
     // no hashchange event to chase its own tail.
-    var hash = which === 'explain' ? '#how-it-works' : which === 'lab' ? '#soon' : '';
+    var hash = which === 'explain' ? '#how-it-works' : which === 'metrics' ? '#the-numbers' : which === 'lab' ? '#soon' : '';
     try { if ((location.hash || '') !== hash) history.replaceState(null, '', location.pathname + location.search + hash); } catch (e) {}
     if (tabShown[which]) tabShown[which]();
   }
@@ -6391,6 +6448,157 @@ ul.cg-list li::before{content:"\2022";position:absolute;left:0;color:var(--ink-4
       $('#tab-' + TAB_KEYS[to]).focus();
     });
   });
+
+  /* ---------------- the numbers ----------------
+     One fetch of api/metrics on first open, then drawn from that. Every
+     headline is written FROM the figures at render time: a hardcoded finding
+     is wrong the day after it is typed. */
+  (function(){
+    var MX_MIN = 30;
+    var host = $('#mx-live'); if (!host) return;
+    var state = { data: null, all: false, w: 0, asked: false };
+    var pct = function(n, d){ return d ? Math.round(100 * n / d) : 0; };
+    var num = function(n){ return String(Math.round(n)).replace(/\B(?=(\d{3})+(?!\d))/g, ','); };
+    var sum = function(o){ var t = 0; for (var k in o) t += o[k] || 0; return t; };
+    var BANDS = [['barely', 'barely suck', 'barely sucks', 0, 3.2], ['normal', 'suck a normal amount', 'sucks a normal amount', 3.2, 5.6], ['lot', 'suck a lot', 'sucks a lot', 5.6, 8], ['completely', 'suck completely', 'sucks completely', 8, 10]];
+    var bandColor = function(i){ return 'var(--mx-b' + (i + 1) + ')'; };
+    var bandOf = function(v){ for (var i = 0; i < BANDS.length; i++) if (v < BANDS[i][4]) return i; return 3; };
+
+    // Sample figures, for looking at the tab on a laptop before there is
+    // anything real to draw. Only ever on localhost, and it says so.
+    function sample(){
+      var rules = YPS.RULES.map(function(r, i){ return { id: r.id, label: r.label, dim: r.dim, n: i % 9 === 8 ? 0 : Math.round(620 * Math.pow(0.86, i) * (0.7 + ((i * 37) % 10) / 16)) }; });
+      return { ok: true, sample: true, since: '2026-09-21', scored: 1184, clean: 96, bands: { barely: 498, normal: 441, lot: 203, completely: 42 }, scores: [38, 142, 231, 219, 187, 122, 98, 74, 47, 26],
+        rules: rules, flags: { media: 312, satire: 41, narrative: 188 }, reword: { asked: 214, modes: { reworded: 131, clean: 22, unavailable: 52, declined: 9 }, gain: { under1: 38, '1to2': 61, '2plus': 32 } },
+        wait: { lt5s: 402, '5to10s': 511, '10to20s': 96, gt20s: 11 } };
+    }
+
+    function section(n, eyebrow, headline, dek, body){
+      return '<section class="mx-sec"><span class="mx-num">' + n + ' &nbsp;/&nbsp; ' + YPS.esc(eyebrow) + '</span><h2 class="mx-h">' + YPS.esc(headline) + '</h2><p class="mx-dek">' + dek + '</p><div class="mx-card">' + body + '</div></section>';
+    }
+    function legend(rows){
+      return '<ul class="mx-legend">' + rows.map(function(r){ return '<li><i style="--c:' + r[0] + '"></i>' + YPS.esc(r[1]) + ' <b>' + r[2] + '</b></li>'; }).join('') + '</ul>';
+    }
+    function stack(rows, total){
+      return '<div class="mx-stack" role="img" aria-label="' + YPS.esc(rows.map(function(r){ return r[1] + ' ' + pct(r[2], total) + ' percent'; }).join(', ')) + '">' +
+        rows.filter(function(r){ return r[2] > 0; }).map(function(r){ return '<span style="--c:' + r[0] + ';flex:' + r[2] + ' 1 0"></span>'; }).join('') + '</div>' +
+        legend(rows.map(function(r){ return [r[0], r[1], pct(r[2], total) + '%']; }));
+    }
+
+    // One bar per point of the score. One viewBox unit is one CSS pixel, so
+    // a 12.5px label is 12.5px on a phone too.
+    function histogram(d, W){
+      var H = 250, l = 6, r = 6, t = 26, b = 44, iw = W - l - r, ih = H - t - b;
+      var max = Math.max.apply(null, d.scores.concat([1])), step = iw / 10, bw = Math.min(46, step * 0.72), top = d.scores.indexOf(max);
+      var s = '<svg viewBox="0 0 ' + W + ' ' + H + '" role="img" aria-label="' + YPS.esc('Posts by score. ' + d.scores.map(function(n, i){ return i + ' to ' + (i === 9 ? '9.9' : i + '.9') + ': ' + pct(n, d.scored) + ' percent'; }).join(', ')) + '">';
+      s += '<line x1="' + l + '" x2="' + (W - r) + '" y1="' + (t + ih) + '" y2="' + (t + ih) + '" stroke="var(--rule-2)" stroke-width="1"/>';
+      d.scores.forEach(function(n, i){
+        var h = n ? Math.max(2, ih * n / max) : 0, x = l + step * i + (step - bw) / 2, y = t + ih - h;
+        if (n) s += '<rect x="' + x.toFixed(1) + '" y="' + y.toFixed(1) + '" width="' + bw.toFixed(1) + '" height="' + h.toFixed(1) + '" rx="2" fill="' + bandColor(bandOf(i + 0.5)) + '"/>';
+        s += '<text class="' + (i === top ? 'mx-top' : 'mx-val') + '" text-anchor="middle" x="' + (x + bw / 2).toFixed(1) + '" y="' + (y - 7).toFixed(1) + '">' + pct(n, d.scored) + '%</text>';
+        s += '<text text-anchor="middle" x="' + (x + bw / 2).toFixed(1) + '" y="' + (t + ih + 18) + '">' + i + '</text>';
+      });
+      // The scale underneath, in the same units as the bars above it.
+      BANDS.forEach(function(bd, i){
+        var x0 = l + iw * bd[3] / 10, x1 = l + iw * bd[4] / 10;
+        s += '<rect x="' + (x0 + 1).toFixed(1) + '" y="' + (H - 14) + '" width="' + Math.max(1, x1 - x0 - 2).toFixed(1) + '" height="5" rx="2.5" fill="' + bandColor(i) + '"/>';
+      });
+      return s + '</svg>' + legend(BANDS.map(function(bd, i){ return [bandColor(i), bd[2], pct(d.bands[bd[0]] || 0, d.scored) + '%']; }));
+    }
+
+    function ruleBars(d){
+      var rows = d.rules.slice().sort(function(a, b){ return b.n - a.n; });
+      var max = Math.max(1, rows[0] ? rows[0].n : 1), shown = state.all ? rows : rows.filter(function(x){ return x.n > 0; }).slice(0, 12);
+      var html = '<ul class="mx-bars">' + shown.map(function(x){
+        return '<li' + (x.n ? '' : ' class="zero"') + '><span class="t">' + YPS.esc(x.label) + '</span><span class="p">' + (x.n ? (pct(x.n, d.scored) || '<1') + '%' : 'never') + '</span><span class="track"><span class="fill" style="--w:' + (100 * x.n / max).toFixed(1) + ';--c:var(--dim-' + x.dim + ')"></span></span></li>';
+      }).join('') + '</ul>';
+      if (rows.length > shown.length || state.all) html += '<button type="button" class="mx-more" id="mx-more" aria-expanded="' + (state.all ? 'true' : 'false') + '">' + (state.all ? 'Show the top 12' : 'Show all ' + rows.length + ' checks') + '</button>';
+      var dims = dimLabels(), seen = {};
+      d.rules.forEach(function(x){ seen[x.dim] = true; });
+      return html + legend(['auth', 'clar', 'cring', 'bait', 'brag'].filter(function(k){ return seen[k]; }).map(function(k){ return ['var(--dim-' + k + ')', dims[k] || k, '']; }));
+    }
+
+    function draw(){
+      var d = state.data, W = Math.max(280, Math.min(760, (host.clientWidth || 640) - 34));
+      state.w = W;
+      if (!d || !d.ok){ host.innerHTML = '<p class="mx-wait">The numbers could not be read just now. The score never depended on them.</p>'; return; }
+      var quiet = d.scored < MX_MIN, html = '';
+      if (d.sample) html += '<p class="mx-sample">Sample figures, made up, for looking at the layout. Only ever shown on localhost.</p>';
+
+      var topBand = BANDS.slice().sort(function(a, b){ return (d.bands[b[0]] || 0) - (d.bands[a[0]] || 0); })[0];
+      var fired = d.rules.filter(function(x){ return x.n > 0; }).sort(function(a, b){ return b.n - a.n; }), sin = fired[0];
+      var never = d.rules.length - fired.length;
+      var rw = d.reword, reached = (rw.modes.reworded || 0) + (rw.modes.unavailable || 0);
+      var waited = sum(d.wait), fast = (d.wait.lt5s || 0) + (d.wait['5to10s'] || 0);
+
+      html += '<div class="mx-tiles">' +
+        '<div class="mx-tile"><span class="v">' + num(d.scored) + '</span><span class="k">Posts scored</span><span class="n">Since ' + YPS.esc(sinceText(d.since)) + '.</span></div>' +
+        '<div class="mx-tile"><span class="v">' + pct(d.bands[topBand[0]] || 0, d.scored) + '%</span><span class="k">' + YPS.esc(topBand[2]) + '</span><span class="n">The biggest group.</span></div>' +
+        '<div class="mx-tile"><span class="v">' + (sin ? pct(sin.n, d.scored) + '%' : '0') + '</span><span class="k">Most common sin</span><span class="n">' + YPS.esc(sin ? sin.label : 'Nothing has fired yet.') + '</span></div>' +
+        '<div class="mx-tile"><span class="v">' + pct(d.clean, d.scored) + '%</span><span class="k">Tripped nothing</span><span class="n">Not one of the ' + d.rules.length + ' checks.</span></div>' +
+        '</div>';
+
+      var few = 'Too few posts to say anything true yet: ' + num(d.scored) + ' so far';
+      var share = pct(d.bands[topBand[0]] || 0, d.scored);
+      html += section('01', 'Where the scores land',
+        quiet ? few : share > 50 ? 'Most posts ' + topBand[1] : 'The biggest group, ' + share + '%, ' + topBand[1],
+        'One bar for each point of the score, 0 to 9.9, and the four verdicts marked underneath. Higher is worse. ' + num(d.scored) + ' posts.',
+        histogram(d, W));
+
+      html += section('02', 'The sins, ranked',
+        quiet || !sin ? few : 'The most common sin is "' + sin.label + '", in ' + (pct(sin.n, d.scored) || 'under 1') + '% of posts',
+        'The share of scored posts that tripped each check, with the bar scaled to the worst offender. Colour is the category the check belongs to.' + (never ? ' ' + never + ' of the ' + d.rules.length + ' checks have not fired once.' : ''),
+        ruleBars(d));
+
+      var rwRows = [['var(--cool)', 'rewritten, and it scored better', rw.modes.reworded || 0], ['var(--ink-3)', 'no rewrite was good enough to show', rw.modes.unavailable || 0], ['var(--dim-clar)', 'nothing to fix', rw.modes.clean || 0], ['var(--rule-2)', 'declined', rw.modes.declined || 0]];
+      if (rw.modes.cache) rwRows[0][2] += rw.modes.cache;
+      var gainRows = [['var(--mx-b2)', 'under a point', rw.gain.under1 || 0], ['var(--cool)', '1 to 2 points', rw.gain['1to2'] || 0], ['var(--dim-clar)', '2 points or more', rw.gain['2plus'] || 0]];
+      html += section('03', 'What Reword manages',
+        rw.asked < MX_MIN ? 'Reword has been asked ' + num(rw.asked) + ' times, which is too few to say anything true' : 'Reword came back with something better ' + pct(rw.modes.reworded || 0, reached) + '% of the times it tried',
+        'A rewrite is only ever shown if the same checks score it lower than the original. When none does, the page says so and shows nothing. ' + num(rw.asked) + ' asks.',
+        '<p class="mx-cardlabel">How an ask ended</p>' + stack(rwRows, sum(rw.modes)) +
+        (sum(rw.gain) ? '<p class="mx-cardlabel mx-gap">Points taken off, when it worked</p>' + stack(gainRows, sum(rw.gain)) : ''));
+
+      var waitRows = [['var(--dim-clar)', 'under 5 seconds', d.wait.lt5s || 0], ['var(--cool)', '5 to 10', d.wait['5to10s'] || 0], ['var(--mx-b2)', '10 to 20', d.wait['10to20s'] || 0], ['var(--warm)', 'over 20', d.wait.gt20s || 0]];
+      html += section('04', 'The wait',
+        waited < MX_MIN ? 'Too few AI write-ups to time yet: ' + num(waited) + ' so far' : pct(fast, waited) + '% of AI write-ups arrive in under ten seconds',
+        'From pressing the button to the write-up, for the calls that reached the AI. The score never waits on any of this: the checklist is code, and code answers at once.',
+        '<p class="mx-cardlabel">' + num(waited) + ' waits</p>' + stack(waitRows, waited));
+
+      html += section('05', 'What came with the post',
+        quiet ? few : pct(d.flags.media, d.scored) + '% of posts came with an image or video',
+        'Three things the page notes about a post, as shares of scored posts. A post can be more than one, or none.',
+        '<ul class="mx-bars">' + [['Had an image or video', d.flags.media], ['Read as a story, so the checks went easier on length', d.flags.narrative], ['Read as satire, and was scored as the joke it was', d.flags.satire]].map(function(x){
+          return '<li><span class="t">' + YPS.esc(x[0]) + '</span><span class="p">' + pct(x[1], d.scored) + '%</span><span class="track"><span class="fill" style="--w:' + pct(x[1], d.scored) + '"></span></span></li>'; }).join('') + '</ul>');
+
+      host.innerHTML = html;
+      var more = $('#mx-more');
+      if (more) more.addEventListener('click', function(){ state.all = !state.all; draw(); var again = $('#mx-more'); if (again) again.focus(); });
+      $('#mx-since').textContent = sinceText(d.since); $('#mx-min').textContent = MX_MIN; $('#mx-foot').hidden = false;
+    }
+    function sinceText(iso){
+      var m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(iso || ''); if (!m) return 'the counting started';
+      return (+m[3]) + ' ' + ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'][+m[2] - 1] + ' ' + m[1];
+    }
+
+    tabShown.metrics = function(){
+      if (state.data){ draw(); return; }
+      if (state.asked) return;
+      state.asked = true;
+      var local = /^(localhost|127\.0\.0\.1)$/.test(location.hostname) && /[?&]sample\b/.test(location.search);
+      if (local){ state.data = sample(); draw(); return; }
+      fetch('api/metrics', { headers: { accept: 'application/json' } })
+        .then(function(r){ return r.ok ? r.json() : { ok: false }; })
+        .catch(function(){ return { ok: false }; })
+        .then(function(j){ state.data = j; state.asked = false; if (!$('#panel-metrics').hidden) draw(); });
+    };
+    var mxTimer = null;
+    window.addEventListener('resize', function(){
+      if (!state.data || $('#panel-metrics').hidden) return;
+      clearTimeout(mxTimer);
+      mxTimer = setTimeout(function(){ if (Math.abs(((host.clientWidth || 0) - 34) - state.w) > 24) draw(); }, 150);
+    });
+  })();
 
   /* ---------------- the locked room ----------------
      This page knows three addresses and nothing else about what it guards:
@@ -6514,6 +6722,7 @@ ul.cg-list li::before{content:"\2022";position:absolute;left:0;color:var(--ink-4
   // does not reload the page and so never reaches the line above it.
   function tabFromHash(){
     if (location.hash === '#how-it-works') selectTab('explain');
+    else if (location.hash === '#the-numbers') selectTab('metrics');
     else if (location.hash === '#soon') selectTab('lab');
   }
   tabFromHash();

@@ -1673,6 +1673,25 @@ console.log('\n=== the ticker ===');
   check('ticker: no counter bound means no count, no error, and no number', r.mode === 'llm' && (await status(noDO)).ticker === null);
 }
 
+console.log('\n=== the numbers, for anyone: an allow-list ===');
+{
+  const env = baseEnv(); env.COUNTERS = mockCounters(); llmBehaviour = 'good'; rewordBehaviour = 'good';
+  await (await worker.fetch(post({ post: BAD }), env, ctx)).json();
+  await (await worker.fetch(reword({ post: BAD }), env, ctx)).json();
+  const off = { ...env }; delete off.ANTHROPIC_API_KEY;
+  await (await worker.fetch(post({ post: NEUTRAL }), off, ctx)).json();   // a rules-only page, with a reason
+  await worker.fetch(post({ post: '' }), env, ctx);                        // a refused request
+  await new Promise(z => setTimeout(z, 60));
+  const res = await worker.fetch(new Request('https://yourpost.sucks/api/metrics'), env, ctx);
+  const m = await res.json(), raw = JSON.stringify(m), all = await readStats(env);
+  const rules = ENGINE.analyze(BAD, {});
+  check('api/metrics: scored posts, the ten score buckets, and every check by name, fired or not', m.ok && m.scored === 2 && m.scores.length === 10 && m.scores.reduce((a, n) => a + n, 0) === 2 && m.rules.length === ENGINE.RULES.length && rules.stats.firedIds.every(id => (m.rules.find(r => r.id === id) || {}).n >= 1) && m.rules.every(r => r.label && r.dim), raw.slice(0, 200));
+  check('  ...Reword outcomes and the wait', m.reword.asked === 1 && m.reword.modes.reworded === 1 && Object.values(m.wait).reduce((a, n) => a + n, 0) >= 1, JSON.stringify(m.reword) + JSON.stringify(m.wait));
+  check('  ...and nothing about how the site is doing: no reasons, no errors, no request totals', all['analyze:why:no_key'] === 1 && all['analyze:error:empty'] === 1 && !/no_key|why|error|analyze:all|mode:rules|budget|turnstile/.test(raw), raw.slice(0, 300));
+  check('  ...it may be cached at the edge, and is read-only', /s-maxage=300/.test(res.headers.get('cache-control') || '') && (await worker.fetch(new Request('https://yourpost.sucks/api/metrics', { method: 'POST' }), env, ctx)).status === 405);
+  check('  ...with no counter bound it says so and does not throw', (await (await worker.fetch(new Request('https://yourpost.sucks/api/metrics'), baseEnv(), ctx)).json()).ok === false);
+}
+
 console.log('\n=== a roast list that came back wrong is mended, not thrown away ===');
 {
   const good = { one_liner: 'A clean post.', brutal: 'Nothing here is desperate.', advice: [], changes: [] };
