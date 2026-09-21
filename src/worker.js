@@ -307,6 +307,47 @@ async function countTipClick(env, ip, where) {
   }
 }
 
+/* ------------------------------------------------------------------ *
+ * how the AI report is doing
+ *
+ * Before this, a failed AI report left one line in a log nobody was
+ * tailing, and the only evidence that it ever happened was a reader's
+ * screenshot. These are lifetime counts of every outcome of the report call,
+ * by reason, plus how many of the calls and of the failures had an image or
+ * the harsher register, since those are the two things that make a failure
+ * more likely. Counts only: nothing about the post, the reader or the text.
+ * ------------------------------------------------------------------ */
+export const AI_OUTCOMES = Object.freeze(['ok', 'repaired', 'partial',
+  'fail:lines_unusable', 'fail:lines_compromised', 'fail:all_roasts_policed', 'fail:roasts_count', 'fail:no_object', 'fail:rejected',
+  'fail:cut_off', 'fail:no_tool_block', 'fail:timeout', 'fail:http_429', 'fail:http_5xx', 'fail:http_other', 'fail:call_failed',
+  'calls:image', 'calls:meaner', 'fail:with_image', 'fail:with_meaner']);
+const AI_TTL = 315360000;
+async function countAiOutcome(env, keys) {
+  const ns = counters(env);
+  if (!ns) return;
+  try {
+    for (const k of keys) if (AI_OUTCOMES.indexOf(k) >= 0) await counterCall(ns, 'ai', '/hit', { key: `ai:${k}`, ttlSeconds: AI_TTL });
+  } catch (e) {
+    console.warn('ai outcome: not counted', e && e.message);
+  }
+}
+async function readAiOutcomes(env) {
+  const ns = counters(env);
+  if (!ns) return null;
+  try {
+    const out = {};
+    for (const k of AI_OUTCOMES) {
+      const r = await counterCall(ns, 'ai', '/charge', { key: `ai:${k}`, cost: 0, ttlSeconds: AI_TTL });
+      const n = Number(r.spent) || 0;
+      if (n) out[k] = n;
+    }
+    return out;
+  } catch (e) {
+    console.warn('ai outcomes: unavailable', e && e.message);
+    return null;
+  }
+}
+
 /** The lifetime totals, or null when the counter is unreachable. Read-only:
  *  a zero-cost charge is how this object reports a count without writing. */
 async function readTipTotals(env) {
@@ -854,7 +895,39 @@ const sounds = v => !MACHINE_TELLS.some(re => re.test(String(v)));
  * the same way an em dash drops one roast and not the response. */
 const EMOJI_TALK = /\bemojis?\b/i;
 
-function validateLLM(out, post, factsText, maxCredits, report) {
+/* A dash is the commonest reason a whole paid report used to be thrown
+ * away: the model reaches for one constantly, one in either load-bearing
+ * line failed policed(), and the reader got the rules-only page with "the
+ * AI's commentary came back unusable". A dash is also the one fault that can
+ * be fixed without judgement. Between digits it is a range and becomes a
+ * hyphen; anywhere else it is a pause and becomes a comma. Everything else
+ * policed() refuses (a score, a link, a remark about the writer) is still
+ * refused: those are not punctuation. */
+const ODD_DASH = '(?!-)\\p{Pd}';
+export function repairDashes(v) {
+  if (typeof v !== 'string') return v;
+  return v
+    .replace(new RegExp('(\\d)[ \\t]*' + ODD_DASH + '+[ \\t]*(\\d)', 'gu'), '$1-$2')
+    .replace(/ -- /g, ', ')
+    .replace(new RegExp('[ \\t]*' + ODD_DASH + '+[ \\t]*', 'gu'), ', ')
+    .replace(/^, /, '').replace(/, $/, '')
+    .replace(/, ([.!?,;:])/g, '$1').replace(/([.!?;:]), /g, '$1 ');
+}
+const repairDeep = v => typeof v === 'string' ? repairDashes(v)
+  : Array.isArray(v) ? v.map(repairDeep)
+  : v && typeof v === 'object' ? Object.fromEntries(Object.entries(v).map(([k, x]) => [k, repairDeep(x)]))
+  : v;
+
+/** `note`, when given, is filled in with what happened: `why` on a whole
+ *  rejection, `repaired` when a dash was fixed, `partial` naming any
+ *  load-bearing line that was replaced by the engine's own. */
+function validateLLM(out, post, factsText, maxCredits, report, note) {
+  note = note || {};
+  if (out && typeof out === 'object') {
+    const fixed = repairDeep(out);
+    if (JSON.stringify(fixed) !== JSON.stringify(out)) note.repaired = true;
+    out = fixed;
+  }
   const nameEmoji = (report && report.nameEmoji) || [];
   // Only when the post's one kind of emoji is a name: then every emoji the
   // model can be talking about is part of somebody's name.
@@ -872,17 +945,27 @@ function validateLLM(out, post, factsText, maxCredits, report) {
   // Same discipline as validateReword: a whole-response rejection names
   // itself in the log. Seen in production before this existed: a 15-second
   // model call that came back as a rules-only report with no trace of why.
-  const reject = why => { console.warn('report rejected:', why); return null; };
+  const reject = why => { console.warn('report rejected:', why); note.why = why; return null; };
   if (!out || typeof out !== 'object') return reject('no_object');
   // See policed(): the post's own vocabulary is not a prediction about it.
   const clean = v => policed(v, post);
   const str = v => typeof v === 'string' && v.trim().length > 0 && v.length < 600;
-  if (!str(out.one_liner) || !str(out.brutal)) return reject('one_liner_or_brutal_missing');
-  // Load-bearing fields get the same clean() gate as everything optional
-  // below. A rejection here discards the whole response, same as it always
-  // has, just now checked against the identical rule instead of a narrower
-  // inline copy of it (see clean()'s own comment for why that mattered).
-  if (!clean(out.one_liner) || !clean(out.brutal)) return reject('one_liner_or_brutal_policed');
+  // The two load-bearing lines get the same clean() gate as everything
+  // optional below. One of them failing used to discard the whole response,
+  // roasts and all, which threw away a cent and a half of good commentary
+  // over one sentence. Now the failed line is replaced by the line the
+  // engine already wrote for this post, and the rest ships. The exception
+  // is a line that reads as the model having been steered (a score, a link,
+  // "as instructed"): that still discards everything, because if the post
+  // talked the model into that, the roasts came from the same conversation.
+  if (compromised(out.one_liner) || compromised(out.brutal)) return reject('lines_compromised');
+  const lineOK = v => str(v) && clean(v) && emojiOK(v);
+  const partial = [];
+  let oneLiner = out.one_liner, brutal = out.brutal;
+  if (!lineOK(oneLiner)) { oneLiner = report && report.oneLiner; partial.push('oneLiner'); }
+  if (!lineOK(brutal)) { brutal = report && report.brutal; partial.push('brutal'); }
+  if (!str(oneLiner) || !str(brutal)) return reject('lines_unusable');
+  if (partial.length) { note.partial = partial; console.warn('report: engine line used for', partial.join(' and ')); }
   if (!Array.isArray(out.roasts) || out.roasts.length < 1 || out.roasts.length > 8) return reject('roasts_count');
 
   // The length check above already rejects anything the label pill can't
@@ -944,7 +1027,7 @@ function validateLLM(out, post, factsText, maxCredits, report) {
   const diagnosticsNote = (shortStr(out.diagnostics_note, 240) && clean(out.diagnostics_note) && noFabricatedNumbers(out.diagnostics_note, factsText)) ? out.diagnostics_note.trim() : null;
   const annotatedNote = (shortStr(out.annotated_note, 240) && clean(out.annotated_note) && noFabricatedNumbers(out.annotated_note, factsText)) ? out.annotated_note.trim() : null;
 
-  return { oneLiner: out.one_liner, roasts, brutal: out.brutal, advice, changes, headline, credits, breakdownNote, diagnosticsNote, annotatedNote };
+  return { oneLiner, roasts, brutal, advice, changes, headline, credits, breakdownNote, diagnosticsNote, annotatedNote, partial: partial.length ? partial : null };
 }
 
 /** `m` is the call's meter (see meter() above): filled in with the usage
@@ -1029,15 +1112,20 @@ async function callClaude(env, post, report, image, m, meaner) {
         messages: [{ role: 'user', content }]
       })
     });
-    if (!res.ok) { console.warn('report: model HTTP', res.status); m.failed = true; return null; }
+    if (!res.ok) { console.warn('report: model HTTP', res.status); m.failed = true; m.why = res.status === 429 ? 'http_429' : res.status >= 500 ? 'http_5xx' : 'http_other'; return null; }
     const data = await res.json();
     m.usage = data.usage || null;
     const block = (data.content || []).find(c => c.type === 'tool_use');
-    if (!block) { console.warn('report: no tool block, stop_reason', data.stop_reason); m.failed = true; return null; }
-    return validateLLM(block.input, post, userMessage, report.credits.length, report);
+    if (!block) { console.warn('report: no tool block, stop_reason', data.stop_reason); m.failed = true; m.why = data.stop_reason === 'max_tokens' ? 'cut_off' : 'no_tool_block'; return null; }
+    const note = {};
+    const valid = validateLLM(block.input, post, userMessage, report.credits.length, report, note);
+    m.why = valid ? null : (note.why || 'rejected');
+    m.repaired = !!note.repaired;
+    return valid;
   } catch (e) {
     console.warn('report: call failed', e && e.name);
     m.failed = true;
+    m.why = e && e.name === 'AbortError' ? 'timeout' : 'call_failed';
     return null; // timeout, network, malformed: all degrade the same way
   } finally {
     clearTimeout(timer);
@@ -1328,6 +1416,16 @@ function newNumbersIntroduced(rewritten, originalPost, withRaw) {
  *  swapped one AI tell for another would be the tool failing at its own
  *  job. A single stray em dash discards that field, same as any other
  *  policed content, rather than silently editing the model's prose. */
+/* The two refusals that are about the MODEL having been steered, not about
+ * a clumsy sentence: a link (it has nowhere legitimate to have got one), and
+ * a score, a verdict of perfection or the vocabulary of obeying an
+ * instruction. policed() refuses these like everything else; validateLLM
+ * also asks separately, because one of these in a load-bearing line means
+ * the whole response is suspect and none of it should ship. */
+const compromisedLow = low => /https?:\/\/|\bwww\./.test(low) ||
+  /\b(?:10\s*\/\s*10|0\s*\/\s*10|out of 10|scores? \d|perfect post|score of|i (?:will|shall) ignore|as (?:you |an )?instructed|as an a\.?i\b\.?)/.test(low);
+const compromised = raw => typeof raw === 'string' && compromisedLow(normalizeForPolicing(raw).toLowerCase());
+
 function policed(raw, source) {
   const v = normalizeForPolicing(raw);
   // The em-dash rule, applied to what an em dash IS rather than to one code
@@ -1347,8 +1445,7 @@ function policed(raw, source) {
   // A link is never something the report should be handing a reader: the
   // model has nowhere legitimate to have got one from, so any URL is either
   // hallucinated or smuggled in from the post.
-  if (/https?:\/\/|\bwww\./.test(low)) return false;
-  if (/\b(?:10\s*\/\s*10|0\s*\/\s*10|out of 10|scores? \d|perfect post|score of|i (?:will|shall) ignore|as (?:you |an )?instructed|as an a\.?i\b\.?)/.test(low)) return false;
+  if (compromisedLow(low)) return false;
   // Reach vocabulary is banned because the model must never PREDICT reach.
   // But a post that is itself ABOUT impressions ("Chasing impressions is not
   // a strategy", "proud of it at 200,000+ impressions") makes that word the
@@ -1704,6 +1801,14 @@ async function handleAnalyze(request, env, ctx) {
 
   const llm = await callClaude(env, post, report, image, reportMeter, meaner);
   await settleCharge(env, precharged, needsTone ? [toneMeter, reportMeter] : [reportMeter]);
+  {
+    const keys = [];
+    if (hasImage) keys.push('calls:image');
+    if (meaner) keys.push('calls:meaner');
+    if (!llm) { keys.push('fail:' + (reportMeter.why || 'rejected')); if (hasImage) keys.push('fail:with_image'); if (meaner) keys.push('fail:with_meaner'); }
+    else keys.push(llm.partial ? 'partial' : reportMeter.repaired ? 'repaired' : 'ok');
+    ctx.waitUntil(countAiOutcome(env, keys));
+  }
   if (!llm) return degrade('llm_unavailable');
 
   const merged = {
@@ -1729,7 +1834,7 @@ async function handleAnalyze(request, env, ctx) {
   // Same reasoning as the read above: an image-derived report never goes
   // into the text-keyed cache, or a future text-only request for the same
   // caption would inherit commentary about a picture it never sent.
-  if (env.KV && !hasImage) {
+  if (env.KV && !hasImage && !llm.partial) {
     ctx.waitUntil(env.KV.put(
       `c:${hash}`,
       JSON.stringify({
@@ -1902,6 +2007,8 @@ async function handleStatus(env) {
       budgetRemaining: spent === null ? null : spent + callCostMicros(true, true) <= capMicros
     },
     tipClicks: tips,
+    // Every outcome of the AI report call, by reason, since 2026-09-21.
+    aiReport: await readAiOutcomes(env),
     // The footer ticker. Up to a minute stale at the edge, which is fine
     // for a number whose whole job is to be large.
     ticker

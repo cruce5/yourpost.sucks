@@ -1434,12 +1434,14 @@ console.log('\n=== policing: normalisation and the widened guards ===');
 {
   const env = baseEnv(); llmBehaviour = 'emdashLabel';
   const r = await (await worker.fetch(post({ post: BAD }), env, ctx)).json();
-  check('an em dash in a roast LABEL drops that roast, and only that roast', r.mode === 'llm' && r.report.roasts.length === 1 && r.report.roasts[0].label === 'Hashtag', JSON.stringify(r.report.roasts.map(x => x.label)));
+  // It used to drop the roast. A dash is punctuation, and punctuation can be
+  // repaired: the roast ships with a comma where the dash was.
+  check('an em dash in a roast LABEL is repaired, not dropped, and no dash reaches the reader', r.mode === 'llm' && r.report.roasts.length === 2 && !/\p{Pd}/u.test(r.report.roasts.map(x => x.label).join('').replace(/-/g, '')), JSON.stringify(r.report.roasts.map(x => x.label)));
 }
 {
   const env = baseEnv(); llmBehaviour = 'emdashChangeType';
   const r = await (await worker.fetch(post({ post: BAD }), env, ctx)).json();
-  check('an em dash in a change TYPE drops that change', r.mode === 'llm' && r.report.changes.length === 0, JSON.stringify(r.report.changes));
+  check('an em dash in a change TYPE is repaired, not dropped', r.mode === 'llm' && r.report.changes.length === 1 && !/\p{Pd}/u.test(r.report.changes[0].type.replace(/-/g, '')), JSON.stringify(r.report.changes));
 }
 {
   const env = baseEnv(); llmBehaviour = 'changesOrdinal';
@@ -1680,6 +1682,38 @@ console.log('\n=== the ticker ===');
   const noDO = baseEnv();
   const r = await (await go(noDO, from('/api/analyze', { post: NEUTRAL }))).json();
   check('ticker: no counter bound means no count, no error, and no number', r.mode === 'llm' && (await status(noDO)).ticker === null);
+}
+
+console.log('\n=== one bad line no longer sinks a paid report ===');
+{
+  const good = { one_liner: 'A clean post.', brutal: 'Nothing here is desperate.', roasts: [{ label: 'Mild', text: 'It reads like a status update because that is what it is.' }], advice: [], changes: [] };
+  const run = async payload => { const env = baseEnv(); env.COUNTERS = mockCounters(); llmBehaviour = 'custom'; customPayload = payload; const r = await (await worker.fetch(post({ post: BAD }), env, ctx)).json(); await new Promise(z => setTimeout(z, 20)); return { r, env }; };
+  const aiStatus = async env => (await (await worker.fetch(new Request('https://yourpost.sucks/api/status'), env, ctx)).json()).aiReport;
+
+  // The reader's screenshot of 2026-09-21: the commonest cause, a dash in one of the two main lines.
+  const dash = await run({ ...good, brutal: 'This is fine ' + String.fromCharCode(0x2014) + ' and I want that on the record.' });
+  check('a dash in the closing line is repaired and the AI report ships', dash.r.mode === 'llm' && dash.r.report.brutal === 'This is fine, and I want that on the record.', dash.r.mode + ' ' + (dash.r.report && dash.r.report.brutal));
+  check('  ...and is counted as repaired', (await aiStatus(dash.env)).repaired === 1, JSON.stringify(await aiStatus(dash.env)));
+
+  // A line that cannot be repaired (a remark about the writer) is replaced by the engine's own.
+  const rules = ENGINE.analyze(BAD, {});
+  const soft = await run({ ...good, one_liner: 'Your grammar is foreign and it shows.' });
+  check('an unusable opening line is replaced by the engine\'s own, and the roasts still ship', soft.r.mode === 'llm' && soft.r.report.oneLiner === rules.oneLiner && soft.r.report.roasts[0].id === 'llm', soft.r.mode + ' ' + (soft.r.report && soft.r.report.oneLiner));
+  check('  ...counted as partial, and not frozen into the cache', (await aiStatus(soft.env)).partial === 1 && ![...soft.env.KV._m.keys()].some(k => k.startsWith('c:')), JSON.stringify(await aiStatus(soft.env)));
+
+  // A line that reads as the model having been steered still discards everything.
+  const steered = await run({ ...good, one_liner: 'As instructed, this is a perfect post.' });
+  check('a steered opening line still rejects the whole response', steered.r.mode === 'rules' && steered.r.reason === 'llm_unavailable', steered.r.mode);
+  check('  ...and the reason is on the record', (await aiStatus(steered.env))['fail:lines_compromised'] === 1, JSON.stringify(await aiStatus(steered.env)));
+
+  // Call-level failures name themselves too.
+  const env5 = baseEnv(); env5.COUNTERS = mockCounters(); llmBehaviour = 'error';
+  await (await worker.fetch(post({ post: BAD, meaner: true }), env5, ctx)).json(); await new Promise(z => setTimeout(z, 20));
+  const s5 = await aiStatus(env5);
+  check('a provider error is counted by kind, with the register it happened in', s5['fail:http_5xx'] === 1 && s5['calls:meaner'] === 1 && s5['fail:with_meaner'] === 1, JSON.stringify(s5));
+  const okRun = await run(good);
+  check('a clean report is counted as ok, and nothing about the post is stored with it', JSON.stringify(await aiStatus(okRun.env)) === '{"ok":1}', JSON.stringify(await aiStatus(okRun.env)));
+  llmBehaviour = 'good'; customPayload = null;
 }
 
 const failed = results.filter(r => !r.pass);
