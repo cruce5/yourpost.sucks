@@ -3655,10 +3655,12 @@ ul.cg-list li::before{content:"\2022";position:absolute;left:0;color:var(--ink-4
         rows.filter(function(r){ return r[2] > 0; }).map(function(r){ return '<span style="--c:' + r[0] + ';flex:' + r[2] + ' 1 0"></span>'; }).join('') + '</div>' +
         legend(rows.map(function(r){ return [r[0], r[1], legendVal(r[2], total)]; }));
     }
-    function bars(rows, d, max, id){
+    /* A bar's full width is every post. Scaling to the biggest row made a
+       24% bar look like 100% (the owner, on two rows tied at 7 of 29). */
+    function bars(rows, d, max, id, none){
       return '<ul class="mx-bars"' + (id ? ' id="' + id + '"' : '') + '>' + rows.map(function(x){
         var off = x.countable === false;
-        return '<li' + (x.n && !off ? '' : ' class="zero"') + '><span class="t">' + E(x.label) + (x.sub ? '<span class="c">' + E(x.sub) + '</span>' : '') + '</span><span class="p">' + (off ? 'not counted here' : x.n ? E(share(x.n, d)) : 'never') + '</span><span class="mx-track"><span class="mx-fill" style="--w:' + (max ? 100 * x.n / max : 0).toFixed(1) + '"></span></span></li>';
+        return '<li' + (x.n && !off ? '' : ' class="zero"') + '><span class="t">' + E(x.label) + (x.sub ? '<span class="c">' + E(x.sub) + '</span>' : '') + '</span><span class="p">' + (off ? 'not counted here' : x.n ? E(share(x.n, d)) : (none || 'never')) + '</span><span class="mx-track"><span class="mx-fill" style="--w:' + (max ? 100 * x.n / max : 0).toFixed(1) + '"></span></span></li>';
       }).join('') + '</ul>';
     }
 
@@ -3696,8 +3698,8 @@ ul.cg-list li::before{content:"\2022";position:absolute;left:0;color:var(--ink-4
       var dims = dimLabels();
       var rows = d.rules.slice().sort(function(a, b){ return (b.countable === false ? -1 : b.n) - (a.countable === false ? -1 : a.n); })
         .map(function(x){ return { label: x.label, n: x.n, countable: x.countable, sub: dims[x.dim] || '' }; });
-      var max = Math.max(1, rows[0] ? rows[0].n : 1), shown = state.all ? rows : rows.filter(function(x){ return x.n > 0; }).slice(0, 12);
-      var html = bars(shown, d.scored, max, 'mx-rules');
+      var shown = state.all ? rows : rows.filter(function(x){ return x.n > 0; }).slice(0, 12);
+      var html = bars(shown, d.scored, Math.max(1, d.scored), 'mx-rules');
       if (rows.length > shown.length || state.all) html += '<button type="button" class="mx-more" id="mx-more" aria-controls="mx-rules" aria-expanded="' + (state.all ? 'true' : 'false') + '">' + (state.all ? 'Show the top 12' : 'Show all ' + rows.length + ' checks') + '</button>';
       return html;
     }
@@ -3744,7 +3746,7 @@ ul.cg-list li::before{content:"\2022";position:absolute;left:0;color:var(--ink-4
         quiet ? few : !sin ? 'Not one check has fired in ' + num(d.scored) + ' posts. Either everyone got better or something is broken'
           : clearLead(sin.n, sin2 && sin2.n) ? 'The most popular sin is "' + sin.label + '", in ' + share(sin.n, d.scored) + ' of posts'
           : 'Two sins, neck and neck: "' + sin.label + '" at ' + share(sin.n, d.scored) + ' and "' + sin2.label + '" at ' + share(sin2.n, d.scored),
-        'How often each check fires. The longest bar is the most common sin, not the worst one. ' + (never ? never + ' of the ' + countable.length + ' countable checks have never fired. ' : '') + '"Not in English" can’t be counted here: a post it catches never gets a score.',
+        'How often each check fires. A full bar would be every post. The longest bar is the most common sin, not the worst one. ' + (never ? never + ' of the ' + countable.length + ' countable checks have never fired. ' : '') + '"Not in English" can’t be counted here: a post it catches never gets a score.',
         ruleBars(d));
 
       var rw = d.reword, T = rw.tried, tried = T.better + T.couldNotBeat + T.unusable;
@@ -3770,8 +3772,8 @@ ul.cg-list li::before{content:"\2022";position:absolute;left:0;color:var(--ink-4
       var ftop = flagRows[0];
       html += section('05', 'What came with the post',
         quiet ? few : say(ftop.n, d.scored, 'None of these has come up yet', 'Every post so far ' + ftop.verb, share(ftop.n, d.scored) + ' of posts ' + ftop.verb),
-        'Three things the checks notice. A post can be all three, or none. Bars are scaled to the biggest of the three.',
-        bars(flagRows, d.scored, Math.max(1, ftop.n)));
+        'Three things the checks notice. A post can be all three, or none. A full bar would be every post.',
+        bars(flagRows, d.scored, Math.max(1, d.scored), null, 'none yet'));
 
       host.innerHTML = html;
       var more = $('#mx-more');
