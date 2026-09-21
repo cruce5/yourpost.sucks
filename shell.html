@@ -342,6 +342,7 @@ textarea::placeholder{color:var(--ink-4)}
   display:inline-flex;align-items:center;
 }
 .media-upload-btn:hover{border-color:var(--cool);color:var(--ink)}
+#mediafile:focus-visible + .media-upload-btn{outline:2px solid var(--cool);outline-offset:2px}
 .media-preview{display:flex;align-items:center;gap:8px;font-size:14px;color:var(--ink-3)}
 /* The flex rule above used to beat the hidden attribute, so an empty
    preview row (a broken image icon and a remove button) sat on the page
@@ -1216,8 +1217,13 @@ ul.cg-list li::before{content:"\2022";position:absolute;left:0;color:var(--ink-4
     </label>
     <p class="media-note">Turns off the checks that assume the text is the whole post. The report says so when it did.</p>
     <div class="media-upload">
-      <button type="button" class="media-upload-btn" id="mediabtn">Attach image, or paste one</button>
-      <input type="file" id="mediafile" accept="image/jpeg,image/png,image/webp,image/gif,image/heic,image/heif" hidden>
+      <!-- A real file input with a real label. It used to be a hidden input
+           opened by a scripted click(), which some extensions and locked-down
+           browsers swallow without a word: a visitor reported the button
+           doing nothing. A label opens the picker with no script at all, and
+           the input itself takes keyboard focus. -->
+      <input type="file" class="sr-only" id="mediafile" accept="image/jpeg,image/png,image/webp,image/gif,image/avif,image/bmp,image/heic,image/heif">
+      <label class="media-upload-btn" id="mediabtn" for="mediafile">Attach image, or paste one</label>
       <div class="media-preview" id="mediapreview" hidden>
         <img id="mediapreview-img" alt="" hidden>
         <span id="mediapreview-name"></span>
@@ -3032,7 +3038,6 @@ ul.cg-list li::before{content:"\2022";position:absolute;left:0;color:var(--ink-4
   }
 
   // Keyboard-reachable stand-in for the hidden file input.
-  $('#mediabtn').addEventListener('click', function(){ $('#mediafile').click(); });
   $('#hasmedia').addEventListener('change', function(){ mediaCheckedByAttach = false; });
 
   /* The register is a preference, not a property of one post, so it is
@@ -3180,7 +3185,9 @@ ul.cg-list li::before{content:"\2022";position:absolute;left:0;color:var(--ink-4
     // iOS reports HEIC as image/heic (and sometimes as no type at all);
     // Safari transcodes it on the way in, other browsers may not decode it,
     // and that failure surfaces as the error toast below.
-    var typeOk = /^image\/(jpeg|png|webp|gif|heic|heif)$/.test(file.type) || (!file.type && /\.hei[cf]$/i.test(file.name));
+    // Whatever comes in is redrawn as a JPEG before it leaves the page, so
+    // anything the browser can decode is fine to accept.
+    var typeOk = /^image\/(jpeg|png|webp|gif|avif|bmp|heic|heif)$/.test(file.type) || (!file.type && /\.hei[cf]$/i.test(file.name));
     if (!typeOk){
       toast('Unsupported image type', { error: true }); if (onReject) onReject(); return;
     }
@@ -3210,7 +3217,7 @@ ul.cg-list li::before{content:"\2022";position:absolute;left:0;color:var(--ink-4
     });
   }
 
-  $('#mediaremove').addEventListener('click', function(){ clearAttachedImage(); $('#mediabtn').focus(); });
+  $('#mediaremove').addEventListener('click', function(){ clearAttachedImage(); $('#mediafile').focus(); });
 
   function showNotices(list, header){
     var n = $('#notices');
@@ -3260,6 +3267,13 @@ ul.cg-list li::before{content:"\2022";position:absolute;left:0;color:var(--ink-4
     for (var i = 0; files && i < files.length; i++) if (/^image\//.test(files[i].type)) return files[i];
     return null;
   }
+  // One image per post. A second one used to be dropped without a word.
+  function severalImages(files){
+    var n = 0;
+    for (var i = 0; files && i < files.length; i++) if (/^image\//.test(files[i].type)) n++;
+    return n > 1;
+  }
+  var ONE_IMAGE = 'One image per post for now. Using the first.';
   function isField(el){
     return !!(el && (el.tagName === 'TEXTAREA' || el.tagName === 'INPUT' || el.isContentEditable));
   }
@@ -3267,7 +3281,7 @@ ul.cg-list li::before{content:"\2022";position:absolute;left:0;color:var(--ink-4
   document.addEventListener('paste', function(ev){
     var cd = ev.clipboardData; if (!cd) return;
     var img = firstImage(cd.files);
-    if (img){ attachImageFile(img); toast('Image attached from the clipboard'); }
+    if (img){ attachImageFile(img); toast(severalImages(cd.files) ? ONE_IMAGE : 'Image attached from the clipboard'); }
     if (isField(ev.target)){
       // Inside the box the browser pastes the text itself. A lone image has
       // no text to paste, so stop it dropping a filename in.
@@ -3320,7 +3334,7 @@ ul.cg-list li::before{content:"\2022";position:absolute;left:0;color:var(--ink-4
       var img = firstImage(dt.files), text = dt.getData('text/plain');
       if (!img && !text) return;
       ev.preventDefault();
-      if (img) attachImageFile(img);
+      if (img){ attachImageFile(img); if (severalImages(dt.files)) toast(ONE_IMAGE); }
       if (text) takeText(text);
     });
   })();

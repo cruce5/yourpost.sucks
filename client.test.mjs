@@ -54,10 +54,10 @@ check('game section is hidden before the first report', await p.evaluate(() => {
   return g.hidden && getComputedStyle(g).display === 'none';
 }));
 check('game stage is not tabbable before Start', await p.getAttribute('#game-stage', 'tabindex') === '-1');
-check('media attach control is a focusable <button>', await p.evaluate(() => {
-  const el = document.getElementById('mediabtn');
-  el.focus();
-  return el.tagName === 'BUTTON' && document.activeElement === el;
+check('media attach control is a real label on a real, focusable file input (no scripted click to swallow)', await p.evaluate(() => {
+  const label = document.getElementById('mediabtn'), input = document.getElementById('mediafile');
+  input.focus();
+  return label.tagName === 'LABEL' && label.htmlFor === 'mediafile' && input.type === 'file' && !input.hidden && getComputedStyle(input).display !== 'none' && document.activeElement === input;
 }));
 check('media preview is hidden with no image', await p.evaluate(() => getComputedStyle(document.getElementById('mediapreview')).display === 'none'));
 check('phantom preview regression: hidden attribute beats the flex rule', await p.evaluate(() => {
@@ -877,6 +877,19 @@ await api.waitForFunction(() => document.getElementById('mediapreview-name').tex
 await api.click('#mediaremove');
 check('removing the image leaves a hand-ticked box alone', await api.evaluate(() => document.getElementById('hasmedia').checked));
 check('accept lists heic and heif', /image\/heic,image\/heif/.test(await api.getAttribute('#mediafile', 'accept')));
+check('accept lists avif and bmp too', /image\/avif,image\/bmp/.test(await api.getAttribute('#mediafile', 'accept')));
+check('two images dropped at once: the first is used and the page says so', await api.evaluate(async () => {
+  const c = document.createElement('canvas'); c.width = 8; c.height = 8;
+  const blob = await new Promise(r => c.toBlob(r, 'image/png'));
+  const dt = new DataTransfer();
+  dt.items.add(new File([blob], 'first.png', { type: 'image/png' })); dt.items.add(new File([blob], 'second.png', { type: 'image/png' }));
+  const panel = document.getElementById('post').closest('.panel') || document.body;
+  const ev = new Event('drop', { bubbles: true, cancelable: true }); ev.dataTransfer = dt;
+  document.getElementById('post').dispatchEvent(ev);
+  await new Promise(r => setTimeout(r, 600));
+  return document.getElementById('mediapreview-name').textContent === 'first.png' && /One image per post/.test(document.body.textContent);
+}));
+await api.click('#mediaremove');
 const transcoded = await api.evaluate(async () => {
   // A fully transparent PNG through the same pipeline: the JPEG that comes
   // out must be white, not black.
