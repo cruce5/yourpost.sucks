@@ -1247,7 +1247,7 @@ ul.cg-list li::before{content:"\2022";position:absolute;left:0;color:var(--ink-4
 <div class="tabs" role="tablist" aria-label="Site sections">
   <button class="tab-btn" id="tab-tool" role="tab" type="button" aria-selected="true" aria-controls="panel-tool">Roast my post</button>
   <button class="tab-btn" id="tab-explain" role="tab" type="button" aria-selected="false" tabindex="-1" aria-controls="panel-explain">How this works</button>
-  <button class="tab-btn" id="tab-metrics" role="tab" type="button" aria-selected="false" tabindex="-1" aria-controls="panel-metrics">The numbers</button>
+  <button class="tab-btn" id="tab-metrics" role="tab" type="button" aria-selected="false" tabindex="-1" aria-controls="panel-metrics" hidden>The numbers</button>
   <button class="tab-btn" id="tab-lab" role="tab" type="button" aria-selected="false" tabindex="-1" aria-controls="panel-lab"><span class="lab-ico" id="lab-ico" aria-hidden="true">&#128274;</span> Soon</button>
 </div>
 
@@ -1316,8 +1316,21 @@ ul.cg-list li::before{content:"\2022";position:absolute;left:0;color:var(--ink-4
 <!-- The numbers: what the posts were like, never how the site is doing. -->
 <div id="panel-metrics" role="tabpanel" aria-labelledby="tab-metrics" tabindex="-1" hidden>
   <p class="mx-intro">What everyone's posts have in common, counted. A score, which checks it tripped, how long the write-up took. No post text is in any of it, because no post text is kept.</p>
+  <div class="panel lab-lock" id="mx-lock" hidden>
+    <div class="lab-pad" aria-hidden="true">&#128274;</div>
+    <h2 class="lab-h" id="mx-lock-h" tabindex="-1">The numbers are being checked before they go up.</h2>
+    <p class="lab-p">Nothing here is secret for long. It is locked while the counting is looked over by the one person who can tell if it is wrong.</p>
+    <form class="lab-form" id="mx-form" autocomplete="off">
+      <label class="lab-label" for="mx-pass">Password</label>
+      <div class="lab-row">
+        <input class="lab-input" type="password" id="mx-pass" name="password" autocomplete="off" autocapitalize="off" spellcheck="false" aria-describedby="mx-err" maxlength="200">
+        <button class="btn-primary" id="mx-go" type="submit">Unlock</button>
+      </div>
+      <p class="field-err" id="mx-err" role="alert" hidden></p>
+    </form>
+  </div>
   <div id="mx-live" aria-live="off"><p class="mx-wait">Counting.</p></div>
-  <p class="mx-foot" id="mx-foot" hidden>Counted since <span id="mx-since"></span>, which is when the counting started, not when the site did. Counts only: a score, the checks that fired, a rewrite's gain, a wait. Nothing that says what a post said or who pasted it. Shares are of scored posts unless a chart says otherwise, and under <span id="mx-min"></span> posts a share is an anecdote, so the headlines stay quiet until then. The raw figures are at <a href="api/metrics">api/metrics</a>.</p>
+  <p class="mx-foot" id="mx-foot" hidden>Counted since <span id="mx-since"></span>, which is when the counting started, not when the site did. The tallies are kept as each report is made; this page reads them when you open the tab, and what it reads is at most five minutes old<span id="mx-asof"></span>. Counts only: a score, the checks that fired, a rewrite's gain, a wait. Nothing that says what a post said or who pasted it. Shares are of scored posts unless a chart says otherwise, and under <span id="mx-min"></span> posts a share is an anecdote, so the headlines stay quiet until then. The raw figures are at <a href="api/metrics">api/metrics</a>.</p>
 </div>
 
 <div id="panel-lab" role="tabpanel" aria-labelledby="tab-lab" tabindex="-1" hidden>
@@ -1453,6 +1466,15 @@ ul.cg-list li::before{content:"\2022";position:absolute;left:0;color:var(--ink-4
       <b>Small print.</b>
       The report explains why a clean post scores 0.2 and not 0.0, and the site finally has its own icon.
     </li>
+    <!-- Below the rest on purpose: what came from the comments stays on top.
+         Hidden until the tab it describes is open to everyone (api/status,
+         metricsOpen). ON THE DAY IT OPENS: set METRICS_OPEN = "1" in
+         wrangler.toml AND move WHATSNEW_VERSION on, or returning visitors
+         are never shown this. -->
+    <li id="wn-metrics" hidden>
+      <b>There is a tab of numbers now.</b>
+      <i>The numbers</i> counts what everyone's posts have in common: where the scores land, and which sins are the most popular. It counts, it does not keep. No post text is in it.
+    </li>
   </ul>
   <p class="wn-tip">Every AI-written report costs me about a penny, and the site is free with no sign-up and no ads. If it has made one of your posts less bad, <a data-tip="whatsnew" href="https://buymeacoffee.com/billyost" target="_blank" rel="noopener noreferrer">buy me a coffee</a>.</p>
   <div class="wn-actions"><button class="btn-ghost" id="wn-done" type="button">Got it</button></div>
@@ -1538,6 +1560,7 @@ ul.cg-list li::before{content:"\2022";position:absolute;left:0;color:var(--ink-4
   })();
   var tsState = { widgetId: null, ready: false, pendingResolve: null };
   fetch('api/status').then(function(r){ return r.ok ? r.json() : null; }).then(function(s){
+    if (s && s.metricsOpen){ var mt = document.getElementById('tab-metrics'), mw = document.getElementById('wn-metrics'); if (mt) mt.hidden = false; if (mw) mw.hidden = false; }
     if (s && typeof s.ticker === 'number') ticker.set(s.ticker);
     var siteKey = s && s.turnstileSiteKey;
     if (!siteKey) return;
@@ -3487,9 +3510,12 @@ ul.cg-list li::before{content:"\2022";position:absolute;left:0;color:var(--ink-4
      the selected tab is the only one in the Tab order, Left and Right wrap,
      Home and End jump, and only the selected panel is shown. */
   var TAB_KEYS = ['tool', 'explain', 'metrics', 'lab'];
+  function liveTabs(){ return TAB_KEYS.filter(function(k){ return !$('#tab-' + k).hidden; }); }
   var tabShown = {};
   function selectTab(which){
     if (TAB_KEYS.indexOf(which) < 0) which = 'tool';
+    // Coming to a tab by its address puts it on the page.
+    $('#tab-' + which).hidden = false;
     TAB_KEYS.forEach(function(k){
       var on = k === which, b = $('#tab-' + k), p = $('#panel-' + k);
       b.setAttribute('aria-selected', on ? 'true' : 'false');
@@ -3507,15 +3533,15 @@ ul.cg-list li::before{content:"\2022";position:absolute;left:0;color:var(--ink-4
   TAB_KEYS.forEach(function(k){ $('#tab-' + k).addEventListener('click', function(){ selectTab(k); }); });
   Array.prototype.forEach.call(document.querySelectorAll('.tab-btn'), function(btn){
     btn.addEventListener('keydown', function(e){
-      var i = TAB_KEYS.indexOf(btn.id.replace('tab-', '')), n = TAB_KEYS.length, to;
+      var keys = liveTabs(), i = keys.indexOf(btn.id.replace('tab-', '')), n = keys.length, to;
       if (e.key === 'ArrowRight') to = (i + 1) % n;
       else if (e.key === 'ArrowLeft') to = (i + n - 1) % n;
       else if (e.key === 'Home') to = 0;
       else if (e.key === 'End') to = n - 1;
       else return;
       e.preventDefault();
-      selectTab(TAB_KEYS[to]);
-      $('#tab-' + TAB_KEYS[to]).focus();
+      selectTab(keys[to]);
+      $('#tab-' + keys[to]).focus();
     });
   });
 
@@ -3531,6 +3557,9 @@ ul.cg-list li::before{content:"\2022";position:absolute;left:0;color:var(--ink-4
     var num = function(n){ return String(Math.round(n)).replace(/\B(?=(\d{3})+(?!\d))/g, ','); };
     var sum = function(o){ var t = 0; for (var k in o) t += o[k] || 0; return t; };
     var BANDS = [['barely', 'barely suck', 'barely sucks', 0, 3.2], ['normal', 'suck a normal amount', 'sucks a normal amount', 3.2, 5.6], ['lot', 'suck a lot', 'sucks a lot', 5.6, 8], ['completely', 'suck completely', 'sucks completely', 8, 10]];
+    // A share that is none or all is a different sentence, not "0%" or "100%"
+    // dropped into the usual one.
+    var say = function(p, none, all, some){ return p <= 0 ? none : p >= 100 ? all : some; };
     var bandColor = function(i){ return 'var(--mx-b' + (i + 1) + ')'; };
     var bandOf = function(v){ for (var i = 0; i < BANDS.length; i++) if (v < BANDS[i][4]) return i; return 3; };
 
@@ -3611,12 +3640,12 @@ ul.cg-list li::before{content:"\2022";position:absolute;left:0;color:var(--ink-4
       var few = 'Too few posts to say anything true yet: ' + num(d.scored) + ' so far';
       var share = pct(d.bands[topBand[0]] || 0, d.scored);
       html += section('01', 'Where the scores land',
-        quiet ? few : share > 50 ? 'Most posts ' + topBand[1] : 'The biggest group, ' + share + '%, ' + topBand[1],
+        quiet ? few : share >= 100 ? 'Every post so far ' + topBand[2] : share > 50 ? 'Most posts ' + topBand[1] : 'The biggest group, ' + share + '%, ' + topBand[1],
         'One bar for each point of the score, 0 to 9.9, and the four verdicts marked underneath. Higher is worse. ' + num(d.scored) + ' posts.',
         histogram(d, W));
 
       html += section('02', 'The sins, ranked',
-        quiet || !sin ? few : 'The most common sin is "' + sin.label + '", in ' + (pct(sin.n, d.scored) || 'under 1') + '% of posts',
+        quiet ? few : !sin ? 'Not one check has fired on ' + num(d.scored) + ' posts, which is either very good news or a bug' : 'The most common sin is "' + sin.label + '", in ' + (pct(sin.n, d.scored) || 'under 1') + '% of posts',
         'The share of scored posts that tripped each check, with the bar scaled to the worst offender. Colour is the category the check belongs to.' + (never ? ' ' + never + ' of the ' + d.rules.length + ' checks have not fired once.' : ''),
         ruleBars(d));
 
@@ -3624,19 +3653,19 @@ ul.cg-list li::before{content:"\2022";position:absolute;left:0;color:var(--ink-4
       if (rw.modes.cache) rwRows[0][2] += rw.modes.cache;
       var gainRows = [['var(--mx-b2)', 'under a point', rw.gain.under1 || 0], ['var(--cool)', '1 to 2 points', rw.gain['1to2'] || 0], ['var(--dim-clar)', '2 points or more', rw.gain['2plus'] || 0]];
       html += section('03', 'What Reword manages',
-        rw.asked < MX_MIN ? 'Reword has been asked ' + num(rw.asked) + ' times, which is too few to say anything true' : 'Reword came back with something better ' + pct(rw.modes.reworded || 0, reached) + '% of the times it tried',
+        rw.asked < MX_MIN ? 'Reword has been asked ' + num(rw.asked) + ' times, which is too few to say anything true' : say(pct(rw.modes.reworded || 0, reached), 'Reword has yet to come back with something better, in ' + num(reached) + ' tries', 'Reword has come back with something better every time it tried', 'Reword came back with something better ' + pct(rw.modes.reworded || 0, reached) + '% of the times it tried'),
         'A rewrite is only ever shown if the same checks score it lower than the original. When none does, the page says so and shows nothing. ' + num(rw.asked) + ' asks.',
         '<p class="mx-cardlabel">How an ask ended</p>' + stack(rwRows, sum(rw.modes)) +
         (sum(rw.gain) ? '<p class="mx-cardlabel mx-gap">Points taken off, when it worked</p>' + stack(gainRows, sum(rw.gain)) : ''));
 
       var waitRows = [['var(--dim-clar)', 'under 5 seconds', d.wait.lt5s || 0], ['var(--cool)', '5 to 10', d.wait['5to10s'] || 0], ['var(--mx-b2)', '10 to 20', d.wait['10to20s'] || 0], ['var(--warm)', 'over 20', d.wait.gt20s || 0]];
       html += section('04', 'The wait',
-        waited < MX_MIN ? 'Too few AI write-ups to time yet: ' + num(waited) + ' so far' : pct(fast, waited) + '% of AI write-ups arrive in under ten seconds',
+        waited < MX_MIN ? 'Too few AI write-ups to time yet: ' + num(waited) + ' so far' : say(pct(fast, waited), 'No AI write-up has arrived in under ten seconds yet', 'Every AI write-up so far arrived in under ten seconds', pct(fast, waited) + '% of AI write-ups arrive in under ten seconds'),
         'From pressing the button to the write-up, for the calls that reached the AI. The score never waits on any of this: the checklist is code, and code answers at once.',
         '<p class="mx-cardlabel">' + num(waited) + ' waits</p>' + stack(waitRows, waited));
 
       html += section('05', 'What came with the post',
-        quiet ? few : pct(d.flags.media, d.scored) + '% of posts came with an image or video',
+        quiet ? few : say(pct(d.flags.media, d.scored), 'No post so far came with an image or video', 'Every post so far came with an image or video', pct(d.flags.media, d.scored) + '% of posts came with an image or video'),
         'Three things the page notes about a post, as shares of scored posts. A post can be more than one, or none.',
         '<ul class="mx-bars">' + [['Had an image or video', d.flags.media], ['Read as a story, so the checks went easier on length', d.flags.narrative], ['Read as satire, and was scored as the joke it was', d.flags.satire]].map(function(x){
           return '<li><span class="t">' + YPS.esc(x[0]) + '</span><span class="p">' + pct(x[1], d.scored) + '%</span><span class="mx-track"><span class="mx-fill" style="--w:' + pct(x[1], d.scored) + '"></span></span></li>'; }).join('') + '</ul>');
@@ -3645,6 +3674,8 @@ ul.cg-list li::before{content:"\2022";position:absolute;left:0;color:var(--ink-4
       var more = $('#mx-more');
       if (more) more.addEventListener('click', function(){ state.all = !state.all; draw(); var again = $('#mx-more'); if (again) again.focus(); });
       $('#mx-since').textContent = sinceText(d.since); $('#mx-min').textContent = MX_MIN; $('#mx-foot').hidden = false;
+      var at = d.at ? new Date(d.at) : null;
+      $('#mx-asof').textContent = at && !isNaN(at) ? ' (read at ' + at.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' }) + ')' : '';
     }
     function sinceText(iso){
       var m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(iso || ''); if (!m) return 'the counting started';
@@ -3657,11 +3688,48 @@ ul.cg-list li::before{content:"\2022";position:absolute;left:0;color:var(--ink-4
       state.asked = true;
       var local = /^(localhost|127\.0\.0\.1)$/.test(location.hostname) && /[?&]sample\b/.test(location.search);
       if (local){ state.data = sample(); draw(); return; }
-      fetch('api/metrics', { headers: { accept: 'application/json' } })
-        .then(function(r){ return r.ok ? r.json() : { ok: false }; })
-        .catch(function(){ return { ok: false }; })
-        .then(function(j){ state.data = j; state.asked = false; if (!$('#panel-metrics').hidden) draw(); });
+      load();
     };
+    function load(){
+      return fetch('api/metrics', { credentials: 'same-origin', headers: { accept: 'application/json' } })
+        .then(function(r){ return r.status === 401 ? { locked: true } : r.ok ? r.json() : { ok: false }; })
+        .catch(function(){ return { ok: false }; })
+        .then(function(j){
+          state.asked = false;
+          var lock = $('#mx-lock');
+          if (j.locked){ lock.hidden = false; host.hidden = true; return false; }
+          lock.hidden = true; host.hidden = false;
+          state.data = j;
+          if (!$('#panel-metrics').hidden) draw();
+          return !!j.ok;
+        });
+    }
+    $('#mx-form').addEventListener('submit', function(e){
+      e.preventDefault();
+      var input = $('#mx-pass'), err = $('#mx-err'), btn = $('#mx-go'), given = input.value;
+      if (!given){ input.focus(); return; }
+      btn.disabled = true; btn.textContent = 'Checking';
+      err.hidden = true; err.textContent = '';
+      getTurnstileToken().then(function(token){
+        return fetch('api/metrics/unlock', { method: 'POST', credentials: 'same-origin', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ password: given, turnstileToken: token }) });
+      })
+        .then(function(r){
+          input.value = '';
+          if (!r.ok) throw { status: r.status };
+          return load().then(function(){ var l = $('#live'); if (l) l.textContent = 'Unlocked.'; var h = document.querySelector('#panel-metrics .mx-h'); if (h){ h.tabIndex = -1; h.focus(); } });
+        })
+        .catch(function(x){
+          var s = x && x.status;
+          err.textContent = s === 401 ? 'That is not it.'
+            : s === 429 ? 'Too many tries from this connection. Come back in an hour.'
+            : s === 404 ? 'There is no door here to open.'
+            : s === 403 ? 'The bot check did not pass. Reload the page and try again.'
+            : 'Could not check that just now. Try again in a minute.';
+          err.hidden = false;
+          input.focus();
+        })
+        .then(function(){ btn.disabled = false; btn.textContent = 'Unlock'; });
+    });
     var mxTimer = null;
     window.addEventListener('resize', function(){
       if (!state.data || $('#panel-metrics').hidden) return;

@@ -43,6 +43,14 @@ RATE_LIMIT_PER_HOUR = "30"
 # total: everything after 2026-09-21 is already in the live count.
 TICKER_BASELINE = "3000"
 
+# "The numbers" tab. Locked by default: the figures answer only to a cookie
+# earned with the METRICS_PASSWORD secret (set with: wrangler secret put
+# METRICS_PASSWORD; never written here). With neither this flag nor the secret
+# set, nobody can read them. To open the tab to everyone, uncomment the line
+# below AND move WHATSNEW_VERSION on in shell.html so returning visitors are
+# told. There is no other step.
+# METRICS_OPEN = "1"
+
 # Check current IDs at https://platform.claude.com/docs/en/about-claude/models/overview
 MODEL = "claude-haiku-4-5"
 

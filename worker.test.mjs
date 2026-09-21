@@ -1675,7 +1675,7 @@ console.log('\n=== the ticker ===');
 
 console.log('\n=== the numbers, for anyone: an allow-list ===');
 {
-  const env = baseEnv(); env.COUNTERS = mockCounters(); llmBehaviour = 'good'; rewordBehaviour = 'good';
+  const env = baseEnv(); env.COUNTERS = mockCounters(); env.METRICS_OPEN = '1'; llmBehaviour = 'good'; rewordBehaviour = 'good';
   await (await worker.fetch(post({ post: BAD }), env, ctx)).json();
   await (await worker.fetch(reword({ post: BAD }), env, ctx)).json();
   const off = { ...env }; delete off.ANTHROPIC_API_KEY;
@@ -1689,7 +1689,43 @@ console.log('\n=== the numbers, for anyone: an allow-list ===');
   check('  ...Reword outcomes and the wait', m.reword.asked === 1 && m.reword.modes.reworded === 1 && Object.values(m.wait).reduce((a, n) => a + n, 0) >= 1, JSON.stringify(m.reword) + JSON.stringify(m.wait));
   check('  ...and nothing about how the site is doing: no reasons, no errors, no request totals', all['analyze:why:no_key'] === 1 && all['analyze:error:empty'] === 1 && !/no_key|why|error|analyze:all|mode:rules|budget|turnstile/.test(raw), raw.slice(0, 300));
   check('  ...it may be cached at the edge, and is read-only', /s-maxage=300/.test(res.headers.get('cache-control') || '') && (await worker.fetch(new Request('https://yourpost.sucks/api/metrics', { method: 'POST' }), env, ctx)).status === 405);
-  check('  ...with no counter bound it says so and does not throw', (await (await worker.fetch(new Request('https://yourpost.sucks/api/metrics'), baseEnv(), ctx)).json()).ok === false);
+  check('  ...with no counter bound it says so and does not throw', (await (await worker.fetch(new Request('https://yourpost.sucks/api/metrics'), { ...baseEnv(), METRICS_OPEN: '1' }, ctx)).json()).ok === false);
+}
+
+console.log('\n=== the door on the numbers ===');
+{
+  const WORD = 'a test word that exists only in this file';
+  const get = (env, cookie) => worker.fetch(new Request('https://yourpost.sucks/api/metrics', { headers: cookie ? { cookie } : {} }), env, ctx);
+  const guess = (env, password, ip = '10.4.4.4') => worker.fetch(new Request('https://yourpost.sucks/api/metrics/unlock', { method: 'POST', headers: { 'content-type': 'application/json', 'sec-fetch-site': 'same-origin', 'cf-connecting-ip': ip }, body: JSON.stringify({ password }) }), env, ctx);
+
+  const bare = baseEnv(); bare.COUNTERS = mockCounters();
+  check('locked is the default: no secret and no open flag means nobody gets the figures', (await get(bare)).status === 401 && (await guess(bare, 'anything')).status === 404);
+  check('  ...and the status page says the tab is not open', (await (await worker.fetch(new Request('https://yourpost.sucks/api/status'), bare, ctx)).json()).metricsOpen === false);
+
+  const env = baseEnv(); env.COUNTERS = mockCounters(); env.METRICS_PASSWORD = WORD;
+  const locked = await get(env);
+  check('with a secret set, no cookie means 401, and the answer is never cached', locked.status === 401 && /no-store/.test(locked.headers.get('cache-control')));
+  const t0 = Date.now(), wrong = await guess(env, 'not it');
+  check('a wrong guess is refused, slowly, and sets nothing', wrong.status === 401 && Date.now() - t0 >= 950 && !wrong.headers.get('set-cookie'));
+  const right = await guess(env, WORD), jar = right.headers.get('set-cookie') || '';
+  check('the right one earns a cookie that a script cannot read and another site cannot send', right.status === 200 && /^mx=\d+\.[0-9a-f]{64};/.test(jar) && /HttpOnly/.test(jar) && /Secure/.test(jar) && /SameSite=Strict/.test(jar) && /Path=\/api\/metrics/.test(jar) && !jar.includes(WORD), jar.slice(0, 60));
+  const cookie = jar.split(';')[0], open = await get(env, cookie), body = await open.json();
+  check('  ...and the cookie opens the figures, uncached, stamped with when they were read', open.status === 200 && body.ok === true && /private, no-store/.test(open.headers.get('cache-control')) && !isNaN(new Date(body.at)), open.status + ' ' + open.headers.get('cache-control'));
+  const forged = cookie.replace(/[0-9a-f]$/, c => c === '0' ? '1' : '0'), later = 'mx=' + (Math.floor(Date.now() / 1000) + 9e6) + cookie.slice(cookie.indexOf('.'));
+  check('  ...a forged signature, or a real one on a later expiry, opens nothing', (await get(env, forged)).status === 401 && (await get(env, later)).status === 401);
+  const changed = { ...env, METRICS_PASSWORD: WORD + ' changed' };
+  check('  ...and changing the secret ends every session', (await get(changed, cookie)).status === 401);
+  let last = null; for (let i = 0; i < 11; i++) last = await guess(env, WORD, '10.5.5.5');
+  check('guesses are capped per address, right or wrong', last.status === 429);
+  const noDO = baseEnv(); noDO.METRICS_PASSWORD = WORD;
+  check('  ...and with nothing to count guesses on, there is no guessing', (await guess(noDO, WORD)).status === 503);
+  const x = await worker.fetch(new Request('https://yourpost.sucks/api/metrics/unlock', { method: 'POST', headers: { 'content-type': 'application/json', 'sec-fetch-site': 'cross-site', origin: 'https://evil.example' }, body: JSON.stringify({ password: WORD }) }), env, ctx);
+  check('  ...another site cannot guess on a visitor\'s behalf', x.status === 403);
+  const pub = baseEnv(); pub.COUNTERS = mockCounters(); pub.METRICS_OPEN = '1'; pub.METRICS_PASSWORD = WORD;
+  const o = await get(pub);
+  check('open to everyone is one config flag: no cookie needed, cacheable, and the door is gone', o.status === 200 && /s-maxage=300/.test(o.headers.get('cache-control')) && (await guess(pub, WORD)).status === 404 && (await (await worker.fetch(new Request('https://yourpost.sucks/api/status'), pub, ctx)).json()).metricsOpen === true);
+  const src = readFileSync(new URL('./src/worker.js', import.meta.url), 'utf8') + readFileSync(new URL('./wrangler.toml', import.meta.url), 'utf8');
+  check('the password is a secret: not in the code, not in the config', !/METRICS_PASSWORD\s*=\s*["']/.test(src));
 }
 
 console.log('\n=== a roast list that came back wrong is mended, not thrown away ===');

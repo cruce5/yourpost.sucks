@@ -949,8 +949,63 @@ check('Right from the last tab wraps to the first, and only one tab is in the Ta
     reword: { asked: 80, modes: { reworded: 50, unavailable: 20, clean: 10 }, gain: { under1: 10, '1to2': 25, '2plus': 15 } },
     wait: { lt5s: 30, '5to10s': 50, '10to20s': 15, gt20s: 5 } });
   let body = figures(500), hits = 0;
+  await api.goto(httpUrl);
+  check('the numbers: the what\'s-new line about it is last, and hidden while the tab is', await api.evaluate(() => { const li = document.getElementById('wn-metrics'); return li.hidden && li === li.parentElement.lastElementChild && li.parentElement.children.length >= 6; }));
+  {
+    const open = await b.newPage();
+    await open.route('**/api/status', route => route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ ok: true, metricsOpen: true, ticker: 10 }) }));
+    await open.goto(httpUrl);
+    await open.waitForFunction(() => !document.getElementById('tab-metrics').hidden, null, { timeout: 5000 });
+    check('the numbers: once the site says it is open, everyone gets the tab and the what\'s-new line', await open.evaluate(() => !document.getElementById('wn-metrics').hidden && document.querySelectorAll('.tab-btn:not([hidden])').length === 4));
+    await open.close();
+  }
+  check('the numbers: the tab is not on the page until it is open to everyone', await api.evaluate(() => document.getElementById('tab-metrics').hidden && document.querySelectorAll('.tab-btn:not([hidden])').length === 3));
+
+  // Behind its door: the address shows the tab, the figures are refused, the padlock answers.
+  let unlocked = false, guesses = [];
+  await api.route('**/api/metrics/unlock', async route => { const g = JSON.parse(route.request().postData()).password; guesses.push(g); if (g === 'open sesame'){ unlocked = true; return route.fulfill({ status: 200, contentType: 'application/json', body: '{"ok":true}' }); } return route.fulfill({ status: 401, contentType: 'application/json', body: '{"error":"wrong"}' }); });
+  await api.route('**/api/metrics', route => { hits++; return unlocked ? route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(body) }) : route.fulfill({ status: 401, contentType: 'application/json', body: '{"error":"locked"}' }); });
+  await api.goto(httpUrl + '#the-numbers'); await api.reload();
+  await api.waitForSelector('#mx-lock:not([hidden])', { timeout: 5000 });
+  check('the numbers: locked, the address shows the tab and a padlock, with no email form and no figures', await api.evaluate(() => !document.getElementById('tab-metrics').hidden && document.querySelectorAll('#panel-metrics .mx-sec').length === 0 && !document.querySelector('#mx-lock input[type="email"]') && document.getElementById('mx-pass').type === 'password'));
+  await api.fill('#mx-pass', 'wrong guess'); await api.click('#mx-go');
+  await api.waitForSelector('#mx-err:not([hidden])', { timeout: 5000 });
+  check('the numbers: a wrong password says so, clears the box and keeps the door shut', await api.evaluate(() => document.getElementById('mx-err').textContent === 'That is not it.' && document.getElementById('mx-pass').value === '' && document.activeElement.id === 'mx-pass' && document.querySelectorAll('#panel-metrics .mx-sec').length === 0));
+  await api.fill('#mx-pass', 'open sesame'); await api.click('#mx-go');
+  await api.waitForSelector('#panel-metrics .mx-sec', { timeout: 5000 });
+  check('the numbers: the right one draws the figures, hides the padlock and moves focus to the first finding', await api.evaluate(() => document.getElementById('mx-lock').hidden && document.activeElement.classList.contains('mx-h') && !/open sesame/.test(document.documentElement.innerHTML)), JSON.stringify(guesses));
+  check('the numbers: the footer says how fresh the figures are', await api.evaluate(() => /at most five minutes old/.test(document.getElementById('mx-foot').textContent)));
+  await api.unroute('**/api/metrics'); await api.unroute('**/api/metrics/unlock');
+
+  // Headline drift: every headline is a template over live figures, so the
+  // risk is a template that reads wrong at an edge. Sweep the edges.
+  const edges = [
+    ['an exact tie for the biggest group', d => { d.bands = { barely: 200, normal: 200, lot: 80, completely: 20 }; }],
+    ['exactly half', d => { d.bands = { barely: 250, normal: 150, lot: 80, completely: 20 }; }],
+    ['a top check under one percent', d => { d.rules.forEach((r, i) => r.n = i === 0 ? 2 : 0); }],
+    ['no check has fired at all', d => { d.rules.forEach(r => r.n = 0); d.clean = d.scored; }],
+    ['Reword never asked', d => { d.reword = { asked: 0, modes: {}, gain: {} }; }],
+    ['Reword asked, never once succeeded', d => { d.reword = { asked: 60, modes: { unavailable: 60 }, gain: {} }; }],
+    ['nobody waited on the AI', d => { d.wait = { lt5s: 0, '5to10s': 0, '10to20s': 0, gt20s: 0 }; }],
+    ['every post in one score bucket', d => { d.scores = [0, 0, 500, 0, 0, 0, 0, 0, 0, 0]; d.bands = { barely: 500 }; }],
+    ['a check whose name has a quote and an angle bracket in it', d => { d.rules[0].label = 'Says "synergy" <b>twice</b>'; }]
+  ];
+  const drift = [];
+  for (const [name, bend] of edges) {
+    const d = figures(500); bend(d);
+    await api.route('**/api/metrics', route => route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(d) }));
+    await api.goto(httpUrl + '#how-it-works'); await api.goto(httpUrl + '#the-numbers'); await api.reload();
+    await api.waitForSelector('#panel-metrics .mx-sec', { timeout: 5000 });
+    const bad = await api.evaluate(() => { const p = document.getElementById('panel-metrics'); const t = p.textContent; const heads = [...p.querySelectorAll('.mx-h')].map(h => h.textContent);
+      return [/NaN|undefined|null|Infinity/.test(t) && 'a broken number', heads.some(h => !h.trim() || /""|, in 0% of posts| 0% of the times|^0% of AI/.test(h)) && 'a headline that says nothing: ' + heads.join(' | '), p.querySelector('.mx-h b, .mx-bars b') && 'markup from a label was rendered', document.documentElement.scrollWidth > innerWidth + 1 && 'sideways scroll'].filter(Boolean); });
+    if (bad.length) drift.push(name + ': ' + bad.join('; '));
+    await api.unroute('**/api/metrics');
+  }
+  check('the numbers: no headline reads wrong at the edges (ties, zeros, a single bucket, an awkward label)', drift.length === 0, drift.join(' || '));
+
   await api.route('**/api/metrics', route => { hits++; return route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(body) }); });
-  await api.goto(httpUrl + '#the-numbers');
+  hits = 0;
+  await api.goto(httpUrl + '#how-it-works'); await api.goto(httpUrl + '#the-numbers'); await api.reload();
   await api.waitForSelector('#panel-metrics .mx-sec', { timeout: 5000 });
   const seen = await api.evaluate(() => ({
     selected: document.getElementById('tab-metrics').getAttribute('aria-selected'),
@@ -961,7 +1016,7 @@ check('Right from the last tab wraps to the first, and only one tab is in the Ta
     text: document.getElementById('panel-metrics').textContent,
     scroll: document.documentElement.scrollWidth <= innerWidth + 1
   }));
-  check('the numbers: the address opens the tab, and it draws from api/metrics', seen.selected === 'true' && hits === 1 && seen.tiles[0] === '500' && seen.bars === 10, JSON.stringify(seen.tiles) + ' bars=' + seen.bars + ' hits=' + hits);
+  check('the numbers: the address opens the tab, and it draws from api/metrics', seen.selected === 'true' && hits >= 1 && seen.tiles[0] === '500' && seen.bars === 10, JSON.stringify(seen.tiles) + ' bars=' + seen.bars + ' hits=' + hits);
   check('the numbers: every headline states a finding, written from the figures', /^Most posts barely suck$/.test(seen.heads[0]) && /"Excited to announce", in 44% of posts/.test(seen.heads[1]) && /71% of the times it tried/.test(seen.heads[2]) && /80% of AI write-ups arrive in under ten seconds/.test(seen.heads[3]), JSON.stringify(seen.heads));
   check('the numbers: checks that fired are ranked, and one that never fired is kept out of the top list', seen.rows.length === 2 && /Excited to announce/.test(seen.rows[0]), JSON.stringify(seen.rows));
   await api.click('#mx-more');

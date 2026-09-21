@@ -435,9 +435,71 @@ export async function readStats(env) {
  * here. Counts only, and a minute or five stale at the edge.
  * ------------------------------------------------------------------ */
 export const METRICS_SINCE = '2026-09-21';
+
+/* THE DOOR ON THE NUMBERS. Until the owner has looked at real figures and is
+ * happy for everyone to, the endpoint answers only to a password.
+ *   METRICS_OPEN = "1" (wrangler.toml)   open to everyone, cacheable, no door
+ *   METRICS_PASSWORD (a secret)          a right guess earns a cookie
+ *   neither                              locked to everyone, and unlock is 404
+ * The default is LOCKED: forgetting to set the secret must never publish the
+ * figures. Same method as the owner's other doors: the guess and the secret
+ * are compared as SHA-256 digests, a right one sets an HttpOnly cookie that
+ * is an expiry and an HMAC of it keyed on the secret (so changing the secret
+ * ends every session), every guess is counted before it is looked at, a wrong
+ * one costs a second, and the bot check applies. The password is never in
+ * this repository, a test, a command or a log. */
+const MX_COOKIE = 'mx';
+const MX_SESSION_SECONDS = 60 * 60 * 24 * 30;
+const MX_GUESSES_PER_HOUR = 10;
+async function mxSign(secret, message) {
+  const key = await crypto.subtle.importKey('raw', new TextEncoder().encode(secret), { name: 'HMAC', hash: 'SHA-256' }, false, ['sign']);
+  const sig = await crypto.subtle.sign('HMAC', key, new TextEncoder().encode(message));
+  return [...new Uint8Array(sig)].map(b => b.toString(16).padStart(2, '0')).join('');
+}
+// Equal-length hex strings, compared without stopping at the first difference.
+function sameHex(a, b) {
+  if (typeof a !== 'string' || typeof b !== 'string' || a.length !== b.length) return false;
+  let diff = 0;
+  for (let i = 0; i < a.length; i++) diff |= a.charCodeAt(i) ^ b.charCodeAt(i);
+  return diff === 0;
+}
+async function metricsAllowed(request, env) {
+  if (env.METRICS_OPEN === '1') return true;
+  const secret = env.METRICS_PASSWORD;
+  if (!secret) return false;
+  const m = new RegExp('(?:^|;\\s*)' + MX_COOKIE + '=(\\d{1,12})\\.([0-9a-f]{64})(?:;|$)').exec(request.headers.get('cookie') || '');
+  if (!m || Number(m[1]) * 1000 < Date.now()) return false;
+  return sameHex(m[2], await mxSign(secret, m[1]));
+}
+async function handleMetricsUnlock(request, env) {
+  const priv = { 'cache-control': 'no-store' };
+  if (env.METRICS_OPEN === '1' || !env.METRICS_PASSWORD) return json({ error: 'not_found' }, 404, priv);
+  if (crossOriginRequest(request)) return json({ error: 'forbidden' }, 403, priv);
+  const ip = clientIP(request), ns = counters(env);
+  // No counter means no cap on guessing, so no guessing.
+  if (!ns) return json({ error: 'unavailable' }, 503, priv);
+  try {
+    const key = `mu:${rateKey(ip)}:${hourBucket()}`;
+    const r = await counterCall(ns, key, '/hit', { key, limit: MX_GUESSES_PER_HOUR, ttlSeconds: 3900 });
+    if (r.ok !== true) return json({ error: 'too_many' }, 429, priv);
+  } catch (e) { return json({ error: 'unavailable' }, 503, priv); }
+  let body = null;
+  try { const text = await request.text(); if (text.length <= 2048) body = JSON.parse(text); } catch (e) { body = null; }
+  if (!(await turnstileOK(env, body && body.turnstileToken, ip))) return json({ error: 'bot_check' }, 403, priv);
+  const given = body && typeof body.password === 'string' && body.password.length <= 200 ? body.password : null;
+  if (given !== null && sameHex(await sha256(given), await sha256(env.METRICS_PASSWORD))) {
+    const expires = String(Math.floor(Date.now() / 1000) + MX_SESSION_SECONDS);
+    return json({ ok: true }, 200, { ...priv, 'set-cookie': `${MX_COOKIE}=${expires}.${await mxSign(env.METRICS_PASSWORD, expires)}; Max-Age=${MX_SESSION_SECONDS}; Path=/api/metrics; Secure; HttpOnly; SameSite=Strict` });
+  }
+  await new Promise(done => setTimeout(done, 1000));
+  return json({ error: 'wrong' }, 401, priv);
+}
 const METRICS_PUBLIC = ['band:', 'score:', 'rule:', 'flag:media', 'flag:satire', 'flag:narrative', 'reword:all', 'reword:mode:', 'reword:gain:', 'analyze:wait:', 'reword:wait:'];
-async function handleMetrics(env) {
-  const headers = { 'cache-control': 'public, s-maxage=300' };
+async function handleMetrics(request, env) {
+  if (!(await metricsAllowed(request, env))) return json({ error: 'locked' }, 401, { 'cache-control': 'no-store' });
+  // Shared at the edge only once it is open to everyone: a cached copy of a
+  // locked answer would be handed to whoever asked next.
+  const headers = { 'cache-control': env.METRICS_OPEN === '1' ? 'public, s-maxage=300' : 'private, no-store' };
   const all = await readStats(env);
   if (!all) return json({ ok: false, since: METRICS_SINCE }, 200, headers);
   const s = Object.fromEntries(Object.entries(all).filter(([k]) => METRICS_PUBLIC.some(p => k === p || (p.endsWith(':') && k.startsWith(p)))));
@@ -446,7 +508,7 @@ async function handleMetrics(env) {
   const fired = under('rule:');
   const waitA = under('analyze:wait:'), waitR = under('reword:wait:');
   return json({
-    ok: true, since: METRICS_SINCE,
+    ok: true, since: METRICS_SINCE, at: new Date().toISOString(),
     scored: Object.values(bands).reduce((a, n) => a + n, 0),
     bands,
     scores: Array.from({ length: 10 }, (_, i) => s['score:' + i] || 0),
@@ -2136,6 +2198,8 @@ async function handleStatus(env) {
     // means it never does, same as the server skipping the check entirely
     // when TURNSTILE_SECRET is unset.
     turnstileSiteKey: env.TURNSTILE_SITE_KEY || null,
+    // Whether "The numbers" tab is shown to everyone yet.
+    metricsOpen: env.METRICS_OPEN === '1',
     // Visible on purpose: this used to be the one limiting number you could
     // only confirm by reading the dashboard, which is exactly the number
     // most worth being able to double-check at a glance right before a
@@ -2210,9 +2274,13 @@ export default {
       if (request.method !== 'GET') return json({ error: 'method' }, 405);
       return handleStatus(env);
     }
+    if (url.pathname === '/api/metrics/unlock') {
+      if (request.method !== 'POST') return json({ error: 'method' }, 405);
+      return handleMetricsUnlock(request, env);
+    }
     if (url.pathname === '/api/metrics') {
       if (request.method !== 'GET') return json({ error: 'method' }, 405);
-      return handleMetrics(env);
+      return handleMetrics(request, env);
     }
 
     return env.ASSETS ? env.ASSETS.fetch(request) : new Response('Not found', { status: 404 });
