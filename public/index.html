@@ -6610,8 +6610,8 @@ ul.cg-list li::before{content:"\2022";position:absolute;left:0;color:var(--ink-4
 
       html += '<div class="mx-tiles">' +
         '<div class="mx-tile"><span class="v">' + num(d.scored) + '</span><span class="k">Posts scored</span><span class="n">Pasted by a person, since ' + E(sinceText(d.since)) + '.</span></div>' +
-        '<div class="mx-tile"><span class="v">' + E(share(d.clean, d.scored)) + '</span><span class="k">Tripped nothing</span><span class="n">Not one of the ' + countable.length + ' checks.</span></div>' +
-        '<div class="mx-tile"><span class="v">' + (mid === null ? 'None yet' : mid + ' to ' + mid + '.9') + '</span><span class="k">The middle score</span><span class="n">Half of all posts score lower.</span></div>' +
+        '<div class="mx-tile"><span class="v">' + E(share(d.clean, d.scored)) + '</span><span class="k">Tripped nothing</span><span class="n">Not one of the ' + d.rules.length + ' checks.</span></div>' +
+        '<div class="mx-tile"><span class="v">' + (mid === null ? 'None yet' : mid + ' to ' + mid + '.9') + '</span><span class="k">The middle score</span><span class="n">The post in the middle lands here.</span></div>' +
         '<div class="mx-tile"><span class="v">' + never + '</span><span class="k">Checks never tripped</span><span class="n">Of the ' + countable.length + ' this tab can count.</span></div>' +
         '</div>';
 
