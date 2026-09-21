@@ -941,12 +941,12 @@ check('Right from the last tab wraps to the first, and only one tab is in the Ta
 
 // 11a. the numbers
 {
-  const figures = (scored) => ({ ok: true, since: '2026-09-21', scored, clean: Math.round(scored * 0.1),
+  const figures = (scored) => ({ ok: true, live: true, at: '2026-09-21T20:00:00.000Z', since: '2026-09-21', scored, clean: Math.round(scored * 0.1),
     bands: { barely: Math.round(scored * 0.6), normal: Math.round(scored * 0.3), lot: Math.round(scored * 0.08), completely: Math.round(scored * 0.02) },
     scores: [2, 20, 38, 18, 8, 4, 5, 3, 1, 1].map(p => Math.round(scored * p / 100)),
-    rules: [{ id: 'announce', label: 'Excited to announce', dim: 'auth', n: Math.round(scored * 0.44) }, { id: 'hashwall', label: 'A wall of hashtags', dim: 'bait', n: Math.round(scored * 0.2) }, { id: 'quiet', label: 'A check nobody trips', dim: 'clar', n: 0 }],
+    rules: [{ id: 'announce', label: 'Excited to announce', dim: 'auth', n: Math.round(scored * 0.44) }, { id: 'hashwall', label: 'A wall of hashtags', dim: 'bait', n: Math.round(scored * 0.2) }, { id: 'quiet', label: 'A check nobody trips', dim: 'clar', n: 0 }, { id: 'not-english', label: 'Not in English', dim: 'clar', n: 0, countable: false }],
     flags: { media: Math.round(scored * 0.25), satire: 3, narrative: 12 },
-    reword: { asked: 80, modes: { reworded: 50, unavailable: 20, clean: 10 }, gain: { under1: 10, '1to2': 25, '2plus': 15 } },
+    reword: { tried: { better: 50, couldNotBeat: 15, unusable: 5 }, notAttempted: 10, gain: { under1: 10, '1to2': 25, '2plus': 15 } },
     wait: { lt5s: 30, '5to10s': 50, '10to20s': 15, gt20s: 5 } });
   let body = figures(500), hits = 0;
   await api.goto(httpUrl);
@@ -974,7 +974,7 @@ check('Right from the last tab wraps to the first, and only one tab is in the Ta
   await api.fill('#mx-pass', 'open sesame'); await api.click('#mx-go');
   await api.waitForSelector('#panel-metrics .mx-sec', { timeout: 5000 });
   check('the numbers: the right one draws the figures, hides the padlock and moves focus to the first finding', await api.evaluate(() => document.getElementById('mx-lock').hidden && document.activeElement.classList.contains('mx-h') && !/open sesame/.test(document.documentElement.innerHTML)), JSON.stringify(guesses));
-  check('the numbers: the footer says how fresh the figures are', await api.evaluate(() => /at most five minutes old/.test(document.getElementById('mx-foot').textContent)));
+  check('the numbers: the footer says how fresh the figures are, and what a post is', await api.evaluate(() => { const t = document.getElementById('mx-foot').textContent; return /live, because you are behind the door/.test(t) && /A post is something a person pasted/.test(t) && !/no post text is kept/i.test(document.getElementById('panel-metrics').textContent); }));
   await api.unroute('**/api/metrics'); await api.unroute('**/api/metrics/unlock');
 
   // Headline drift: every headline is a template over live figures, so the
@@ -984,8 +984,10 @@ check('Right from the last tab wraps to the first, and only one tab is in the Ta
     ['exactly half', d => { d.bands = { barely: 250, normal: 150, lot: 80, completely: 20 }; }],
     ['a top check under one percent', d => { d.rules.forEach((r, i) => r.n = i === 0 ? 2 : 0); }],
     ['no check has fired at all', d => { d.rules.forEach(r => r.n = 0); d.clean = d.scored; }],
-    ['Reword never asked', d => { d.reword = { asked: 0, modes: {}, gain: {} }; }],
-    ['Reword asked, never once succeeded', d => { d.reword = { asked: 60, modes: { unavailable: 60 }, gain: {} }; }],
+    ['Reword never asked', d => { d.reword = { tried: { better: 0, couldNotBeat: 0, unusable: 0 }, notAttempted: 0, gain: {} }; }],
+    ['Reword tried, never once won', d => { d.reword = { tried: { better: 0, couldNotBeat: 50, unusable: 10 }, notAttempted: 5, gain: {} }; }],
+    ['the top two sins within noise of each other', d => { d.rules[0].n = 100; d.rules[1].n = 95; }],
+    ['one post short of all', d => { d.flags.media = d.scored - 1; }],
     ['nobody waited on the AI', d => { d.wait = { lt5s: 0, '5to10s': 0, '10to20s': 0, gt20s: 0 }; }],
     ['every post in one score bucket', d => { d.scores = [0, 0, 500, 0, 0, 0, 0, 0, 0, 0]; d.bands = { barely: 500 }; }],
     ['a check whose name has a quote and an angle bracket in it', d => { d.rules[0].label = 'Says "synergy" <b>twice</b>'; }]
@@ -997,7 +999,7 @@ check('Right from the last tab wraps to the first, and only one tab is in the Ta
     await api.goto(httpUrl + '#how-it-works'); await api.goto(httpUrl + '#the-numbers'); await api.reload();
     await api.waitForSelector('#panel-metrics .mx-sec', { timeout: 5000 });
     const bad = await api.evaluate(() => { const p = document.getElementById('panel-metrics'); const t = p.textContent; const heads = [...p.querySelectorAll('.mx-h')].map(h => h.textContent);
-      return [/NaN|undefined|null|Infinity/.test(t) && 'a broken number', heads.some(h => !h.trim() || /""|, in 0% of posts| 0% of the times|^0% of AI/.test(h)) && 'a headline that says nothing: ' + heads.join(' | '), p.querySelector('.mx-h b, .mx-bars b') && 'markup from a label was rendered', document.documentElement.scrollWidth > innerWidth + 1 && 'sideways scroll'].filter(Boolean); });
+      return [/NaN|undefined|null|Infinity/.test(t) && 'a broken number', heads.some(h => !h.trim() || /""|, in 0% of posts| 0% of the times|^0% of AI|100%|^Every post so far came/.test(h)) && 'a headline that says nothing, or all when it is not all: ' + heads.join(' | '), p.querySelector('.mx-h b, .mx-bars b') && 'markup from a label was rendered', document.documentElement.scrollWidth > innerWidth + 1 && 'sideways scroll'].filter(Boolean); });
     if (bad.length) drift.push(name + ': ' + bad.join('; '));
     await api.unroute('**/api/metrics');
   }
@@ -1017,23 +1019,42 @@ check('Right from the last tab wraps to the first, and only one tab is in the Ta
     scroll: document.documentElement.scrollWidth <= innerWidth + 1
   }));
   check('the numbers: the address opens the tab, and it draws from api/metrics', seen.selected === 'true' && hits >= 1 && seen.tiles[0] === '500' && seen.bars === 10, JSON.stringify(seen.tiles) + ' bars=' + seen.bars + ' hits=' + hits);
-  check('the numbers: every headline states a finding, written from the figures', /^Most posts barely suck$/.test(seen.heads[0]) && /"Excited to announce", in 44% of posts/.test(seen.heads[1]) && /71% of the times it tried/.test(seen.heads[2]) && /80% of AI write-ups arrive in under ten seconds/.test(seen.heads[3]), JSON.stringify(seen.heads));
+  check('the numbers: every headline states a finding, written from the figures', /^60% of posts barely suck$/.test(seen.heads[0]) && /"Excited to announce", in 44% of posts/.test(seen.heads[1]) && /beat the original 71% of the times it tried/.test(seen.heads[2]) && /^80% of AI write-ups take under ten seconds$/.test(seen.heads[3]) && /^25% of posts came with an image or video$/.test(seen.heads[4]), JSON.stringify(seen.heads));
+  check('the numbers: the sins are one grey, with the category written under each name', await api.evaluate(() => { const li = document.querySelector('#mx-rules li'); return /Inauthenticity/.test(li.querySelector('.c').textContent) && !document.querySelector('#mx-rules .mx-fill[style*="--c"]'); }));
+  check('the numbers: "Not in English" is listed as not countable, not as never fired', await api.evaluate(() => { document.getElementById('mx-more') && document.getElementById('mx-more').click(); const li = [...document.querySelectorAll('#mx-rules li')].find(l => /Not in English/.test(l.textContent)); const ok = li && /not counted here/.test(li.textContent); document.getElementById('mx-more') && document.getElementById('mx-more').click(); return ok; }));
   check('the numbers: checks that fired are ranked, and one that never fired is kept out of the top list', seen.rows.length === 2 && /Excited to announce/.test(seen.rows[0]), JSON.stringify(seen.rows));
   await api.click('#mx-more');
-  check('the numbers: "show all" lists the check that never fired, and says never', await api.evaluate(() => /A check nobody trips\s*never/.test(document.querySelector('#panel-metrics .mx-bars li.zero').textContent) && document.activeElement.id === 'mx-more' && document.activeElement.getAttribute('aria-expanded') === 'true'));
+  check('the numbers: "show all" lists the check that never fired, and says never', await api.evaluate(() => /A check nobody trips[\s\S]*never/.test(document.querySelector('#panel-metrics .mx-bars li.zero').textContent) && document.activeElement.id === 'mx-more' && document.activeElement.getAttribute('aria-expanded') === 'true'));
   check('the numbers: no em dash, no sample notice off localhost data, no sideways scroll', !/\u2014/.test(seen.text) && !/Sample figures/.test(seen.text) && seen.scroll);
-  check('the numbers: the chart says what it shows to a screen reader', await api.evaluate(() => /Posts by score\. 0 to 0\.9: 2 percent/.test(document.querySelector('#panel-metrics svg').getAttribute('aria-label'))));
+  check('the numbers: the chart says what it shows to a screen reader', await api.evaluate(() => (l => /^Posts by score\. 0 to 0\.9, barely sucks: 2%;/.test(l) && /3 to 3\.9, barely sucks or sucks a normal amount: /.test(l))(document.querySelector('#panel-metrics svg').getAttribute('aria-label'))));
 
   body = figures(12);
   await api.goto(httpUrl + '#how-it-works'); await api.goto(httpUrl + '#the-numbers'); await api.reload();
   await api.waitForSelector('#panel-metrics .mx-sec', { timeout: 5000 });
   check('the numbers: under 30 posts the headlines refuse to generalise', await api.evaluate(() => /^Too few posts to say anything true yet: 12 so far$/.test(document.querySelector('#panel-metrics .mx-h').textContent)));
+  check('  ...and the tiles and bars print counts, not percentages', await api.evaluate(() => { const tiles = [...document.querySelectorAll('#panel-metrics .mx-tile .v')].map(v => v.textContent); return tiles[1] === '1 of 12' && ![...document.querySelectorAll('#panel-metrics .mx-bars .p')].some(p => /%/.test(p.textContent)); }));
 
   body = { ok: false };
   await api.reload();
-  await api.waitForFunction(() => /could not be read/.test(document.getElementById('mx-live').textContent), null, { timeout: 5000 });
+  await api.waitForFunction(() => /did not answer/.test(document.getElementById('mx-live').textContent), null, { timeout: 5000 });
   check('the numbers: when they cannot be read the tab says so and draws nothing', await api.evaluate(() => document.querySelectorAll('#panel-metrics .mx-sec').length === 0));
   await api.unroute('**/api/metrics');
+}
+
+// 11a2. where the text came from
+{
+  const sources = [];
+  await api.route('**/api/analyze', route => { sources.push(route.request().headers()['x-yps-source']); return route.fulfill({ status: 500, contentType: 'text/plain', body: 'no' }); });
+  await api.goto(httpUrl);
+  await api.evaluate(() => { try { localStorage.setItem('yps_whatsnew_seen', window.YPSClient.whatsnewVersion); } catch (e) {} const d = document.querySelector('dialog[open]'); if (d) d.close(); });
+  await api.click('[data-spec]');
+  await api.waitForFunction(n => n, sources.length, { timeout: 100 }).catch(() => {});
+  await new Promise(r => setTimeout(r, 400));
+  await api.fill('#post', 'I typed this one myself about the quarterly review, which ran long.');
+  await api.click('#run');
+  await new Promise(r => setTimeout(r, 400));
+  check('a specimen click says so, and a typed post says paste', sources[0] === 'specimen' && sources[sources.length - 1] === 'paste', JSON.stringify(sources));
+  await api.unroute('**/api/analyze');
 }
 
 // 11b. the masthead at 320, the narrowest phone still in use

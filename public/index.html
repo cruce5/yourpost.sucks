@@ -293,7 +293,10 @@ header{border-bottom:1px solid var(--rule);padding-bottom:20px;margin-bottom:28p
    the Cape Index (a numbered eyebrow, a headline that states the finding, a
    dek that says what the marks are) and the stat tiles and thin CSS bars of
    the media kit. Text only ever wears an ink token; colour is for marks. */
-#panel-metrics{--mx-b1:var(--cool);--mx-b2:var(--caution);--mx-b3:#d9772f;--mx-b4:var(--warm)}
+/* Colour means one thing per chart. Verdict colours live in 01 only; the
+   ordered stacks are one hue in steps; counts are one neutral grey. */
+#panel-metrics{--mx-b1:var(--cool);--mx-b2:var(--caution);--mx-b3:#b85420;--mx-b4:var(--warm);--mx-mid:var(--rule-2);
+  --mx-s4:var(--cool);--mx-s3:color-mix(in srgb, var(--cool) 78%, var(--surface));--mx-s2:color-mix(in srgb, var(--cool) 56%, var(--surface));--mx-s1:color-mix(in srgb, var(--cool) 38%, var(--surface));--mx-bar:var(--ink-3)}
 .mx-intro{margin:22px 0 0;color:var(--ink-2);font-size:16px;line-height:1.55;max-width:44rem}
 .mx-sample{margin:14px 0 0;padding:8px 12px;border:1px dashed var(--caution);border-radius:6px;color:var(--ink-2);font:500 13px/1.4 var(--mono);letter-spacing:.04em}
 .mx-tiles{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px;margin:24px 0 0}
@@ -319,9 +322,10 @@ header{border-bottom:1px solid var(--rule);padding-bottom:20px;margin-bottom:28p
 .mx-bars li{display:grid;grid-template-columns:minmax(0,1fr) 3.6em;gap:3px 10px;align-items:baseline;padding:7px 0;border-bottom:1px solid var(--hair)}
 .mx-bars li:last-child{border-bottom:none}
 .mx-bars .t{font-size:14.5px;color:var(--ink);overflow-wrap:anywhere}
+.mx-bars .t .c{display:block;margin-top:2px;font:500 11.5px/1.3 var(--mono);letter-spacing:.06em;text-transform:uppercase;color:var(--ink-3)}
 .mx-bars .p{font:500 13px/1 var(--mono);color:var(--ink-2);text-align:right;font-variant-numeric:tabular-nums}
 .mx-bars .mx-track{grid-column:1 / -1;height:6px;border-radius:3px;background:var(--hair);overflow:hidden}
-.mx-bars .mx-fill{display:block;height:100%;width:calc(var(--w) * 1%);min-width:2px;border-radius:0 3px 3px 0;background:var(--c, var(--cool))}
+.mx-bars .mx-fill{display:block;height:100%;width:calc(var(--w) * 1%);min-width:2px;border-radius:0 3px 3px 0;background:var(--c, var(--mx-bar))}
 .mx-bars li.zero .t,.mx-bars li.zero .p{color:var(--ink-3)}
 .mx-bars li.zero .mx-fill{display:none}
 .mx-more{margin:12px 0 0;font:500 13px/1 var(--mono);letter-spacing:.06em;text-transform:uppercase;color:var(--ink-3);background:transparent;border:1px solid var(--rule);border-radius:4px;padding:6px 12px;min-height:44px;cursor:pointer}
@@ -333,6 +337,9 @@ header{border-bottom:1px solid var(--rule);padding-bottom:20px;margin-bottom:28p
 .mx-gap{margin-top:22px}
 .mx-foot{margin:44px 0 0;padding:20px 0 0;border-top:1px dashed var(--rule-2);color:var(--ink-3);font-size:14.5px;line-height:1.55;max-width:44rem}
 .mx-foot a{color:var(--ink-2)}
+/* A footer link is a small target on a phone; the padding widens what a
+   thumb can hit without moving a line. */
+footer a{padding-block:8px;margin-block:-8px}
 .mx-wait{color:var(--ink-3);font-size:15px;margin:26px 0 0}
 
 /* ---------- input ---------- */
@@ -1315,7 +1322,7 @@ ul.cg-list li::before{content:"\2022";position:absolute;left:0;color:var(--ink-4
      nowhere but there, so reading this source gets nobody any closer. -->
 <!-- The numbers: what the posts were like, never how the site is doing. -->
 <div id="panel-metrics" role="tabpanel" aria-labelledby="tab-metrics" tabindex="-1" hidden>
-  <p class="mx-intro">What everyone's posts have in common, counted. A score, which checks it tripped, how long the write-up took. No post text is in any of it, because no post text is kept.</p>
+  <p class="mx-intro">What everyone's posts have in common, counted. A score, which checks it tripped, how long the write-up took. No post text is in any of it.</p>
   <div class="panel lab-lock" id="mx-lock" hidden>
     <div class="lab-pad" aria-hidden="true">&#128274;</div>
     <h2 class="lab-h" id="mx-lock-h" tabindex="-1">The numbers are being checked before they go up.</h2>
@@ -1330,7 +1337,7 @@ ul.cg-list li::before{content:"\2022";position:absolute;left:0;color:var(--ink-4
     </form>
   </div>
   <div id="mx-live" aria-live="off"><p class="mx-wait">Counting.</p></div>
-  <p class="mx-foot" id="mx-foot" hidden>Counted since <span id="mx-since"></span>, which is when the counting started, not when the site did. The tallies are kept as each report is made; this page reads them when you open the tab, and what it reads is at most five minutes old<span id="mx-asof"></span>. Counts only: a score, the checks that fired, a rewrite's gain, a wait. Nothing that says what a post said or who pasted it. Shares are of scored posts unless a chart says otherwise, and under <span id="mx-min"></span> posts a share is an anecdote, so the headlines stay quiet until then. The raw figures are at <a href="api/metrics">api/metrics</a>.</p>
+  <p class="mx-foot" id="mx-foot" hidden></p>
 </div>
 
 <div id="panel-lab" role="tabpanel" aria-labelledby="tab-lab" tabindex="-1" hidden>
@@ -1473,7 +1480,7 @@ ul.cg-list li::before{content:"\2022";position:absolute;left:0;color:var(--ink-4
          are never shown this. -->
     <li id="wn-metrics" hidden>
       <b>There is a tab of numbers now.</b>
-      <i>The numbers</i> counts what everyone's posts have in common: where the scores land, and which sins are the most popular. It counts, it does not keep. No post text is in it.
+      <i>The numbers</i> counts what everyone's posts have in common: where the scores land, and which sins are the most popular. It counts. No words from any post are in it.
     </li>
   </ul>
   <p class="wn-tip">Every AI-written report costs me about a penny, and the site is free with no sign-up and no ads. If it has made one of your posts less bad, <a data-tip="whatsnew" href="https://buymeacoffee.com/billyost" target="_blank" rel="noopener noreferrer">buy me a coffee</a>.</p>
@@ -1548,8 +1555,8 @@ ul.cg-list li::before{content:"\2022";position:absolute;left:0;color:var(--ink-4
   }
 
   function esc(s) {
-    return String(s).replace(/[&<>"]/g, function (c) {
-      return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c];
+    return String(s).replace(/[&<>"']/g, function (c) {
+      return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c];
     });
   }
 
@@ -5582,6 +5589,7 @@ ul.cg-list li::before{content:"\2022";position:absolute;left:0;color:var(--ink-4
     // pasting it back in, and clicking Analyze by hand.
     $('#analyzereword').addEventListener('click', function(){
       $('#post').value = payload.rewritten;
+      textSource = 'rewrite';
       updateCounter();
       run();
     });
@@ -5744,6 +5752,10 @@ ul.cg-list li::before{content:"\2022";position:absolute;left:0;color:var(--ink-4
      of those happened, honestly: 'offline' only when the browser is offline
      or the network request itself failed, 'timeout' when the AI ran past
      the killer, 'server' for a bad status or an unreadable reply. */
+  /* Where the text in the box came from, sent with the request so the
+     counting knows a paste from a specimen (Reconcilers, episode 4). Set when
+     the page puts text in the box; any typing makes it a paste again. */
+  var textSource = 'paste';
   function run(){
     if (inFlight) return;
     hygiene();
@@ -5825,7 +5837,7 @@ ul.cg-list li::before{content:"\2022";position:absolute;left:0;color:var(--ink-4
       if (fell_back) return;
       fetch('api/analyze', {
         method: 'POST',
-        headers: { 'content-type': 'application/json' },
+        headers: { 'content-type': 'application/json', 'x-yps-source': textSource },
         body: JSON.stringify({ post: text, flags: flags, meaner: meaner, image: attachedImage || undefined, turnstileToken: turnstileToken }),
         signal: ctrl ? ctrl.signal : undefined
       }).then(function(res){
@@ -6352,6 +6364,7 @@ ul.cg-list li::before{content:"\2022";position:absolute;left:0;color:var(--ink-4
     });
   })();
   $('#post').addEventListener('input', function(){
+    textSource = 'paste';
     updateCounter();
     if ($('#notices').className && !$('#post').value.trim()) showNotices([]);
   });
@@ -6361,6 +6374,7 @@ ul.cg-list li::before{content:"\2022";position:absolute;left:0;color:var(--ink-4
   Array.prototype.forEach.call(document.querySelectorAll('[data-spec]'), function(b){
     b.addEventListener('click', function(){
       $('#post').value = SPECIMENS[+b.getAttribute('data-spec')];
+      textSource = 'specimen';
       pasteFlags = {};
       $('#hasmedia').checked = false;
       clearAttachedImage();
@@ -6382,6 +6396,7 @@ ul.cg-list li::before{content:"\2022";position:absolute;left:0;color:var(--ink-4
         return;
       }
       $('#post').value = text;
+      textSource = 'permalink';
       pasteFlags = {};
       updateCounter();
       // An over-limit link shows the same inline error the textarea does;
@@ -6487,31 +6502,53 @@ ul.cg-list li::before{content:"\2022";position:absolute;left:0;color:var(--ink-4
     var num = function(n){ return String(Math.round(n)).replace(/\B(?=(\d{3})+(?!\d))/g, ','); };
     var sum = function(o){ var t = 0; for (var k in o) t += o[k] || 0; return t; };
     var BANDS = [['barely', 'barely suck', 'barely sucks', 0, 3.2], ['normal', 'suck a normal amount', 'sucks a normal amount', 3.2, 5.6], ['lot', 'suck a lot', 'sucks a lot', 5.6, 8], ['completely', 'suck completely', 'sucks completely', 8, 10]];
-    // A share that is none or all is a different sentence, not "0%" or "100%"
-    // dropped into the usual one.
-    var say = function(p, none, all, some){ return p <= 0 ? none : p >= 100 ? all : some; };
+    var CUTS = [3.2, 5.6, 8];
+    // A share, as the page prints it. Under MX_MIN it is the count itself:
+    // "3 of 12" is honest where "25%" pretends. Never "0%" for something that
+    // happened, never "100%" for something that did not always happen.
+    function share(n, d){
+      if (!d) return '0';
+      if (d < MX_MIN) return num(n) + ' of ' + num(d);
+      var p = Math.round(100 * n / d);
+      return (p === 0 && n > 0 ? '<1' : p === 100 && n < d ? '>99' : String(p)) + '%';
+    }
+    var E = function(x){ return YPS.esc(String(x)); };
+    // None and all are decided on the counts, not on a rounded share.
+    var say = function(n, d, none, all, some){ return n <= 0 ? none : n >= d ? all : some; };
+    // A lead worth naming: more than two standard errors of the difference,
+    // roughly. Otherwise the top two are named together.
+    var clearLead = function(a, b){ return !b || (a - b) >= 2 * Math.sqrt(a + b); };
     var bandColor = function(i){ return 'var(--mx-b' + (i + 1) + ')'; };
     var bandOf = function(v){ for (var i = 0; i < BANDS.length; i++) if (v < BANDS[i][4]) return i; return 3; };
+    // Whole-point bars 3 and 5 each hold two verdicts: grey, not one of them.
+    var straddles = function(i){ return CUTS.some(function(c){ return c > i && c < i + 1; }); };
+    var bandsIn = function(i){ return BANDS.filter(function(bd){ return bd[3] < i + 1 && bd[4] > i; }).map(function(bd){ return bd[2]; }).join(' or '); };
 
     // Sample figures, for looking at the tab on a laptop before there is
     // anything real to draw. Only ever on localhost, and it says so.
     function sample(){
-      var rules = YPS.RULES.map(function(r, i){ return { id: r.id, label: r.label, dim: r.dim, n: i % 9 === 8 ? 0 : Math.round(620 * Math.pow(0.86, i) * (0.7 + ((i * 37) % 10) / 16)) }; });
-      return { ok: true, sample: true, since: '2026-09-21', scored: 1184, clean: 96, bands: { barely: 498, normal: 441, lot: 203, completely: 42 }, scores: [38, 142, 231, 219, 187, 122, 98, 74, 47, 26],
-        rules: rules, flags: { media: 312, satire: 41, narrative: 188 }, reword: { asked: 214, modes: { reworded: 131, clean: 22, unavailable: 52, declined: 9 }, gain: { under1: 38, '1to2': 61, '2plus': 32 } },
+      var rules = YPS.RULES.map(function(r, i){ return { id: r.id, label: r.label, dim: r.dim, n: i % 9 === 8 || r.id === 'not-english' ? 0 : Math.round(620 * Math.pow(0.86, i) * (0.7 + ((i * 37) % 10) / 16)), countable: r.id === 'not-english' ? false : undefined }; });
+      return { ok: true, sample: true, live: true, since: '2026-09-21', at: new Date().toISOString(), scored: 1184, clean: 96, bands: { barely: 498, normal: 441, lot: 203, completely: 42 }, scores: [38, 142, 231, 219, 187, 122, 98, 74, 47, 26],
+        rules: rules, flags: { media: 312, satire: 41, narrative: 188 }, reword: { tried: { better: 131, couldNotBeat: 44, unusable: 8 }, notAttempted: 31, gain: { under1: 38, '1to2': 61, '2plus': 32 } },
         wait: { lt5s: 402, '5to10s': 511, '10to20s': 96, gt20s: 11 } };
     }
 
     function section(n, eyebrow, headline, dek, body){
-      return '<section class="mx-sec"><span class="mx-num">' + n + ' &nbsp;/&nbsp; ' + YPS.esc(eyebrow) + '</span><h2 class="mx-h">' + YPS.esc(headline) + '</h2><p class="mx-dek">' + dek + '</p><div class="mx-card">' + body + '</div></section>';
+      return '<section class="mx-sec"><span class="mx-num">' + n + ' &nbsp;/&nbsp; ' + E(eyebrow) + '</span><h2 class="mx-h" tabindex="-1">' + E(headline) + '</h2><p class="mx-dek">' + dek + '</p><div class="mx-card">' + body + '</div></section>';
     }
     function legend(rows){
-      return '<ul class="mx-legend">' + rows.map(function(r){ return '<li><i style="--c:' + r[0] + '"></i>' + YPS.esc(r[1]) + ' <b>' + r[2] + '</b></li>'; }).join('') + '</ul>';
+      return '<ul class="mx-legend">' + rows.map(function(r){ return '<li><i style="--c:' + r[0] + '"></i>' + E(r[1]) + ' <b>' + E(r[2]) + '</b></li>'; }).join('') + '</ul>';
     }
     function stack(rows, total){
-      return '<div class="mx-stack" role="img" aria-label="' + YPS.esc(rows.map(function(r){ return r[1] + ' ' + pct(r[2], total) + ' percent'; }).join(', ')) + '">' +
+      return '<div class="mx-stack" role="img" aria-label="' + E(rows.map(function(r){ return r[1] + ': ' + share(r[2], total); }).join(', ')) + '">' +
         rows.filter(function(r){ return r[2] > 0; }).map(function(r){ return '<span style="--c:' + r[0] + ';flex:' + r[2] + ' 1 0"></span>'; }).join('') + '</div>' +
-        legend(rows.map(function(r){ return [r[0], r[1], pct(r[2], total) + '%']; }));
+        legend(rows.map(function(r){ return [r[0], r[1], share(r[2], total)]; }));
+    }
+    function bars(rows, d, max, id){
+      return '<ul class="mx-bars"' + (id ? ' id="' + id + '"' : '') + '>' + rows.map(function(x){
+        var off = x.countable === false;
+        return '<li' + (x.n && !off ? '' : ' class="zero"') + '><span class="t">' + E(x.label) + (x.sub ? '<span class="c">' + E(x.sub) + '</span>' : '') + '</span><span class="p">' + (off ? 'not counted here' : x.n ? E(share(x.n, d)) : 'never') + '</span><span class="mx-track"><span class="mx-fill" style="--w:' + (max ? 100 * x.n / max : 0).toFixed(1) + '"></span></span></li>';
+      }).join('') + '</ul>';
     }
 
     // One bar per point of the score. One viewBox unit is one CSS pixel, so
@@ -6519,12 +6556,12 @@ ul.cg-list li::before{content:"\2022";position:absolute;left:0;color:var(--ink-4
     function histogram(d, W){
       var H = 250, l = 6, r = 6, t = 26, b = 44, iw = W - l - r, ih = H - t - b;
       var max = Math.max.apply(null, d.scores.concat([1])), step = iw / 10, bw = Math.min(46, step * 0.72), top = d.scores.indexOf(max);
-      var s = '<svg viewBox="0 0 ' + W + ' ' + H + '" role="img" aria-label="' + YPS.esc('Posts by score. ' + d.scores.map(function(n, i){ return i + ' to ' + (i === 9 ? '9.9' : i + '.9') + ': ' + pct(n, d.scored) + ' percent'; }).join(', ')) + '">';
+      var s = '<svg viewBox="0 0 ' + W + ' ' + H + '" role="img" aria-label="' + E('Posts by score. ' + d.scores.map(function(n, i){ return i + ' to ' + (i === 9 ? '9.9' : i + '.9') + ', ' + bandsIn(i) + ': ' + share(n, d.scored); }).join('; ')) + '">';
       s += '<line x1="' + l + '" x2="' + (W - r) + '" y1="' + (t + ih) + '" y2="' + (t + ih) + '" stroke="var(--rule-2)" stroke-width="1"/>';
       d.scores.forEach(function(n, i){
         var h = n ? Math.max(2, ih * n / max) : 0, x = l + step * i + (step - bw) / 2, y = t + ih - h;
-        if (n) s += '<rect x="' + x.toFixed(1) + '" y="' + y.toFixed(1) + '" width="' + bw.toFixed(1) + '" height="' + h.toFixed(1) + '" rx="2" fill="' + bandColor(bandOf(i + 0.5)) + '"/>';
-        s += '<text class="' + (i === top ? 'mx-top' : 'mx-val') + '" text-anchor="middle" x="' + (x + bw / 2).toFixed(1) + '" y="' + (y - 7).toFixed(1) + '">' + pct(n, d.scored) + '%</text>';
+        if (n) s += '<rect x="' + x.toFixed(1) + '" y="' + y.toFixed(1) + '" width="' + bw.toFixed(1) + '" height="' + h.toFixed(1) + '" rx="2" fill="' + (straddles(i) ? 'var(--mx-mid)' : bandColor(bandOf(i + 0.5))) + '"/>';
+        s += '<text class="' + (i === top ? 'mx-top' : 'mx-val') + '" text-anchor="middle" x="' + (x + bw / 2).toFixed(1) + '" y="' + (y - 7).toFixed(1) + '">' + E(d.scored < MX_MIN ? num(n) : share(n, d.scored)) + '</text>';
         s += '<text text-anchor="middle" x="' + (x + bw / 2).toFixed(1) + '" y="' + (t + ih + 18) + '">' + i + '</text>';
       });
       // The scale underneath, in the same units as the bars above it.
@@ -6532,80 +6569,102 @@ ul.cg-list li::before{content:"\2022";position:absolute;left:0;color:var(--ink-4
         var x0 = l + iw * bd[3] / 10, x1 = l + iw * bd[4] / 10;
         s += '<rect x="' + (x0 + 1).toFixed(1) + '" y="' + (H - 14) + '" width="' + Math.max(1, x1 - x0 - 2).toFixed(1) + '" height="5" rx="2.5" fill="' + bandColor(i) + '"/>';
       });
-      return s + '</svg>' + legend(BANDS.map(function(bd, i){ return [bandColor(i), bd[2], pct(d.bands[bd[0]] || 0, d.scored) + '%']; }));
+      return s + '</svg>' + legend(BANDS.map(function(bd, i){ return [bandColor(i), bd[2], share(d.bands[bd[0]] || 0, d.scored)]; }));
     }
 
+    // Every check in one grey: the question is how often, not which kind.
+    // The kind is written under the name, where no eye has to match a colour.
     function ruleBars(d){
-      var rows = d.rules.slice().sort(function(a, b){ return b.n - a.n; });
+      var dims = dimLabels();
+      var rows = d.rules.slice().sort(function(a, b){ return (b.countable === false ? -1 : b.n) - (a.countable === false ? -1 : a.n); })
+        .map(function(x){ return { label: x.label, n: x.n, countable: x.countable, sub: dims[x.dim] || '' }; });
       var max = Math.max(1, rows[0] ? rows[0].n : 1), shown = state.all ? rows : rows.filter(function(x){ return x.n > 0; }).slice(0, 12);
-      var html = '<ul class="mx-bars">' + shown.map(function(x){
-        return '<li' + (x.n ? '' : ' class="zero"') + '><span class="t">' + YPS.esc(x.label) + '</span><span class="p">' + (x.n ? (pct(x.n, d.scored) || '<1') + '%' : 'never') + '</span><span class="mx-track"><span class="mx-fill" style="--w:' + (100 * x.n / max).toFixed(1) + ';--c:var(--dim-' + x.dim + ')"></span></span></li>';
-      }).join('') + '</ul>';
-      if (rows.length > shown.length || state.all) html += '<button type="button" class="mx-more" id="mx-more" aria-expanded="' + (state.all ? 'true' : 'false') + '">' + (state.all ? 'Show the top 12' : 'Show all ' + rows.length + ' checks') + '</button>';
-      var dims = dimLabels(), seen = {};
-      d.rules.forEach(function(x){ seen[x.dim] = true; });
-      return html + legend(['auth', 'clar', 'cring', 'bait', 'brag'].filter(function(k){ return seen[k]; }).map(function(k){ return ['var(--dim-' + k + ')', dims[k] || k, '']; }));
+      var html = bars(shown, d.scored, max, 'mx-rules');
+      if (rows.length > shown.length || state.all) html += '<button type="button" class="mx-more" id="mx-more" aria-controls="mx-rules" aria-expanded="' + (state.all ? 'true' : 'false') + '">' + (state.all ? 'Show the top 12' : 'Show all ' + rows.length + ' checks') + '</button>';
+      return html;
+    }
+
+    function typical(scores, total){
+      var half = total / 2, run = 0;
+      for (var i = 0; i < scores.length; i++){ run += scores[i]; if (run >= half) return i; }
+      return null;
     }
 
     function draw(){
-      var d = state.data, W = Math.max(280, Math.min(760, (host.clientWidth || 640) - 34));
+      var d = state.data, W = Math.max(200, Math.min(760, (host.clientWidth || 640) - 34));
       state.w = W;
-      if (!d || !d.ok){ host.innerHTML = '<p class="mx-wait">The numbers could not be read just now. The score never depended on them.</p>'; return; }
-      var quiet = d.scored < MX_MIN, html = '';
+      if (!d || !d.ok){
+        host.innerHTML = '<p class="mx-wait">' + (d && d.net ? 'Could not reach the site just now. Check the connection, then open this tab again.' : 'The counter did not answer just now. Try again in a minute. No score on this site depends on it.') + '</p>';
+        $('#mx-foot').hidden = true;
+        return;
+      }
+      var quiet = d.scored < MX_MIN, html = '', few = 'Too few posts to say anything true yet: ' + num(d.scored) + ' so far';
       if (d.sample) html += '<p class="mx-sample">Sample figures, made up, for looking at the layout. Only ever shown on localhost.</p>';
 
-      var topBand = BANDS.slice().sort(function(a, b){ return (d.bands[b[0]] || 0) - (d.bands[a[0]] || 0); })[0];
-      var fired = d.rules.filter(function(x){ return x.n > 0; }).sort(function(a, b){ return b.n - a.n; }), sin = fired[0];
-      var never = d.rules.length - fired.length;
-      var rw = d.reword, reached = (rw.modes.reworded || 0) + (rw.modes.unavailable || 0);
-      var waited = sum(d.wait), fast = (d.wait.lt5s || 0) + (d.wait['5to10s'] || 0);
+      var bandRank = BANDS.slice().sort(function(a, b){ return (d.bands[b[0]] || 0) - (d.bands[a[0]] || 0); });
+      var b1 = d.bands[bandRank[0][0]] || 0, b2 = d.bands[bandRank[1][0]] || 0;
+      var countable = d.rules.filter(function(x){ return x.countable !== false; });
+      var fired = countable.filter(function(x){ return x.n > 0; }).sort(function(a, b){ return b.n - a.n; }), sin = fired[0], sin2 = fired[1];
+      var never = countable.length - fired.length;
+      var mid = typical(d.scores, d.scored);
 
       html += '<div class="mx-tiles">' +
-        '<div class="mx-tile"><span class="v">' + num(d.scored) + '</span><span class="k">Posts scored</span><span class="n">Since ' + YPS.esc(sinceText(d.since)) + '.</span></div>' +
-        '<div class="mx-tile"><span class="v">' + pct(d.bands[topBand[0]] || 0, d.scored) + '%</span><span class="k">' + YPS.esc(topBand[2]) + '</span><span class="n">The biggest group.</span></div>' +
-        '<div class="mx-tile"><span class="v">' + (sin ? pct(sin.n, d.scored) + '%' : '0') + '</span><span class="k">Most common sin</span><span class="n">' + YPS.esc(sin ? sin.label : 'Nothing has fired yet.') + '</span></div>' +
-        '<div class="mx-tile"><span class="v">' + pct(d.clean, d.scored) + '%</span><span class="k">Tripped nothing</span><span class="n">Not one of the ' + d.rules.length + ' checks.</span></div>' +
+        '<div class="mx-tile"><span class="v">' + num(d.scored) + '</span><span class="k">Posts scored</span><span class="n">Pasted by a person, since ' + E(sinceText(d.since)) + '.</span></div>' +
+        '<div class="mx-tile"><span class="v">' + E(share(d.clean, d.scored)) + '</span><span class="k">Tripped nothing</span><span class="n">Not one of the ' + countable.length + ' checks.</span></div>' +
+        '<div class="mx-tile"><span class="v">' + (mid === null ? 'None yet' : mid + ' to ' + mid + '.9') + '</span><span class="k">The middle score</span><span class="n">Half of all posts score lower.</span></div>' +
+        '<div class="mx-tile"><span class="v">' + never + '</span><span class="k">Checks never tripped</span><span class="n">Of the ' + countable.length + ' this tab can count.</span></div>' +
         '</div>';
 
-      var few = 'Too few posts to say anything true yet: ' + num(d.scored) + ' so far';
-      var share = pct(d.bands[topBand[0]] || 0, d.scored);
       html += section('01', 'Where the scores land',
-        quiet ? few : share >= 100 ? 'Every post so far ' + topBand[2] : share > 50 ? 'Most posts ' + topBand[1] : 'The biggest group, ' + share + '%, ' + topBand[1],
-        'One bar for each point of the score, 0 to 9.9, and the four verdicts marked underneath. Higher is worse. ' + num(d.scored) + ' posts.',
+        quiet ? few : b1 >= d.scored ? 'Every post so far ' + bandRank[0][2]
+          : clearLead(b1, b2) ? share(b1, d.scored) + ' of posts ' + bandRank[0][1]
+          : 'Posts split between "' + bandRank[0][2] + '" and "' + bandRank[1][2] + '", at ' + share(b1, d.scored) + ' and ' + share(b2, d.scored),
+        'One bar for each point of the score, 0 to 9.9, with the four verdicts marked underneath. Higher is worse. Bars 3 and 5 are grey because each holds two verdicts. ' + num(d.scored) + ' posts.',
         histogram(d, W));
 
       html += section('02', 'The sins, ranked',
-        quiet ? few : !sin ? 'Not one check has fired on ' + num(d.scored) + ' posts, which is either very good news or a bug' : 'The most common sin is "' + sin.label + '", in ' + (pct(sin.n, d.scored) || 'under 1') + '% of posts',
-        'The share of scored posts that tripped each check, with the bar scaled to the worst offender. Colour is the category the check belongs to.' + (never ? ' ' + never + ' of the ' + d.rules.length + ' checks have not fired once.' : ''),
+        quiet ? few : !sin ? 'Not one check has fired on ' + num(d.scored) + ' posts, which is either very good news or a bug'
+          : clearLead(sin.n, sin2 && sin2.n) ? 'The most common sin is "' + sin.label + '", in ' + share(sin.n, d.scored) + ' of posts'
+          : 'Two sins lead, too close to separate: "' + sin.label + '" and "' + sin2.label + '", in ' + share(sin.n, d.scored) + ' and ' + share(sin2.n, d.scored) + ' of posts',
+        'The share of scored posts that tripped each check, the bar scaled to the most common one. ' + (never ? never + ' of the ' + countable.length + ' checks this tab can count have not fired once. ' : '') + 'One check, "Not in English", is never counted: a post it catches is not scored at all.',
         ruleBars(d));
 
-      var rwRows = [['var(--cool)', 'rewritten, and it scored better', rw.modes.reworded || 0], ['var(--ink-3)', 'no rewrite was good enough to show', rw.modes.unavailable || 0], ['var(--dim-clar)', 'nothing to fix', rw.modes.clean || 0], ['var(--rule-2)', 'declined', rw.modes.declined || 0]];
-      if (rw.modes.cache) rwRows[0][2] += rw.modes.cache;
-      var gainRows = [['var(--mx-b2)', 'under a point', rw.gain.under1 || 0], ['var(--cool)', '1 to 2 points', rw.gain['1to2'] || 0], ['var(--dim-clar)', '2 points or more', rw.gain['2plus'] || 0]];
+      var rw = d.reword, T = rw.tried, tried = T.better + T.couldNotBeat + T.unusable;
+      var rwRows = [['var(--cool)', 'beat the original', T.better], ['var(--mx-mid)', 'nothing it wrote scored lower', T.couldNotBeat], ['var(--ink-3)', 'the AI came back unusable', T.unusable]];
+      var gainRows = [['var(--mx-s2)', 'under a point', rw.gain.under1 || 0], ['var(--mx-s3)', '1 to 2 points', rw.gain['1to2'] || 0], ['var(--mx-s4)', '2 points or more', rw.gain['2plus'] || 0]];
       html += section('03', 'What Reword manages',
-        rw.asked < MX_MIN ? 'Reword has been asked ' + num(rw.asked) + ' times, which is too few to say anything true' : say(pct(rw.modes.reworded || 0, reached), 'Reword has yet to come back with something better, in ' + num(reached) + ' tries', 'Reword has come back with something better every time it tried', 'Reword came back with something better ' + pct(rw.modes.reworded || 0, reached) + '% of the times it tried'),
-        'A rewrite is only ever shown if the same checks score it lower than the original. When none does, the page says so and shows nothing. ' + num(rw.asked) + ' asks.',
-        '<p class="mx-cardlabel">How an ask ended</p>' + stack(rwRows, sum(rw.modes)) +
-        (sum(rw.gain) ? '<p class="mx-cardlabel mx-gap">Points taken off, when it worked</p>' + stack(gainRows, sum(rw.gain)) : ''));
+        tried < MX_MIN ? 'Reword has tried ' + num(tried) + ' times, which is too few to say anything true'
+          : say(T.better, tried, 'Reword has yet to beat an original, in ' + num(tried) + ' tries', 'Reword has beaten the original every time it tried', 'Reword beat the original ' + share(T.better, tried) + ' of the times it tried'),
+        'A rewrite is only shown if the same checks score it lower than the original. These are the ' + num(tried) + ' times Reword actually ran. ' + (rw.notAttempted ? 'Another ' + num(rw.notAttempted) + ' asks never reached it: nothing to fix, a declined post, or the AI out of reach for a moment.' : ''),
+        '<p class="mx-cardlabel">How a try ended</p>' + stack(rwRows, tried) +
+        (sum(rw.gain) ? '<p class="mx-cardlabel mx-gap">Points taken off, when it won</p>' + stack(gainRows, sum(rw.gain)) : ''));
 
-      var waitRows = [['var(--dim-clar)', 'under 5 seconds', d.wait.lt5s || 0], ['var(--cool)', '5 to 10', d.wait['5to10s'] || 0], ['var(--mx-b2)', '10 to 20', d.wait['10to20s'] || 0], ['var(--warm)', 'over 20', d.wait.gt20s || 0]];
+      var waited = sum(d.wait), fast = (d.wait.lt5s || 0) + (d.wait['5to10s'] || 0);
+      var waitRows = [['var(--mx-s4)', 'under 5 seconds', d.wait.lt5s || 0], ['var(--mx-s3)', '5 to 10 seconds', d.wait['5to10s'] || 0], ['var(--mx-s2)', '10 to 20 seconds', d.wait['10to20s'] || 0], ['var(--mx-s1)', 'over 20 seconds', d.wait.gt20s || 0]];
       html += section('04', 'The wait',
-        waited < MX_MIN ? 'Too few AI write-ups to time yet: ' + num(waited) + ' so far' : say(pct(fast, waited), 'No AI write-up has arrived in under ten seconds yet', 'Every AI write-up so far arrived in under ten seconds', pct(fast, waited) + '% of AI write-ups arrive in under ten seconds'),
-        'From pressing the button to the write-up, for the calls that reached the AI. The score never waits on any of this: the checklist is code, and code answers at once.',
-        '<p class="mx-cardlabel">' + num(waited) + ' waits</p>' + stack(waitRows, waited));
+        waited < MX_MIN ? 'Too few AI write-ups to time yet: ' + num(waited) + ' so far'
+          : say(fast, waited, 'No AI write-up has taken under ten seconds yet', 'Every AI write-up so far took under ten seconds', share(fast, waited) + ' of AI write-ups take under ten seconds'),
+        'How long the AI took to write a report, timed on the server from the moment the request arrived. Only write-ups that arrived are counted, and only reports, not rewrites. The score does not depend on the AI: when it fails, the checklist score still shows.',
+        '<p class="mx-cardlabel">' + num(waited) + ' write-ups</p>' + stack(waitRows, waited));
 
+      var flagRows = [{ label: 'Had an image or video', verb: 'came with an image or video', n: d.flags.media }, { label: 'Read as a told story', verb: 'read as a told story', n: d.flags.narrative }, { label: 'Read as satire, so the checks that assume the writer means it stood down', verb: 'read as satire', n: d.flags.satire }]
+        .sort(function(a, b){ return b.n - a.n; });
+      var ftop = flagRows[0];
       html += section('05', 'What came with the post',
-        quiet ? few : say(pct(d.flags.media, d.scored), 'No post so far came with an image or video', 'Every post so far came with an image or video', pct(d.flags.media, d.scored) + '% of posts came with an image or video'),
-        'Three things the page notes about a post, as shares of scored posts. A post can be more than one, or none.',
-        '<ul class="mx-bars">' + [['Had an image or video', d.flags.media], ['Read as a story, so the checks went easier on length', d.flags.narrative], ['Read as satire, and was scored as the joke it was', d.flags.satire]].map(function(x){
-          return '<li><span class="t">' + YPS.esc(x[0]) + '</span><span class="p">' + pct(x[1], d.scored) + '%</span><span class="mx-track"><span class="mx-fill" style="--w:' + pct(x[1], d.scored) + '"></span></span></li>'; }).join('') + '</ul>');
+        quiet ? few : say(ftop.n, d.scored, 'None of these has come up in a post yet', 'Every post so far ' + ftop.verb, share(ftop.n, d.scored) + ' of posts ' + ftop.verb),
+        'Three things the checks notice about a post, as shares of scored posts, the bar scaled to the largest of the three. A post can be more than one, or none.',
+        bars(flagRows, d.scored, Math.max(1, ftop.n)));
 
       host.innerHTML = html;
       var more = $('#mx-more');
       if (more) more.addEventListener('click', function(){ state.all = !state.all; draw(); var again = $('#mx-more'); if (again) again.focus(); });
-      $('#mx-since').textContent = sinceText(d.since); $('#mx-min').textContent = MX_MIN; $('#mx-foot').hidden = false;
-      var at = d.at ? new Date(d.at) : null;
-      $('#mx-asof').textContent = at && !isNaN(at) ? ' (read at ' + at.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' }) + ')' : '';
+      var at = d.at ? new Date(d.at) : null, when = at && !isNaN(at) ? at.toLocaleString([], { weekday: 'short', hour: 'numeric', minute: '2-digit' }) : null;
+      var foot = $('#mx-foot');
+      foot.innerHTML = 'Counted since ' + E(sinceText(d.since)) + '. A post is something a person pasted: the four example posts, a rewrite sent back through, a shared link opened again, a repeat of a post seen this week and a request that failed the bot check are not counted. ' +
+        'Counts only: a score, the checks that fired, a rewrite’s gain, a wait. No words from any post, and nothing about who pasted one. ' +
+        (d.live ? 'These are live, because you are behind the door' + (when ? ' (read ' + E(when) + ')' : '') + '. Everyone else sees them an hour at a time.' : 'These figures are as of ' + E(when || 'the last count') + '. They move at most once an hour, and only after at least ten more posts, so no one can tell one person’s post from the next.') +
+        ' Under ' + MX_MIN + ' a share is shown as a count. The raw figures are at <a href="api/metrics">api/metrics</a>.';
+      foot.hidden = false;
     }
     function sinceText(iso){
       var m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(iso || ''); if (!m) return 'the counting started';
@@ -6623,7 +6682,7 @@ ul.cg-list li::before{content:"\2022";position:absolute;left:0;color:var(--ink-4
     function load(){
       return fetch('api/metrics', { credentials: 'same-origin', headers: { accept: 'application/json' } })
         .then(function(r){ return r.status === 401 ? { locked: true } : r.ok ? r.json() : { ok: false }; })
-        .catch(function(){ return { ok: false }; })
+        .catch(function(){ return { ok: false, net: true }; })
         .then(function(j){
           state.asked = false;
           var lock = $('#mx-lock');
@@ -6664,7 +6723,15 @@ ul.cg-list li::before{content:"\2022";position:absolute;left:0;color:var(--ink-4
     window.addEventListener('resize', function(){
       if (!state.data || $('#panel-metrics').hidden) return;
       clearTimeout(mxTimer);
-      mxTimer = setTimeout(function(){ if (Math.abs(((host.clientWidth || 0) - 34) - state.w) > 24) draw(); }, 150);
+      mxTimer = setTimeout(function(){
+        if (Math.abs(((host.clientWidth || 0) - 34) - state.w) <= 24) return;
+        // A redraw replaces every node; whoever had focus in here keeps it.
+        var a = document.activeElement, inside = a && host.contains(a), id = inside && a.id;
+        draw();
+        if (!inside) return;
+        var back = (id && document.getElementById(id)) || host.querySelector('.mx-h');
+        if (back) back.focus();
+      }, 150);
     });
   })();
 
@@ -6769,6 +6836,7 @@ ul.cg-list li::before{content:"\2022";position:absolute;left:0;color:var(--ink-4
       $('#hasmedia').checked = false;
       clearAttachedImage();
       showNotices([]);
+      textSource = 'lab';
       updateCounter();
       run();
       // run() cleans the text and rewrites the notices with whatever it

@@ -1,6 +1,6 @@
 /* Exercises every degradation and safety path in the Worker with a mocked
    env + mocked Anthropic endpoint. No API key, no wrangler, no network. */
-import worker, { readStats, statKeys, Counters, COSTS } from './src/worker.js';
+import worker, { readStats, statKeys, readAiOutcomes, publicFigures, Counters, COSTS } from './src/worker.js';
 import ENGINE from './src/engine.mjs';
 import { readFileSync } from 'node:fs';
 
@@ -42,8 +42,8 @@ function mockCounters() {
     if (!o) {
       const store = new Map();
       const state = { storage: {
-        async get(k) { await tick(); return store.get(k); },
-        async put(k, v) { await tick(); store.set(k, v); },
+        async get(k) { await tick(); return Array.isArray(k) ? new Map(k.filter(x => store.has(x)).map(x => [x, store.get(x)])) : store.get(k); },
+        async put(k, v) { await tick(); if (k && typeof k === 'object') { for (const [x, y] of Object.entries(k)) store.set(x, y); } else store.set(k, v); },
         async list({ prefix = '', limit = 1000 } = {}) { await tick(); return new Map([...store].filter(([k]) => k.startsWith(prefix)).slice(0, limit)); }
       } };
       o = { obj: new Counters(state, {}), queue: Promise.resolve(), store };
@@ -1686,9 +1686,9 @@ console.log('\n=== the numbers, for anyone: an allow-list ===');
   const m = await res.json(), raw = JSON.stringify(m), all = await readStats(env);
   const rules = ENGINE.analyze(BAD, {});
   check('api/metrics: scored posts, the ten score buckets, and every check by name, fired or not', m.ok && m.scored === 2 && m.scores.length === 10 && m.scores.reduce((a, n) => a + n, 0) === 2 && m.rules.length === ENGINE.RULES.length && rules.stats.firedIds.every(id => (m.rules.find(r => r.id === id) || {}).n >= 1) && m.rules.every(r => r.label && r.dim), raw.slice(0, 200));
-  check('  ...Reword outcomes and the wait', m.reword.asked === 1 && m.reword.modes.reworded === 1 && Object.values(m.wait).reduce((a, n) => a + n, 0) >= 1, JSON.stringify(m.reword) + JSON.stringify(m.wait));
+  check('  ...Reword split into what it tried and what it did not, and the wait for write-ups that arrived', m.reword.tried.better === 1 && m.reword.notAttempted === 0 && Object.values(m.wait).reduce((a, n) => a + n, 0) === 1, JSON.stringify(m.reword) + JSON.stringify(m.wait));
   check('  ...and nothing about how the site is doing: no reasons, no errors, no request totals', all['analyze:why:no_key'] === 1 && all['analyze:error:empty'] === 1 && !/no_key|why|error|analyze:all|mode:rules|budget|turnstile/.test(raw), raw.slice(0, 300));
-  check('  ...it may be cached at the edge, and is read-only', /s-maxage=300/.test(res.headers.get('cache-control') || '') && (await worker.fetch(new Request('https://yourpost.sucks/api/metrics', { method: 'POST' }), env, ctx)).status === 405);
+  check('  ...it is a stored snapshot, never cached anywhere else, and read-only', m.live === false && /private, no-store/.test(res.headers.get('cache-control') || '') && (await worker.fetch(new Request('https://yourpost.sucks/api/metrics', { method: 'POST' }), env, ctx)).status === 405);
   check('  ...with no counter bound it says so and does not throw', (await (await worker.fetch(new Request('https://yourpost.sucks/api/metrics'), { ...baseEnv(), METRICS_OPEN: '1' }, ctx)).json()).ok === false);
 }
 
@@ -1723,16 +1723,81 @@ console.log('\n=== the door on the numbers ===');
   check('  ...another site cannot guess on a visitor\'s behalf', x.status === 403);
   const pub = baseEnv(); pub.COUNTERS = mockCounters(); pub.METRICS_OPEN = '1'; pub.METRICS_PASSWORD = WORD;
   const o = await get(pub);
-  check('open to everyone is one config flag: no cookie needed, cacheable, and the door is gone', o.status === 200 && /s-maxage=300/.test(o.headers.get('cache-control')) && (await guess(pub, WORD)).status === 404 && (await (await worker.fetch(new Request('https://yourpost.sucks/api/status'), pub, ctx)).json()).metricsOpen === true);
+  check('open to everyone is one config flag: no cookie needed, and the door is gone', o.status === 200 && /no-store/.test(o.headers.get('cache-control')) && (await guess(pub, WORD)).status === 404 && (await (await worker.fetch(new Request('https://yourpost.sucks/api/status'), pub, ctx)).json()).metricsOpen === true);
   const src = readFileSync(new URL('./src/worker.js', import.meta.url), 'utf8') + readFileSync(new URL('./wrangler.toml', import.meta.url), 'utf8');
   check('the password is a secret: not in the code, not in the config', !/METRICS_PASSWORD\s*=\s*["']/.test(src));
+}
+
+console.log('\n=== what is a post (Reconcilers, episode 4) ===');
+{
+  const settle = () => new Promise(z => setTimeout(z, 40));
+  const from = (src, body, extra = {}) => new Request('https://yourpost.sucks/api/analyze', { method: 'POST', headers: { 'content-type': 'application/json', 'sec-fetch-site': 'same-origin', 'cf-connecting-ip': '10.8.8.' + Math.floor(Math.random() * 200), ...(src ? { 'x-yps-source': src } : {}), ...extra }, body: JSON.stringify(body) });
+  const env = baseEnv(); env.COUNTERS = mockCounters(); llmBehaviour = 'good';
+  for (const src of ['specimen', 'rewrite', 'lab', 'permalink']) await (await worker.fetch(from(src, { post: NEUTRAL + ' ' + src }), env, ctx)).json();
+  await settle();
+  let s = await readStats(env);
+  check('a specimen click, an analyzed rewrite, a lab hand-off and a shared-link load are not posts', !s['post:all'] && s['analyze:source:specimen'] === 1 && s['analyze:source:rewrite'] === 1 && s['analyze:source:lab'] === 1 && s['analyze:source:permalink'] === 1, JSON.stringify(s).slice(0, 300));
+  await (await worker.fetch(from('paste', { post: NEUTRAL }), env, ctx)).json(); await settle();
+  await (await worker.fetch(from(null, { post: NEUTRAL + ' no header' }), env, ctx)).json(); await settle();
+  s = await readStats(env);
+  check('  ...a paste is, and so is a request that says nothing about where it came from', s['post:all'] === 2, s['post:all']);
+  const bot = baseEnv(); bot.COUNTERS = mockCounters(); bot.TURNSTILE_SECRET = 's'; bot.TURNSTILE_SITE_KEY = 'k'; bot.TURNSTILE_MODE = 'enforce';
+  for (let i = 0; i < 5; i++) await (await worker.fetch(from('paste', { post: BAD + ' ' + i }), bot, ctx)).json();
+  await settle();
+  const sb = await readStats(bot);
+  check('a request that fails the bot check is not a post: a script cannot move the tab', !sb['post:all'] && sb['analyze:why:turnstile'] === 5, JSON.stringify(sb).slice(0, 200));
+  // Fake bold is a finding outside the 47: it no longer hides a clean post.
+  const fb = statKeys('analyze', 200, { mode: 'llm', report: { band: { key: 'barely' }, overall: 0.3, stats: { firedIds: ['unicode-bold'] } } }, 100, 'paste');
+  check('a post whose only finding is fake bold counts as tripping none of the 47 checks', fb.includes('post:rule:none') && fb.includes('post:rule:unicode-bold'));
+  // Gains in tenths: 1.4 to 0.4 is a whole point.
+  const g = (b, a) => statKeys('reword', 200, { mode: 'reworded', before: { overall: b }, after: { overall: a } }, 100).find(k => k.startsWith('reword:gain:'));
+  check('a gain of exactly one point lands in "1 to 2", and exactly two in "2 or more"', g(1.4, 0.4) === 'reword:gain:1to2' && g(4.3, 2.3) === 'reword:gain:2plus' && g(1.0, 0.9) === 'reword:gain:under1', g(1.4, 0.4) + ' ' + g(4.3, 2.3));
+  // Reword: tried and not tried, never mixed.
+  const f = publicFigures({ 'reword:mode:reworded': 7, 'reword:mode:unavailable': 9, 'reword:why:no_improvement': 3, 'reword:why:llm_unavailable': 1, 'reword:why:budget': 4, 'reword:why:turnstile': 1, 'reword:mode:clean': 2 }, 'x');
+  check('Reword: the budget, the bot check and "nothing to fix" are not attempts', f.reword.tried.better === 7 && f.reword.tried.couldNotBeat === 3 && f.reword.tried.unusable === 1 && f.reword.notAttempted === 7, JSON.stringify(f.reword));
+  // The wait: only write-ups that arrived, only the report's.
+  const w = statKeys('analyze', 200, { mode: 'rules', reason: 'llm_unavailable', report: null }, 9000);
+  check('a failed write-up is not a wait for one, and a rewrite is not a report', !w.some(k => k.startsWith('ai:wait:')) && publicFigures({ 'ai:wait:reword:lt5s': 5, 'ai:wait:analyze:lt5s': 2 }, 'x').wait.lt5s === 2);
+  check('"Not in English" is marked as something this tab cannot count', publicFigures({}, 'x').rules.find(r => r.id === 'not-english').countable === false);
+  llmBehaviour = 'good';
+}
+
+console.log('\n=== the public numbers are a snapshot (Census, episode 4) ===');
+{
+  const env = baseEnv(); env.COUNTERS = mockCounters(); env.METRICS_OPEN = '1'; llmBehaviour = 'good';
+  const read = async () => (await worker.fetch(new Request('https://yourpost.sucks/api/metrics?x=' + Math.random()), env, ctx)).json();
+  const paste = async i => { await (await worker.fetch(post({ post: NEUTRAL + ' number ' + i }), env, ctx)).json(); await new Promise(z => setTimeout(z, 30)); };
+  await paste(0);
+  const first = await read();
+  await paste(1);
+  const second = await read();
+  check('two reads around one post, in the same hour, are the same snapshot: nothing to subtract', first.scored === 1 && JSON.stringify(second) === JSON.stringify(first), first.scored + ' then ' + second.scored);
+  // A new hour with fewer than ten new posts still serves the old snapshot.
+  const old = { ...first, at: '2000-01-01T00:00:00.000Z' };
+  await env.KV.put('mx:snap', JSON.stringify(old));
+  const third = await read();
+  check('  ...a new hour with fewer than ten new posts still does not move', third.at === old.at && third.scored === 1);
+  for (let i = 2; i < 13; i++) await paste(i);
+  const fourth = await read();
+  check('  ...a new hour and ten or more new posts moves it, stamped with when', fourth.scored === 13 && fourth.at !== old.at && fourth.live === false, fourth.scored + ' at ' + fourth.at);
+}
+
+console.log('\n=== the saved notes are read after the bot check (Census, episode 4) ===');
+{
+  const env = baseEnv(); env.COUNTERS = mockCounters(); llmBehaviour = 'good';
+  await (await worker.fetch(post({ post: BAD }), env, ctx)).json(); await new Promise(z => setTimeout(z, 30));
+  env.TURNSTILE_SECRET = 's'; env.TURNSTILE_SITE_KEY = 'k'; env.TURNSTILE_MODE = 'enforce';
+  const probe = await (await worker.fetch(post({ post: BAD }), env, ctx)).json();
+  check('without a bot-check token, a known text is not served from the saved notes: no free "was this pasted?"', probe.mode === 'rules' && probe.reason === 'turnstile', probe.mode + ' ' + probe.reason);
+  check('the public status no longer carries the AI report counters', !('aiReport' in await (await worker.fetch(new Request('https://yourpost.sucks/api/status'), baseEnv(), ctx)).json()));
+  check('an API answer carries nosniff and a referrer policy', (await worker.fetch(new Request('https://yourpost.sucks/api/status'), baseEnv(), ctx)).headers.get('x-content-type-options') === 'nosniff');
 }
 
 console.log('\n=== a roast list that came back wrong is mended, not thrown away ===');
 {
   const good = { one_liner: 'A clean post.', brutal: 'Nothing here is desperate.', advice: [], changes: [] };
   const roast = (i) => ({ label: 'Tag ' + i, text: 'Callout number ' + 'abcdefghijkl'[i] + ' about the opening line of this post.' });
-  const run = async payload => { const env = baseEnv(); env.COUNTERS = mockCounters(); llmBehaviour = 'custom'; customPayload = payload; const r = await (await worker.fetch(post({ post: BAD }), env, ctx)).json(); await new Promise(z => setTimeout(z, 30)); const ai = (await (await worker.fetch(new Request('https://yourpost.sucks/api/status'), env, ctx)).json()).aiReport; return { r, ai }; };
+  const run = async payload => { const env = baseEnv(); env.COUNTERS = mockCounters(); llmBehaviour = 'custom'; customPayload = payload; const r = await (await worker.fetch(post({ post: BAD }), env, ctx)).json(); await new Promise(z => setTimeout(z, 30)); const ai = await readAiOutcomes(env); return { r, ai }; };
 
   const many = await run({ ...good, roasts: Array.from({ length: 11 }, (_, i) => roast(i)) });
   check('eleven callouts: the first eight ship, where the whole report used to be discarded', many.r.mode === 'llm' && many.r.report.roasts.length === 8 && many.ai['mend:roasts_trimmed'] === 1, many.r.mode + ' ' + JSON.stringify(many.ai));
@@ -1784,11 +1849,11 @@ console.log('\n=== is the tool right, and is it fast: the tallies ===');
   const rules = ENGINE.analyze(BAD, {});
   await (await worker.fetch(post({ post: BAD }), env, ctx)).json(); await settle();
   let s = await readStats(env);
-  check('a report is tallied by band, by whole-number score, and by every check that fired', s['analyze:all'] === 1 && s['analyze:mode:llm'] === 1 && s['band:' + rules.band.key] === 1 && s['score:' + Math.min(9, Math.floor(rules.overall))] === 1 && rules.stats.firedIds.length > 0 && rules.stats.firedIds.every(id => s['rule:' + id.toLowerCase()] === 1), JSON.stringify(s).slice(0, 300));
-  check('  ...and how long the reader waited on the model', Object.keys(s).filter(k => k.startsWith('analyze:wait:')).length === 1);
+  check('a report is tallied by band, by whole-number score, and by every check that fired', s['analyze:all'] === 1 && s['analyze:mode:llm'] === 1 && s['post:all'] === 1 && s['post:band:' + rules.band.key] === 1 && s['post:score:' + Math.min(9, Math.floor(rules.overall))] === 1 && rules.stats.firedIds.length > 0 && rules.stats.firedIds.every(id => s['post:rule:' + id.toLowerCase()] === 1) && s['post:since'] > 1e12, JSON.stringify(s).slice(0, 300));
+  check('  ...and how long the write-up took', Object.keys(s).filter(k => k.startsWith('ai:wait:analyze:')).length === 1);
   await (await worker.fetch(post({ post: BAD }), env, ctx)).json(); await settle();
   s = await readStats(env);
-  check('a cache hit counts the post again but not the wait', s['analyze:all'] === 2 && s['analyze:mode:cache'] === 1 && s['band:' + rules.band.key] === 2 && Object.entries(s).filter(([k]) => k.startsWith('analyze:wait:')).reduce((a, [, n]) => a + n, 0) === 1, JSON.stringify(s).slice(0, 200));
+  check('a cache hit is a request, not a new post, and not a wait', s['analyze:all'] === 2 && s['analyze:mode:cache'] === 1 && s['post:all'] === 1 && s['post:band:' + rules.band.key] === 1 && Object.entries(s).filter(([k]) => k.startsWith('analyze:wait:')).reduce((a, [, n]) => a + n, 0) === 1, JSON.stringify(s).slice(0, 200));
   const off = baseEnv(); off.COUNTERS = mockCounters(); delete off.ANTHROPIC_API_KEY;
   await (await worker.fetch(post({ post: BAD }), off, ctx)).json(); await settle();
   const so = await readStats(off);
@@ -1798,7 +1863,7 @@ console.log('\n=== is the tool right, and is it fast: the tallies ===');
   const sens = baseEnv(); sens.COUNTERS = mockCounters();
   await (await worker.fetch(post({ post: 'My father passed away last week and I have not been able to work since the funeral.' }), sens, ctx)).json(); await settle();
   const ss = await readStats(sens);
-  check('a declined post is counted as declined, with no band, score or rule', ss['analyze:mode:declined'] === 1 && !Object.keys(ss).some(k => /^(band|score|rule):/.test(k)), JSON.stringify(ss));
+  check('a declined post is counted as declined, with no band, score or rule', ss['analyze:mode:declined'] === 1 && !Object.keys(ss).some(k => /^post:/.test(k)), JSON.stringify(ss));
   check('the tallies are not on the public status page', !('stats' in await (await worker.fetch(new Request('https://yourpost.sucks/api/status'), env, ctx)).json()));
   check('nothing but fixed words and rule ids can become a key', statKeys('analyze', 200, { mode: 'rules', reason: 'x'.repeat(200), report: null }, 10).every(k => k.length < 64));
   const noDO = baseEnv();
@@ -1809,7 +1874,7 @@ console.log('\n=== one bad line no longer sinks a paid report ===');
 {
   const good = { one_liner: 'A clean post.', brutal: 'Nothing here is desperate.', roasts: [{ label: 'Mild', text: 'It reads like a status update because that is what it is.' }], advice: [], changes: [] };
   const run = async payload => { const env = baseEnv(); env.COUNTERS = mockCounters(); llmBehaviour = 'custom'; customPayload = payload; const r = await (await worker.fetch(post({ post: BAD }), env, ctx)).json(); await new Promise(z => setTimeout(z, 20)); return { r, env }; };
-  const aiStatus = async env => (await (await worker.fetch(new Request('https://yourpost.sucks/api/status'), env, ctx)).json()).aiReport;
+  const aiStatus = async env => await readAiOutcomes(env);
 
   // The reader's screenshot of 2026-09-21: the commonest cause, a dash in one of the two main lines.
   const dash = await run({ ...good, brutal: 'This is fine ' + String.fromCharCode(0x2014) + ' and I want that on the record.' });

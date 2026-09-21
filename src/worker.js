@@ -168,7 +168,9 @@ function extractImage(body) {
 const json = (obj, status = 200, extra = {}) =>
   new Response(JSON.stringify(obj), {
     status,
-    headers: { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'no-store', ...extra }
+    // public/_headers only reaches the static files; an /api answer is made
+    // here, so it carries its own.
+    headers: { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'no-store', 'x-content-type-options': 'nosniff', 'referrer-policy': 'strict-origin-when-cross-origin', ...extra }
   });
 
 async function sha256(str) {
@@ -351,7 +353,7 @@ async function countAiOutcome(env, keys) {
     console.warn('ai outcome: not counted', e && e.message);
   }
 }
-async function readAiOutcomes(env) {
+export async function readAiOutcomes(env) {
   const ns = counters(env);
   if (!ns) return null;
   try {
@@ -383,34 +385,59 @@ async function readAiOutcomes(env) {
  * time of day. Written here; READ only from inside the locked room.
  * ------------------------------------------------------------------ */
 const latBucket = ms => ms < 5000 ? 'lt5s' : ms < 10000 ? '5to10s' : ms < 20000 ? '10to20s' : 'gt20s';
-export function statKeys(kind, status, p, ms) {
+/* WHAT IS A POST. The Reconcilers (episode 4) found "posts scored" counting
+ * every request: a cache hit, each reload of a shared link, a click on one of
+ * the four specimen buttons, the AI's own rewrite sent back through, a draft
+ * handed over from the locked room, and, worst, a request that FAILED the bot
+ * check, which is answered with a scored report and came before any rate
+ * limit, so a script could move every share on the tab. The owner's rule
+ * since: a post is something a person pasted. The page says where its text
+ * came from in the x-yps-source header; anything but "paste" (or no header)
+ * is not a post. A cache hit is not a new post. A bot-check failure is not a
+ * post. Those are still counted as requests, privately, under analyze:*.
+ * Posts are counted under post:* so the series restarts clean, with a stamp
+ * of when it began. */
+export const POST_SOURCES = ['paste', 'specimen', 'rewrite', 'lab', 'permalink'];
+const NOT_A_POST_REASONS = ['turnstile'];
+const RULE_IDS = new Set(ENGINE.RULES.map(r => r.id));
+// Tenths, compared as whole numbers: 1.4 - 0.4 is 0.9999999999999999.
+const gainBucket = (before, after) => { const t = Math.round(before * 10) - Math.round(after * 10); return t >= 20 ? '2plus' : t >= 10 ? '1to2' : t > 0 ? 'under1' : 'none'; };
+export function statKeys(kind, status, p, ms, source) {
   const keys = [`${kind}:all`];
   if (status >= 400) { keys.push(`${kind}:error:${String(p && p.error || status).slice(0, 24)}`); return keys; }
   const mode = String(p && p.mode || 'none');
   keys.push(`${kind}:mode:${mode}`);
   if (p && p.reason) keys.push(`${kind}:why:${String(p.reason).slice(0, 24)}`);
-  // Only calls that waited on a model: a cache hit in 40ms says nothing.
-  if (mode === 'llm' || mode === 'reworded' || ((mode === 'rules' || mode === 'unavailable') && ['llm_unavailable', 'no_improvement', 'overwritten'].includes(p.reason))) keys.push(`${kind}:wait:${latBucket(ms)}`);
+  const src = POST_SOURCES.includes(source) ? source : 'paste';
+  if (kind === 'analyze') keys.push(`analyze:source:${src}`);
+  // The old wait, kept for the owner: every call that reached a model.
+  if (mode === 'llm' || mode === 'reworded' || ((mode === 'rules' || mode === 'unavailable') && ['llm_unavailable', 'no_improvement'].includes(p.reason))) keys.push(`${kind}:wait:${latBucket(ms)}`);
+  // The public wait: only a write-up that arrived. A failure is not a wait
+  // for a write-up, it is a wait for nothing.
+  if ((kind === 'analyze' && mode === 'llm') || (kind === 'reword' && mode === 'reworded')) keys.push(`ai:wait:${kind}:${latBucket(ms)}`);
   const r = kind === 'analyze' ? p && p.report : p && p.before;
-  if (kind === 'analyze' && r && r.band && typeof r.overall === 'number' && !r.unscored && !r.sensitive) {
-    keys.push(`band:${r.band.key}`, `score:${Math.min(9, Math.floor(r.overall))}`);
-    for (const id of (r.stats && r.stats.firedIds) || []) keys.push(`rule:${id}`);
-    if (!((r.stats && r.stats.firedIds) || []).length) keys.push('rule:none');
-    if (r.satireApplied) keys.push('flag:satire');
-    if (r.mediaAttached) keys.push('flag:media');
-    if (r.meanerSkipped) keys.push('flag:meaner_skipped');
-    if (r.narrative) keys.push('flag:narrative');
+  const aPost = kind === 'analyze' && src === 'paste' && mode !== 'cache' && !NOT_A_POST_REASONS.includes(p && p.reason);
+  if (aPost && r && r.band && typeof r.overall === 'number' && !r.unscored && !r.sensitive) {
+    const fired = (r.stats && r.stats.firedIds) || [];
+    keys.push('post:all', `post:band:${r.band.key}`, `post:score:${Math.min(9, Math.floor(r.overall))}`);
+    for (const id of fired) keys.push(`post:rule:${id}`);
+    // Clean means none of the published checks fired. A finding outside them
+    // (fake bold) is counted under its own id and does not hide a clean post.
+    if (!fired.some(id => RULE_IDS.has(id))) keys.push('post:rule:none');
+    if (r.satireApplied) keys.push('post:flag:satire');
+    if (r.mediaAttached) keys.push('post:flag:media');
+    if (r.meanerSkipped) keys.push('post:flag:meaner_skipped');
+    if (r.narrative) keys.push('post:flag:narrative');
   }
   if (kind === 'reword' && p && p.after && p.before && typeof p.after.overall === 'number') {
-    const gain = p.before.overall - p.after.overall;
-    keys.push('reword:gain:' + (gain >= 2 ? '2plus' : gain >= 1 ? '1to2' : gain > 0 ? 'under1' : 'none'));
+    keys.push('reword:gain:' + gainBucket(p.before.overall, p.after.overall));
   }
   return keys;
 }
 async function bumpStats(env, keys) {
   const ns = counters(env);
   if (!ns || !keys.length) return;
-  try { await counterCall(ns, 'stats', '/bump', { keys: keys.map(k => 's:' + k.toLowerCase().replace(/[^a-z0-9:_.-]/g, '_')) }); }
+  try { await counterCall(ns, 'stats', '/bump', { keys: keys.map(k => 's:' + k.toLowerCase().replace(/[^a-z0-9:_.-]/g, '_')), stamp: keys.includes('post:all') ? 's:post:since' : undefined }); }
   catch (e) { console.warn('stats: not counted', e && e.message); }
 }
 /** Every tally, with the prefix stripped, or null. For lab.js and the tests. */
@@ -431,10 +458,18 @@ export async function readStats(env) {
  * Out, on purpose: why a reader got the rules-only page, refused requests,
  * AI failure reasons, the budget, the bot check. Those describe the
  * operation, they change by the hour, and on a bad day they are a map.
- * The list below is an allow-list: a new tally is private until it is named
- * here. Counts only, and a minute or five stale at the edge.
+ * Nothing below passes a raw tally through: every public figure is built
+ * here by name, so a new tally is private until it is written into this
+ * function. Counts only.
+ *
+ * ONCE IT IS PUBLIC, it is a snapshot, not a live read. Census (episode 4):
+ * two live reads a second apart differ by one person's post, and some checks
+ * fire only on layoff or resignation language. So the public figures move at
+ * most once an UTC hour, and only once at least MX_SNAP_MIN more posts have
+ * been counted. Someone behind the door (the owner) always reads live.
  * ------------------------------------------------------------------ */
-export const METRICS_SINCE = '2026-09-21';
+const MX_SNAP_KEY = 'mx:snap';
+const MX_SNAP_MIN = 10;
 
 /* THE DOOR ON THE NUMBERS. Until the owner has looked at real figures and is
  * happy for everyone to, the endpoint answers only to a password.
@@ -494,39 +529,65 @@ async function handleMetricsUnlock(request, env) {
   await new Promise(done => setTimeout(done, 1000));
   return json({ error: 'wrong' }, 401, priv);
 }
-const METRICS_PUBLIC = ['band:', 'score:', 'rule:', 'flag:media', 'flag:satire', 'flag:narrative', 'reword:all', 'reword:mode:', 'reword:gain:', 'analyze:wait:', 'reword:wait:'];
-async function handleMetrics(request, env) {
-  if (!(await metricsAllowed(request, env))) return json({ error: 'locked' }, 401, { 'cache-control': 'no-store' });
-  // Shared at the edge only once it is open to everyone: a cached copy of a
-  // locked answer would be handed to whoever asked next.
-  const headers = { 'cache-control': env.METRICS_OPEN === '1' ? 'public, s-maxage=300' : 'private, no-store' };
-  const all = await readStats(env);
-  if (!all) return json({ ok: false, since: METRICS_SINCE }, 200, headers);
-  const s = Object.fromEntries(Object.entries(all).filter(([k]) => METRICS_PUBLIC.some(p => k === p || (p.endsWith(':') && k.startsWith(p)))));
+/** The public figures, built by name from the tallies. */
+export function publicFigures(all, at) {
+  const s = all || {};
   const under = prefix => Object.fromEntries(Object.entries(s).filter(([k]) => k.startsWith(prefix)).map(([k, n]) => [k.slice(prefix.length), n]));
-  const bands = under('band:');
-  const fired = under('rule:');
-  const waitA = under('analyze:wait:'), waitR = under('reword:wait:');
-  return json({
-    ok: true, since: METRICS_SINCE, at: new Date().toISOString(),
+  const bands = under('post:band:'), fired = under('post:rule:'), why = under('reword:why:'), mode = under('reword:mode:');
+  const tried = { better: mode.reworded || 0, couldNotBeat: why.no_improvement || 0, unusable: why.llm_unavailable || 0 };
+  const outcomes = Object.values(mode).reduce((a, n) => a + n, 0);
+  const since = s['post:since'] ? new Date(s['post:since']).toISOString().slice(0, 10) : null;
+  return {
+    ok: true, since, at,
     scored: Object.values(bands).reduce((a, n) => a + n, 0),
     bands,
-    scores: Array.from({ length: 10 }, (_, i) => s['score:' + i] || 0),
-    // Every check, fired or not: one that never fires is a finding too.
-    rules: ENGINE.RULES.map(r => ({ id: r.id, label: r.label, dim: r.dim, n: fired[r.id.toLowerCase()] || 0 })),
+    scores: Array.from({ length: 10 }, (_, i) => s['post:score:' + i] || 0),
+    // Every check, fired or not: one that never fires is a finding too. One
+    // can never be counted here: a post it catches is not scored at all.
+    rules: ENGINE.RULES.map(r => ({ id: r.id, label: r.label, dim: r.dim, n: fired[r.id.toLowerCase()] || 0, ...(r.id === 'not-english' ? { countable: false } : {}) })),
     clean: fired.none || 0,
-    flags: { media: s['flag:media'] || 0, satire: s['flag:satire'] || 0, narrative: s['flag:narrative'] || 0 },
-    reword: { asked: s['reword:all'] || 0, modes: under('reword:mode:'), gain: under('reword:gain:') },
-    wait: Object.fromEntries(['lt5s', '5to10s', '10to20s', 'gt20s'].map(b => [b, (waitA[b] || 0) + (waitR[b] || 0)]))
-  }, 200, headers);
+    flags: { media: s['post:flag:media'] || 0, satire: s['post:flag:satire'] || 0, narrative: s['post:flag:narrative'] || 0 },
+    // Tried and not tried, never mixed. "Not attempted" is one number: why
+    // (no key, the bot check, the budget, the hourly limit, nothing to fix,
+    // a declined post) is the operation's business, not the page's.
+    reword: { tried, notAttempted: Math.max(0, outcomes - tried.better - tried.couldNotBeat - tried.unusable), gain: under('reword:gain:') },
+    // Only write-ups that arrived, and only the report's: Reword is its own.
+    wait: Object.fromEntries(['lt5s', '5to10s', '10to20s', 'gt20s'].map(b => [b, s['ai:wait:analyze:' + b] || 0]))
+  };
+}
+async function handleMetrics(request, env) {
+  const priv = { 'cache-control': 'private, no-store' };
+  const open = env.METRICS_OPEN === '1';
+  // Behind the door (a cookie) is always live, open or not.
+  const owner = env.METRICS_PASSWORD && await (async () => { const shut = { ...env, METRICS_OPEN: undefined }; return metricsAllowed(request, shut); })();
+  if (!open && !owner) return json({ error: 'locked' }, 401, { 'cache-control': 'no-store' });
+  if (owner || !env.KV) {
+    const all = await readStats(env);
+    if (!all) return json({ ok: false }, 200, priv);
+    return json({ ...publicFigures(all, new Date().toISOString()), live: true }, 200, priv);
+  }
+  // Public: the stored snapshot, replaced only in a new UTC hour and only
+  // after MX_SNAP_MIN more posts. Within the hour the counter is not read.
+  let snap = null;
+  try { snap = await env.KV.get(MX_SNAP_KEY, 'json'); } catch (e) { snap = null; }
+  const hourOf = iso => String(iso || '').slice(0, 13);
+  const now = new Date().toISOString();
+  if (snap && hourOf(snap.at) === hourOf(now)) return json({ ...snap, live: false }, 200, priv);
+  const all = await readStats(env);
+  if (!all) return snap ? json({ ...snap, live: false }, 200, priv) : json({ ok: false }, 200, priv);
+  const fresh = publicFigures(all, now);
+  if (snap && fresh.scored - (snap.scored || 0) < MX_SNAP_MIN) return json({ ...snap, live: false }, 200, priv);
+  try { await env.KV.put(MX_SNAP_KEY, JSON.stringify(fresh)); } catch (e) { console.warn('metrics: snapshot not stored', e && e.message); }
+  return json({ ...fresh, live: false }, 200, priv);
 }
 
 async function counted(kind, handler, request, env, ctx) {
   const t0 = Date.now();
+  const source = request.headers.get('x-yps-source');
   const res = await handler(request, env, ctx);
   try {
     const p = await res.clone().json();
-    ctx.waitUntil(bumpStats(env, statKeys(kind, res.status, p, Date.now() - t0)));
+    ctx.waitUntil(bumpStats(env, statKeys(kind, res.status, p, Date.now() - t0, source)));
   } catch (e) { /* a response that is not JSON is not one of ours to count */ }
   return res;
 }
@@ -785,11 +846,18 @@ export class Counters {
     // would be slow on the write and over the platform's limit on the read.
     // These never expire and carry no limit: they are tallies, not guards.
     if (body && typeof body === 'object' && url.pathname === '/bump') {
-      const keys = Array.isArray(body.keys) ? body.keys.filter(k => typeof k === 'string' && /^[a-z0-9:_.-]{1,64}$/.test(k)).slice(0, 80) : [];
-      for (const k of new Set(keys)) {
-        const r = await this.state.storage.get(k);
-        await this.state.storage.put(k, { n: (r && Number(r.n) || 0) + 1 });
-      }
+      const given = Array.isArray(body.keys) ? body.keys : [];
+      const ok = given.filter(k => typeof k === 'string' && /^[a-z0-9:_.-]{1,64}$/.test(k));
+      const keys = [...new Set(ok)].slice(0, 160);
+      // Silently losing a tally is how a count drifts, so say so.
+      if (keys.length < given.length) console.warn('stats: keys dropped', given.length - keys.length);
+      // One read and one write for the whole batch, not one of each per key.
+      const now = await this.state.storage.get(keys);
+      const next = {};
+      for (const k of keys) { const r = now.get(k); next[k] = { n: (r && Number(r.n) || 0) + 1 }; }
+      // A stamp, written once and never moved: when this series began.
+      if (typeof body.stamp === 'string' && /^[a-z0-9:_.-]{1,64}$/.test(body.stamp) && !(await this.state.storage.get(body.stamp))) next[body.stamp] = { n: Date.now() };
+      await this.state.storage.put(next);
       return json({ ok: true, n: keys.length });
     }
     if (body && typeof body === 'object' && url.pathname === '/dump') {
@@ -1975,7 +2043,21 @@ async function handleAnalyze(request, env, ctx) {
   // wrong answer to the question they asked.
   const hash = await sha256(CACHE_VERSION + '|' + post.trim() + '|' + safeFlags.styled + '|' + (safeFlags.hasMedia ? 1 : 0) + (meaner ? '|mean' : ''));
 
-  // 3. Cache. On a viral day everyone pastes the same famous posts. The tone
+  const degrade = reason => json({ mode: 'rules', reason, report });
+
+  // A failed Turnstile check degrades exactly like every other reason on
+  // this list, not a bare error. This was the one place that broke the
+  // site's own rule ("no key, spent budget, rate limit... every one of
+  // these falls through to the same rules-written report, never an
+  // error"). Turnstile is live and enforced in production (wrangler.toml,
+  // TURNSTILE_MODE), so this path fires for real: an automated browser gets
+  // the rules-written report with reason "turnstile", never a bare 403.
+  if (!(await turnstileOK(env, body.turnstileToken, ip))) return degrade('turnstile');
+
+  // 3. Cache, AFTER the bot check (Census, episode 4). Read before it, the
+  // answer "mode: cache" told anyone holding a text, for free and without
+  // limit, whether somebody had pasted exactly it this week.
+  // On a viral day everyone pastes the same famous posts. The tone
   // verdict is deterministic for a given post, so it is cached alongside the
   // prose and replayed through the (free, local) engine rather than re-asked.
   // Skipped entirely when an image is attached: the cache key is text-only,
@@ -1996,17 +2078,7 @@ async function handleAnalyze(request, env, ctx) {
     }
   }
 
-  const degrade = reason => json({ mode: 'rules', reason, report });
-
   if (!env.ANTHROPIC_API_KEY) return degrade('no_key');
-  // A failed Turnstile check degrades exactly like every other reason on
-  // this list, not a bare error. This was the one place that broke the
-  // site's own rule ("no key, spent budget, rate limit... every one of
-  // these falls through to the same rules-written report, never an
-  // error"). Turnstile is live and enforced in production (wrangler.toml,
-  // TURNSTILE_MODE), so this path fires for real: an automated browser gets
-  // the rules-written report with reason "turnstile", never a bare 403.
-  if (!(await turnstileOK(env, body.turnstileToken, ip))) return degrade('turnstile');
 
   // 4. Budget first, and charged in the same step as it is checked, so a
   // crash mid-flight cannot double-spend and a burst cannot overspend. Then
@@ -2221,8 +2293,6 @@ async function handleStatus(env) {
       budgetRemaining: spent === null ? null : spent + callCostMicros(true, true) <= capMicros
     },
     tipClicks: tips,
-    // Every outcome of the AI report call, by reason, since 2026-09-21.
-    aiReport: await readAiOutcomes(env),
     // The footer ticker. Up to a minute stale at the edge, which is fine
     // for a number whose whole job is to be large.
     ticker
