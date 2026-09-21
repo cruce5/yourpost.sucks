@@ -236,7 +236,10 @@ header{border-bottom:1px solid var(--rule);padding-bottom:20px;margin-bottom:28p
    a gradient cannot be transitioned, so both are wiped on again from the
    left in the new colour, which reads as something that just happened. */
 .read-rule,.read-bar{
-  --grad:linear-gradient(90deg,#17497f 0%,#2467b3 24%,#3987e5 52%,#6fb0f2 78%,#a9d6ff 100%);
+  /* Grey when it is the ordinary edit, red when it is the meaner one (the
+     owner, 2026-09-21). Built from the ink tokens, so it runs dark to light
+     on the dark page and light to dark on the light one. */
+  --grad:linear-gradient(90deg,var(--rule) 0%,var(--rule-2) 24%,var(--ink-3) 52%,var(--ink-2) 78%,var(--ink) 100%);
   transform:scaleX(0);transform-origin:left center;
   transition:transform .45s cubic-bezier(.2,.7,.2,1), opacity .2s;
 }
@@ -284,6 +287,9 @@ header{border-bottom:1px solid var(--rule);padding-bottom:20px;margin-bottom:28p
      underline, which is still drawn on the button's own bottom edge. */
   min-height:44px;display:inline-flex;align-items:center;
 }
+/* The display rule above beats the hidden attribute, which put a tab that
+   was meant to be hidden on every visitor's page. Hidden means hidden. */
+.tab-btn[hidden]{display:none}
 .tab-btn:hover{color:var(--ink-2)}
 .tab-btn[aria-selected="true"]{color:var(--ink);border-bottom-color:var(--ink)}
 .tab-btn:focus-visible{outline:2px solid var(--cool);outline-offset:2px}
@@ -2470,6 +2476,12 @@ ul.cg-list li::before{content:"\2022";position:absolute;left:0;color:var(--ink-4
      measured, not asserted by the model that wrote the rewrite. */
   var REWORD_TIMEOUT_MS = 35000;
   var rewordInFlight = false;
+  function rewordAdvice(r){
+    var out = [];
+    ((r && r.changes) || []).forEach(function(c){ if (c && typeof c.suggestion === 'string') out.push(c.suggestion); });
+    ((r && r.advice) || []).forEach(function(a){ if (typeof a === 'string') out.push(a); });
+    return out.slice(0, 5);
+  }
   function runReword(post, r, btn){
     if (rewordInFlight) return;
     rewordInFlight = true;
@@ -2508,7 +2520,9 @@ ul.cg-list li::before{content:"\2022";position:absolute;left:0;color:var(--ink-4
       fetch('api/reword', {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ post: post, flags: Object.assign({}, pasteFlags, { hasMedia: $('#hasmedia').checked }), turnstileToken: turnstileToken }),
+        // What the report told them, so the rewrite does it: "cut the last
+        // line" should come back without the last line, not with a new one.
+        body: JSON.stringify({ post: post, flags: Object.assign({}, pasteFlags, { hasMedia: $('#hasmedia').checked }), advice: rewordAdvice(r), turnstileToken: turnstileToken }),
         signal: ctrl ? ctrl.signal : undefined
       }).then(function(res){
         if (res.ok) return res.json();

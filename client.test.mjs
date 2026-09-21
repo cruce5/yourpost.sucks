@@ -760,16 +760,16 @@ check('error is above the kept rewrite, not replacing it', await api.evaluate(()
     const ruleBg = getComputedStyle(rule).backgroundImage, barBg = getComputedStyle(bar.querySelector('i'), '::before').backgroundImage;
     const rr = rule.getBoundingClientRect();
     return {
-      ruleOn: rule.classList.contains('on'), ruleBlue: /57, 135, 229/.test(ruleBg), ruleRed: /242, 84, 60/.test(ruleBg),
+      ruleOn: rule.classList.contains('on'), ruleBlue: /137, 135, 129|95, 92, 83/.test(ruleBg), ruleRed: /242, 84, 60/.test(ruleBg),
       ruleInView: rr.bottom > 0 && rr.top < innerHeight, ruleWidth: Math.round(rr.width), ruleHeight: Math.round(rr.height),
-      barBlue: /57, 135, 229/.test(barBg), barRed: /242, 84, 60/.test(barBg),
+      barBlue: /137, 135, 129|95, 92, 83/.test(barBg), barRed: /242, 84, 60/.test(barBg),
       stuck: bar.classList.contains('stuck'), barOpacity: Number(getComputedStyle(bar).opacity),
       fill: bar.querySelector('i').getBoundingClientRect().width / window.innerWidth
     };
   });
   await api.waitForTimeout(800);
   let bar = await barState();
-  check('reading rule: on load the whole gradient is there, in blue, under the masthead', bar.ruleOn && bar.ruleBlue && !bar.ruleRed && bar.ruleInView && bar.ruleWidth > 300 && bar.ruleHeight === 6, JSON.stringify(bar));
+  check('reading rule: on load the whole gradient is there, in grey, under the masthead', bar.ruleOn && bar.ruleBlue && !bar.ruleRed && bar.ruleInView && bar.ruleWidth > 300 && bar.ruleHeight === 6, JSON.stringify(bar));
   check('reading bar: the pinned one stays out of sight while the rule is in view', !bar.stuck && bar.barOpacity === 0);
   await api.click('#meaner');
   await api.waitForTimeout(800);
@@ -804,7 +804,7 @@ check('error is above the kept rewrite, not replacing it', await api.evaluate(()
   await api.click('#meaner');
   await api.waitForTimeout(800);
   bar = await barState();
-  check('  ...and back to blue when the setting goes', bar.ruleOn && bar.ruleBlue && !bar.ruleRed && bar.barBlue, JSON.stringify(bar));
+  check('  ...and back to grey when the setting goes', bar.ruleOn && bar.ruleBlue && !bar.ruleRed && bar.barBlue, JSON.stringify(bar));
   check('header: both header buttons keep a 44px target', await api.evaluate(() => ['whatsnewbtn', 'themetoggle'].every(id => document.getElementById(id).getBoundingClientRect().height >= 44)));
   // Leave it marked seen. The blocks below click through the page, and a
   // modal opening over them on load is exactly what it should do to a
@@ -959,7 +959,7 @@ check('Right from the last tab wraps to the first, and only one tab is in the Ta
     check('the numbers: once the site says it is open, everyone gets the tab and the what\'s-new line', await open.evaluate(() => !document.getElementById('wn-metrics').hidden && document.querySelectorAll('.tab-btn:not([hidden])').length === 4));
     await open.close();
   }
-  check('the numbers: the tab is not on the page until it is open to everyone', await api.evaluate(() => document.getElementById('tab-metrics').hidden && document.querySelectorAll('.tab-btn:not([hidden])').length === 3));
+  check('the numbers: the tab is not on the page until it is open to everyone', await api.evaluate(() => document.getElementById('tab-metrics').hidden && getComputedStyle(document.getElementById('tab-metrics')).display === 'none' && getComputedStyle(document.getElementById('wn-metrics')).display === 'none' && [...document.querySelectorAll('.tab-btn')].filter(x => getComputedStyle(x).display !== 'none').length === 3));
 
   // Behind its door: the address shows the tab, the figures are refused, the padlock answers.
   let unlocked = false, guesses = [];
