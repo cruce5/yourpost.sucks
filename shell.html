@@ -3611,6 +3611,25 @@ ul.cg-list li::before{content:"\2022";position:absolute;left:0;color:var(--ink-4
     var bandOf = function(v){ for (var i = 0; i < BANDS.length; i++) if (v < BANDS[i][4]) return i; return 3; };
     // Whole-point bars 3 and 5 each hold two verdicts: grey, not one of them.
     var straddles = function(i){ return CUTS.some(function(c){ return c > i && c < i + 1; }); };
+    /* Each whole-point bar, split by verdict. Scores are counted to the whole
+       point, but the verdict totals are exact, so the part of a bar that a
+       verdict line cuts through can be worked out: walk the bars from 0,
+       filling each verdict's total in order. Bar 3 is whatever "barely" has
+       left after bars 0 to 2, and the rest of it is "normal". Returns, per
+       bar, [[band index, count], ...] from the bottom up. */
+    function splitBars(d){
+      var left = BANDS.map(function(bd){ return d.bands[bd[0]] || 0; });
+      return d.scores.map(function(n, i){
+        var parts = [], rest = n;
+        BANDS.forEach(function(bd, b){
+          if (!rest || bd[3] >= i + 1 || bd[4] <= i) return;
+          var take = straddles(i) && bd[4] < i + 1 ? Math.min(rest, Math.max(0, left[b])) : rest;
+          if (take > 0){ parts.push([b, take]); left[b] -= take; rest -= take; }
+        });
+        if (rest > 0) parts.push([bandOf(i + 0.99), rest]); // figures that do not tie: never drop a post
+        return parts;
+      });
+    }
     var bandsIn = function(i){ return BANDS.filter(function(bd){ return bd[3] < i + 1 && bd[4] > i; }).map(function(bd){ return bd[2]; }).join(' or '); };
 
     // Sample figures, for looking at the tab on a laptop before there is
@@ -3647,12 +3666,19 @@ ul.cg-list li::before{content:"\2022";position:absolute;left:0;color:var(--ink-4
     // a 12.5px label is 12.5px on a phone too.
     function histogram(d, W){
       var H = 250, l = 6, r = 6, t = 26, b = 44, iw = W - l - r, ih = H - t - b;
-      var max = Math.max.apply(null, d.scores.concat([1])), step = iw / 10, bw = Math.min(46, step * 0.72), top = d.scores.indexOf(max);
+      var max = Math.max.apply(null, d.scores.concat([1])), step = iw / 10, bw = Math.min(46, step * 0.72), top = d.scores.indexOf(max), parts = splitBars(d);
       var s = '<svg viewBox="0 0 ' + W + ' ' + H + '" role="img" aria-label="' + E('Posts by score. ' + d.scores.map(function(n, i){ return i + ' to ' + (i === 9 ? '9.9' : i + '.9') + ', ' + bandsIn(i) + ': ' + share(n, d.scored); }).join('; ')) + '">';
       s += '<line x1="' + l + '" x2="' + (W - r) + '" y1="' + (t + ih) + '" y2="' + (t + ih) + '" stroke="var(--rule-2)" stroke-width="1"/>';
       d.scores.forEach(function(n, i){
         var h = n ? Math.max(2, ih * n / max) : 0, x = l + step * i + (step - bw) / 2, y = t + ih - h;
-        if (n) s += '<rect x="' + x.toFixed(1) + '" y="' + y.toFixed(1) + '" width="' + bw.toFixed(1) + '" height="' + h.toFixed(1) + '" rx="2" fill="' + (straddles(i) ? 'var(--mx-mid)' : bandColor(bandOf(i + 0.5))) + '"/>';
+        // Bottom up, one rect per verdict in the bar; a 2px gap between parts.
+        var yy = t + ih;
+        parts[i].forEach(function(pt, k){
+          var ph = n ? h * pt[1] / n : 0, gap = k ? 2 : 0;
+          if (ph - gap <= 0) return;
+          s += '<rect x="' + x.toFixed(1) + '" y="' + (yy - ph).toFixed(1) + '" width="' + bw.toFixed(1) + '" height="' + (ph - gap).toFixed(1) + '" rx="2" fill="' + bandColor(pt[0]) + '"/>';
+          yy -= ph;
+        });
         s += '<text class="' + (i === top ? 'mx-top' : 'mx-val') + '" text-anchor="middle" x="' + (x + bw / 2).toFixed(1) + '" y="' + (y - 7).toFixed(1) + '">' + E(d.scored < MX_MIN ? num(n) : share(n, d.scored)) + '</text>';
         s += '<text text-anchor="middle" x="' + (x + bw / 2).toFixed(1) + '" y="' + (t + ih + 18) + '">' + i + '</text>';
       });
@@ -3711,7 +3737,7 @@ ul.cg-list li::before{content:"\2022";position:absolute;left:0;color:var(--ink-4
         quiet ? few : b1 >= d.scored ? 'Every post so far ' + bandRank[0][2]
           : clearLead(b1, b2) ? share(b1, d.scored) + ' of posts ' + bandRank[0][1]
           : 'Too close to call: ' + share(b1, d.scored) + ' ' + bandRank[0][1] + ', ' + share(b2, d.scored) + ' ' + bandRank[1][1],
-        'One bar per point of the score. Higher is worse. Bars 3 and 5 are grey because each holds two verdicts and won’t pick one. ' + num(d.scored) + ' posts.',
+        'One bar per point of the score, colored by verdict. Higher is worse. The verdict lines fall at 3.2, 5.6 and 8, so bars 3 and 5 can hold two colors. ' + num(d.scored) + ' posts.',
         histogram(d, W));
 
       html += section('02', 'The sins, ranked',

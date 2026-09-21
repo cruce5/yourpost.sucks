@@ -1035,6 +1035,12 @@ check('Right from the last tab wraps to the first, and only one tab is in the Ta
   check('the numbers: under 30 posts the headlines refuse to generalise', await api.evaluate(() => /^Only 12 posts so far, not enough to say anything true$/.test(document.querySelector('#panel-metrics .mx-h').textContent)));
   check('  ...and the tiles and bars print counts, not percentages', await api.evaluate(() => { const tiles = [...document.querySelectorAll('#panel-metrics .mx-tile .v')].map(v => v.textContent); return tiles[1] === '1' && ![...document.querySelectorAll('#panel-metrics .mx-bars .p')].some(p => /%/.test(p.textContent)); }));
 
+  // Bars split by verdict: bar 3 holds the last barely-sucks post and two normal ones.
+  body = { ...figures(20), bands: { barely: 18, normal: 2, lot: 0, completely: 0 }, scores: [9, 3, 5, 3, 0, 0, 0, 0, 0, 0] };
+  await api.reload();
+  await api.waitForSelector('#panel-metrics svg', { timeout: 5000 });
+  check('the numbers: a bar a verdict line runs through is drawn in both colors, in the right amounts', await api.evaluate(() => { const r = [...document.querySelectorAll('#panel-metrics svg rect[rx="2"]')].map(x => [x.getAttribute('fill'), +x.getAttribute('height')]); const b3 = r.slice(3); return r.length === 5 && b3[0][0] === 'var(--mx-b1)' && b3[1][0] === 'var(--mx-b2)' && b3[1][1] > b3[0][1]; }));
+
   body = { ok: false };
   await api.reload();
   await api.waitForFunction(() => /isn\u2019t answering/.test(document.getElementById('mx-live').textContent), null, { timeout: 5000 });
