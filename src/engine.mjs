@@ -2905,6 +2905,9 @@
         avgSentence: Math.round(ctx.avgSentence * 10) / 10,
         specifics: ctx.specifics,
         rulesFired: findings.length,
+        // Which ones, by id. The Worker counts how often each check fires, so
+        // a rule that fires on most posts or on none can be seen as a number.
+        firedIds: findings.map(function (f) { return f.id; }),
         rulesTotal: RULES.length,
         readSeconds: Math.max(1, Math.round((ctx.wc / 230) * 60))
       },

@@ -1,6 +1,6 @@
 /* Exercises every degradation and safety path in the Worker with a mocked
    env + mocked Anthropic endpoint. No API key, no wrangler, no network. */
-import worker, { Counters, COSTS } from './src/worker.js';
+import worker, { readStats, statKeys, Counters, COSTS } from './src/worker.js';
 import ENGINE from './src/engine.mjs';
 import { readFileSync } from 'node:fs';
 
@@ -43,7 +43,8 @@ function mockCounters() {
       const store = new Map();
       const state = { storage: {
         async get(k) { await tick(); return store.get(k); },
-        async put(k, v) { await tick(); store.set(k, v); }
+        async put(k, v) { await tick(); store.set(k, v); },
+        async list({ prefix = '', limit = 1000 } = {}) { await tick(); return new Map([...store].filter(([k]) => k.startsWith(prefix)).slice(0, limit)); }
       } };
       o = { obj: new Counters(state, {}), queue: Promise.resolve(), store };
       objects.set(name, o);
@@ -1682,6 +1683,34 @@ console.log('\n=== the ticker ===');
   const noDO = baseEnv();
   const r = await (await go(noDO, from('/api/analyze', { post: NEUTRAL }))).json();
   check('ticker: no counter bound means no count, no error, and no number', r.mode === 'llm' && (await status(noDO)).ticker === null);
+}
+
+console.log('\n=== is the tool right, and is it fast: the tallies ===');
+{
+  const env = baseEnv(); env.COUNTERS = mockCounters(); llmBehaviour = 'good';
+  const settle = () => new Promise(z => setTimeout(z, 40));
+  const rules = ENGINE.analyze(BAD, {});
+  await (await worker.fetch(post({ post: BAD }), env, ctx)).json(); await settle();
+  let s = await readStats(env);
+  check('a report is tallied by band, by whole-number score, and by every check that fired', s['analyze:all'] === 1 && s['analyze:mode:llm'] === 1 && s['band:' + rules.band.key] === 1 && s['score:' + Math.min(9, Math.floor(rules.overall))] === 1 && rules.stats.firedIds.length > 0 && rules.stats.firedIds.every(id => s['rule:' + id.toLowerCase()] === 1), JSON.stringify(s).slice(0, 300));
+  check('  ...and how long the reader waited on the model', Object.keys(s).filter(k => k.startsWith('analyze:wait:')).length === 1);
+  await (await worker.fetch(post({ post: BAD }), env, ctx)).json(); await settle();
+  s = await readStats(env);
+  check('a cache hit counts the post again but not the wait', s['analyze:all'] === 2 && s['analyze:mode:cache'] === 1 && s['band:' + rules.band.key] === 2 && Object.entries(s).filter(([k]) => k.startsWith('analyze:wait:')).reduce((a, [, n]) => a + n, 0) === 1, JSON.stringify(s).slice(0, 200));
+  const off = baseEnv(); off.COUNTERS = mockCounters(); delete off.ANTHROPIC_API_KEY;
+  await (await worker.fetch(post({ post: BAD }), off, ctx)).json(); await settle();
+  const so = await readStats(off);
+  check('a rules-only page records why', so['analyze:mode:rules'] === 1 && so['analyze:why:no_key'] === 1, JSON.stringify(so).slice(0, 200));
+  await worker.fetch(post({ post: '' }), off, ctx); await settle();
+  check('a refused request is tallied as an error and nothing else', (await readStats(off))['analyze:error:empty'] === 1 && (await readStats(off))['analyze:all'] === 2);
+  const sens = baseEnv(); sens.COUNTERS = mockCounters();
+  await (await worker.fetch(post({ post: 'My father passed away last week and I have not been able to work since the funeral.' }), sens, ctx)).json(); await settle();
+  const ss = await readStats(sens);
+  check('a declined post is counted as declined, with no band, score or rule', ss['analyze:mode:declined'] === 1 && !Object.keys(ss).some(k => /^(band|score|rule):/.test(k)), JSON.stringify(ss));
+  check('the tallies are not on the public status page', !('stats' in await (await worker.fetch(new Request('https://yourpost.sucks/api/status'), env, ctx)).json()));
+  check('nothing but fixed words and rule ids can become a key', statKeys('analyze', 200, { mode: 'rules', reason: 'x'.repeat(200), report: null }, 10).every(k => k.length < 64));
+  const noDO = baseEnv();
+  check('no counter bound: the report still comes back', (await (await worker.fetch(post({ post: BAD }), noDO, ctx)).json()).mode === 'llm' && (await readStats(noDO)) === null);
 }
 
 console.log('\n=== one bad line no longer sinks a paid report ===');

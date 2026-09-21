@@ -348,6 +348,70 @@ async function readAiOutcomes(env) {
   }
 }
 
+/* ------------------------------------------------------------------ *
+ * is the tool right, and is it fast
+ *
+ * The AI counters above say whether the model call worked. These say the
+ * things nothing else did: how the scores are spread (a scale where most
+ * posts land in one band is not measuring anything), how often each of the
+ * checks fires (one that fires on most posts is too loose, one that never
+ * fires is dead weight, one whose rate jumps after a deploy is a regression),
+ * why a reader got the rules-only page, how Reword attempts end, and how
+ * long the reader waited. Every key is derived from the response the reader
+ * was already sent, at the router, so no handler had to change and nothing
+ * can be counted that was not shown. Counts only: no text, no address, no
+ * time of day. Written here; READ only from inside the locked room.
+ * ------------------------------------------------------------------ */
+const latBucket = ms => ms < 5000 ? 'lt5s' : ms < 10000 ? '5to10s' : ms < 20000 ? '10to20s' : 'gt20s';
+export function statKeys(kind, status, p, ms) {
+  const keys = [`${kind}:all`];
+  if (status >= 400) { keys.push(`${kind}:error:${String(p && p.error || status).slice(0, 24)}`); return keys; }
+  const mode = String(p && p.mode || 'none');
+  keys.push(`${kind}:mode:${mode}`);
+  if (p && p.reason) keys.push(`${kind}:why:${String(p.reason).slice(0, 24)}`);
+  // Only calls that waited on a model: a cache hit in 40ms says nothing.
+  if (mode === 'llm' || mode === 'reworded' || ((mode === 'rules' || mode === 'unavailable') && ['llm_unavailable', 'no_improvement', 'overwritten'].includes(p.reason))) keys.push(`${kind}:wait:${latBucket(ms)}`);
+  const r = kind === 'analyze' ? p && p.report : p && p.before;
+  if (kind === 'analyze' && r && r.band && typeof r.overall === 'number' && !r.unscored && !r.sensitive) {
+    keys.push(`band:${r.band.key}`, `score:${Math.min(9, Math.floor(r.overall))}`);
+    for (const id of (r.stats && r.stats.firedIds) || []) keys.push(`rule:${id}`);
+    if (!((r.stats && r.stats.firedIds) || []).length) keys.push('rule:none');
+    if (r.satireApplied) keys.push('flag:satire');
+    if (r.mediaAttached) keys.push('flag:media');
+    if (r.meanerSkipped) keys.push('flag:meaner_skipped');
+    if (r.narrative) keys.push('flag:narrative');
+  }
+  if (kind === 'reword' && p && p.after && p.before && typeof p.after.overall === 'number') {
+    const gain = p.before.overall - p.after.overall;
+    keys.push('reword:gain:' + (gain >= 2 ? '2plus' : gain >= 1 ? '1to2' : gain > 0 ? 'under1' : 'none'));
+  }
+  return keys;
+}
+async function bumpStats(env, keys) {
+  const ns = counters(env);
+  if (!ns || !keys.length) return;
+  try { await counterCall(ns, 'stats', '/bump', { keys: keys.map(k => 's:' + k.toLowerCase().replace(/[^a-z0-9:_.-]/g, '_')) }); }
+  catch (e) { console.warn('stats: not counted', e && e.message); }
+}
+/** Every tally, with the prefix stripped, or null. For lab.js and the tests. */
+export async function readStats(env) {
+  const ns = counters(env);
+  if (!ns) return null;
+  try {
+    const r = await counterCall(ns, 'stats', '/dump', { prefix: 's:' });
+    return Object.fromEntries(Object.entries(r.counts || {}).map(([k, n]) => [k.slice(2), n]));
+  } catch (e) { console.warn('stats: unavailable', e && e.message); return null; }
+}
+async function counted(kind, handler, request, env, ctx) {
+  const t0 = Date.now();
+  const res = await handler(request, env, ctx);
+  try {
+    const p = await res.clone().json();
+    ctx.waitUntil(bumpStats(env, statKeys(kind, res.status, p, Date.now() - t0)));
+  } catch (e) { /* a response that is not JSON is not one of ours to count */ }
+  return res;
+}
+
 /** The lifetime totals, or null when the counter is unreachable. Read-only:
  *  a zero-cost charge is how this object reports a count without writing. */
 async function readTipTotals(env) {
@@ -597,6 +661,25 @@ export class Counters {
     const url = new URL(request.url);
     let body;
     try { body = await request.json(); } catch { return json({ error: 'bad_request' }, 400); }
+    // Two batch forms, for the stats below: a report bumps a dozen counters
+    // at once and the owner reads a few hundred, and one subrequest each
+    // would be slow on the write and over the platform's limit on the read.
+    // These never expire and carry no limit: they are tallies, not guards.
+    if (body && typeof body === 'object' && url.pathname === '/bump') {
+      const keys = Array.isArray(body.keys) ? body.keys.filter(k => typeof k === 'string' && /^[a-z0-9:_.-]{1,64}$/.test(k)).slice(0, 80) : [];
+      for (const k of new Set(keys)) {
+        const r = await this.state.storage.get(k);
+        await this.state.storage.put(k, { n: (r && Number(r.n) || 0) + 1 });
+      }
+      return json({ ok: true, n: keys.length });
+    }
+    if (body && typeof body === 'object' && url.pathname === '/dump') {
+      const prefix = typeof body.prefix === 'string' ? body.prefix : '';
+      const all = await this.state.storage.list({ prefix, limit: 2000 });
+      const counts = {};
+      for (const [k, r] of all) counts[k] = r && Number(r.n) || 0;
+      return json({ ok: true, counts });
+    }
     if (!body || typeof body !== 'object' || typeof body.key !== 'string' || !body.key) return json({ error: 'bad_request' }, 400);
     const key = body.key;
     const now = Date.now();
@@ -2046,11 +2129,11 @@ export default {
 
     if (url.pathname === '/api/analyze') {
       if (request.method !== 'POST') return json({ error: 'method' }, 405);
-      return handleAnalyze(request, env, ctx);
+      return counted('analyze', handleAnalyze, request, env, ctx);
     }
     if (url.pathname === '/api/reword') {
       if (request.method !== 'POST') return json({ error: 'method' }, 405);
-      return handleReword(request, env, ctx);
+      return counted('reword', handleReword, request, env, ctx);
     }
     if (url.pathname === '/api/tip') {
       if (request.method !== 'POST') return json({ error: 'method' }, 405);
