@@ -1404,7 +1404,7 @@ ul.cg-list li::before{content:"\2022";position:absolute;left:0;color:var(--ink-4
 
   <section class="explain-block">
     <h2 class="sec">What happens to what you paste</h2>
-    <p>The post and any image go to Anthropic's API for the commentary. Here, your post, your image and any rewrite are never stored. What is kept: the AI's notes on a post, for 7 days, filed under a one-way fingerprint of the text so that a post doing the rounds costs one AI call and not hundreds. Those notes can quote a phrase of yours; the suggested replacement sentences are not kept. Beyond that, counters: an hourly per-IP limit that expires on its own, and tallies of scores and which checks fired, with no text in them. No accounts, no analytics on your text.</p>
+    <p>The post and any image go to Anthropic's API for the commentary. Here, nothing about your post is stored: not the post, not the image, not the AI's notes, not a rewrite. Every paste gets its own fresh read. What is kept is counters: an hourly per-IP limit that expires on its own, and tallies of scores and which checks fired, with no text in them. No accounts, no analytics on your text.</p>
   </section>
 
 </div>
@@ -3744,7 +3744,7 @@ ul.cg-list li::before{content:"\2022";position:absolute;left:0;color:var(--ink-4
       if (more) more.addEventListener('click', function(){ state.all = !state.all; draw(); var again = $('#mx-more'); if (again) again.focus(); });
       var at = d.at ? new Date(d.at) : null, when = at && !isNaN(at) ? at.toLocaleString([], { weekday: 'short', hour: 'numeric', minute: '2-digit' }) : null;
       var foot = $('#mx-foot');
-      foot.innerHTML = 'Counted since ' + E(sinceText(d.since)) + '. A post means something a person pasted. The example posts, rewrites sent back through, shared links opened again, the same post twice in a week and anything that failed the bot check don’t count. ' +
+      foot.innerHTML = 'Counted since ' + E(sinceText(d.since)) + '. A post means something a person pasted. The example posts, rewrites sent back through, shared links opened again and anything that failed the bot check don’t count. The same post pasted by two people counts twice, because it is two people. ' +
         'Counts only: scores, fired checks, rewrite gains, wait times. No words from any post. Nothing about who pasted it. ' +
         (d.live ? 'You’re behind the door, so these are live' + (when ? ' (read ' + E(when) + ')' : '') + '. Everyone else gets them an hour at a time.' : 'As of ' + E(when || 'the last count') + '. These move once an hour at most, and only after ten more posts, so nobody can work out whose post was whose.') +
         ' Under ' + MX_MIN + ' posts you get counts, not percentages, because 2 of 3 is not 67% of anything. Raw figures: <a href="api/metrics">api/metrics</a>.';

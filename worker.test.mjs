@@ -576,25 +576,15 @@ console.log('\n=== tone gate (satire detection) ===');
     `non-eligible mode=${nonEligible.mode}, tone-eligible mode=${eligible.mode}/${eligible.reason}`);
 }
 
-console.log('\n=== cache ===');
+console.log('\n=== no analysis cache: every paste gets its own read ===');
 {
+  // The owner, 2026-09-21: "We can't assume it's the same person running the
+  // prompt each time."
   const env = baseEnv(); llmBehaviour = 'good'; toneBehaviour = 'no'; llmCalls = 0; toneCalls = 0;
-  await worker.fetch(post({ post: BAD }), env, ctx);
-  const before = llmCalls, toneBefore = toneCalls;
-  const r2 = await (await worker.fetch(post({ post: BAD }), env, ctx)).json();
-  check('identical post served from cache', r2.mode === 'cache' && llmCalls === before, llmCalls + ' model calls for 2 requests');
-  check('  ...and the cached tone verdict is not re-asked', toneCalls === toneBefore, toneCalls + ' tone calls for 2 requests');
-}
-{
-  // The satire verdict itself is cached and correctly re-applied on a hit,
-  // not just the prose — the second request never calls the model at all.
-  const env = baseEnv(); llmBehaviour = 'good'; toneBehaviour = 'yes';
-  const first = await (await worker.fetch(post({ post: PARODY }), env, ctx)).json();
-  toneBehaviour = 'no'; llmBehaviour = 'error'; // if either were re-called, this would show up
-  const second = await (await worker.fetch(post({ post: PARODY }), env, ctx)).json();
-  check('cached satire verdict is replayed through the engine on a cache hit',
-    second.mode === 'cache' && second.report.satireApplied === true && second.report.overall === first.report.overall,
-    `first ${first.report.overall}/${first.report.satireApplied}, second ${second.report.overall}/${second.report.satireApplied}`);
+  const one = await (await worker.fetch(post({ post: BAD }), env, ctx)).json();
+  const two = await (await worker.fetch(post({ post: BAD }), env, ctx)).json();
+  check('the same post twice is two fresh AI reports, never a replay', one.mode === 'llm' && two.mode === 'llm' && llmCalls === 2, llmCalls + ' model calls for 2 requests');
+  check('  ...and nothing about it is written to storage', ![...env.KV._m.keys()].some(k => k.startsWith('c:')), [...env.KV._m.keys()].join(' '));
 }
 
 console.log('\n=== sprinkle: llm-authored asides ===');
@@ -652,19 +642,6 @@ console.log('\n=== sprinkle: llm-authored asides ===');
   check('rules-mode fallback: headline/credits are the rules-only values, asides are absent',
     r.mode === 'rules' && r.report.headline === rules.headline && JSON.stringify(r.report.credits) === JSON.stringify(rules.credits) &&
     r.report.breakdownNote === undefined && r.report.diagnosticsNote === undefined && r.report.annotatedNote === undefined);
-}
-{
-  // The new fields must round-trip through the cache exactly like the
-  // pre-existing ones.
-  const env = baseEnv(); llmBehaviour = 'sprinkle'; toneBehaviour = 'no';
-  const first = await (await worker.fetch(post({ post: NEUTRAL }), env, ctx)).json();
-  llmBehaviour = 'error'; // if the model were re-called, this would surface
-  const second = await (await worker.fetch(post({ post: NEUTRAL }), env, ctx)).json();
-  check('sprinkle fields survive a cache hit',
-    second.mode === 'cache' && second.report.headline === first.report.headline &&
-    JSON.stringify(second.report.credits) === JSON.stringify(first.report.credits) &&
-    second.report.breakdownNote === first.report.breakdownNote,
-    JSON.stringify({ headline: second.report.headline, credits: second.report.credits, breakdownNote: second.report.breakdownNote }));
 }
 
 console.log('\n=== suggested-changes fabrication guard ===');
@@ -1451,83 +1428,7 @@ console.log('\n=== policing: normalisation and the widened guards ===');
 }
 llmBehaviour = 'good';
 
-console.log('\n=== cache key: version, hasMedia, styled rounding ===');
-{
-  const env = baseEnv(); llmBehaviour = 'good'; llmCalls = 0;
-  const caption = 'This chart explains everything wrong with your dashboard, and the fix took us one afternoon.';
-  const withMedia = await (await worker.fetch(post({ post: caption, flags: { hasMedia: true } }), env, ctx)).json();
-  const withoutMedia = await (await worker.fetch(post({ post: caption, flags: { hasMedia: false } }), env, ctx)).json();
-  check('hasMedia true and false do not share a cache entry', withMedia.mode === 'llm' && withoutMedia.mode === 'llm' && llmCalls === 2, withMedia.mode + ', ' + withoutMedia.mode + ', ' + llmCalls + ' calls');
-  const again = await (await worker.fetch(post({ post: caption, flags: { hasMedia: true } }), env, ctx)).json();
-  check('  ...while a repeat with the same hasMedia is a hit', again.mode === 'cache' && llmCalls === 2);
-}
-{
-  const env = baseEnv(); llmBehaviour = 'good'; llmCalls = 0;
-  const first = await (await worker.fetch(post({ post: NEUTRAL, flags: { styled: 1 } }), env, ctx)).json();
-  const second = await (await worker.fetch(post({ post: NEUTRAL, flags: { styled: 1.4 } }), env, ctx)).json();
-  check('styled 1 and styled 1.4 share one cache entry', first.mode === 'llm' && second.mode === 'cache' && llmCalls === 1, first.mode + ', ' + second.mode);
-  const zero = await (await worker.fetch(post({ post: NEUTRAL, flags: { styled: 0 } }), env, ctx)).json();
-  const negative = await (await worker.fetch(post({ post: NEUTRAL, flags: { styled: -7 } }), env, ctx)).json();
-  check('  ...styled 0 is its own entry, and a negative count clamps to it', zero.mode === 'llm' && negative.mode === 'cache' && llmCalls === 2, zero.mode + ', ' + negative.mode);
-}
 
-/* ------------------------------------------------------------------ *
- * /api/tip: which coffee link was clicked, and nothing else
- * ------------------------------------------------------------------ */
-{
-  const tip = (where, ip = '9.9.9.9', extra = {}) => new Request('https://yourpost.sucks/api/tip', {
-    method: 'POST',
-    headers: { 'content-type': 'application/json', 'cf-connecting-ip': ip, 'sec-fetch-site': 'same-origin', ...(extra.headers || {}) },
-    body: 'body' in extra ? extra.body : JSON.stringify({ where })
-  });
-  const env = baseEnv(); env.COUNTERS = mockCounters();
-  const total = where => env.COUNTERS._count('t:' + where, 't:' + where);
-  // The handler answers first and counts in the background, exactly as it
-  // should, so the test has to wait for the background work the way the
-  // platform does before reading a total.
-  const pending = [];
-  const tipCtx = { waitUntil: p => { pending.push(p); return p; } };
-  const click = async req => { const res = await worker.fetch(req, env, tipCtx); await Promise.all(pending.splice(0)); return res; };
-
-  const r = await click(tip('report'));
-  check('/api/tip: a click is accepted with no body to parse', r.status === 204, String(r.status));
-  check('  ...and counted against the place that was clicked', total('report') === 1 && total('card') === 0 && total('footer') === 0);
-  await click(tip('card'));
-  await click(tip('footer'));
-  check('  ...each place keeps its own total', total('card') === 1 && total('footer') === 1);
-  check('  ...and a per-day total is kept beside it', env.COUNTERS._count('t:report:' + new Date().toISOString().slice(0, 10), 't:report:' + new Date().toISOString().slice(0, 10)) === 1);
-
-  const bad = await click(tip('../../etc'));
-  check('/api/tip: an unknown place is refused, not counted', bad.status === 400 && total('report') === 1, String(bad.status));
-  const notJson = await click(tip('report', '9.9.9.9', { body: 'where=report', headers: { 'content-type': 'text/plain' } }));
-  check('/api/tip: a non-JSON body is refused', notJson.status === 400, String(notJson.status));
-  const getIt = await click(new Request('https://yourpost.sucks/api/tip'));
-  check('/api/tip: GET is not a click', getIt.status === 405, String(getIt.status));
-  const crossOrigin = await click(tip('report', '9.9.9.9', { headers: { 'sec-fetch-site': 'cross-site', origin: 'https://example.com' } }));
-  check('/api/tip: another site cannot inflate the count', crossOrigin.status === 403 && total('report') === 1, String(crossOrigin.status));
-
-  // Someone in a loop: the clicks stop counting, and the endpoint still
-  // answers, because the reader's link must open either way.
-  let last;
-  for (let i = 0; i < 40; i++) last = await click(tip('card', '7.7.7.7'));
-  check('/api/tip: a flood is capped per IP per hour', total('card') <= 11 && last.status === 204, 'card=' + total('card'));
-  const other = await click(tip('card', '8.8.8.8'));
-  check('  ...and one flooder does not block anybody else', other.status === 204 && total('card') <= 12);
-
-  const status = await (await worker.fetch(new Request('https://yourpost.sucks/api/status'), env, ctx)).json();
-  check('/api/status reports a total for every place a coffee link sits', status.tipClicks && status.tipClicks.report === 1 && ['card', 'footer', 'whatsnew'].every(k => typeof status.tipClicks[k] === 'number'), JSON.stringify(status.tipClicks));
-
-  // No Durable Object bound (a KV-only deploy, or a local run): the click
-  // is simply not counted, and nothing anywhere fails.
-  const noDO = baseEnv();
-  const quiet = await worker.fetch(tip('report'), noDO, ctx);
-  const quietStatus = await (await worker.fetch(new Request('https://yourpost.sucks/api/status'), noDO, ctx)).json();
-  check('/api/tip: no counter bound means no count and no error', quiet.status === 204 && quietStatus.tipClicks === null, String(quiet.status));
-}
-
-/* ------------------------------------------------------------------ *
- * the rewrite has to sound like the person who wrote the post
- * ------------------------------------------------------------------ */
 console.log('\n=== reword: keeping the writer\'s own words ===');
 {
   const env = baseEnv(); rewordBehaviour = 'closeEdit'; rewordCalls = 0;
@@ -1628,7 +1529,7 @@ console.log('\n=== the ticker ===');
   const first = await (await go(env, from('/api/analyze', { post: NEUTRAL }))).json();
   check('ticker: an Analyze that returns a model-written report is one', first.mode === 'llm' && count(env) === 1, 'mode=' + first.mode + ' n=' + count(env));
   const again = await (await go(env, from('/api/analyze', { post: NEUTRAL }))).json();
-  check('ticker: a cached report is one too, it is still a post someone brought', again.mode === 'cache' && count(env) === 2, 'mode=' + again.mode + ' n=' + count(env));
+  check('ticker: the same post again is another fresh report, and another one on the count', again.mode === 'llm' && count(env) === 2, 'mode=' + again.mode + ' n=' + count(env));
   llmBehaviour = 'error';
   const rulesOnly = await (await go(env, from('/api/analyze', { post: NEUTRAL + ' It held through the month.' }))).json();
   check('ticker: so is a rules-only report', rulesOnly.mode === 'rules' && count(env) === 3, 'mode=' + rulesOnly.mode + ' n=' + count(env));
@@ -1849,13 +1750,13 @@ console.log('\n=== your post is never stored ===');
   const stats = JSON.stringify(await readStats(env));
   check('a fresh report still carries the ready-to-paste sentence', first.mode === 'llm' && first.report.changes[0].rewrite.includes(MARK));
   check('after a report and a reword, the post is nowhere in storage: not in the cache, not in a key, not in a tally', !kv.includes(MARK) && !kv.includes('TechCorp') && !stats.includes('zebra'), kv.slice(0, 200));
-  const hit = await (await worker.fetch(post({ post: POST }), env, ctx)).json();
-  check('a cache hit serves the notes without the replacement sentence, which is the writer\'s own words rearranged', hit.mode === 'cache' && hit.report.changes.length === 1 && hit.report.changes[0].rewrite === null && hit.report.changes[0].suggestion === 'Lead with the role.', JSON.stringify(hit.report.changes));
+  const again = await (await worker.fetch(post({ post: POST }), env, ctx)).json();
+  check('the same post again gets a fresh report with its replacement sentence, not a stored one', again.mode === 'llm' && again.report.changes[0].rewrite.includes(MARK));
   const src = readFileSync(new URL('./src/worker.js', import.meta.url), 'utf8');
-  check('the notes are kept for 7 days, not 30', /REPORT_CACHE_TTL = 604800/.test(src) && !/expirationTtl: 2592000/.test(src));
+  check('there is no analysis cache left to keep anything', !/KV\.(get|put)\(`c:/.test(src) && !/REPORT_CACHE_TTL/.test(src));
   check('no log line carries a rejection\'s detail', !/console\.warn\('reword rejected:', why, detail\)/.test(src) && !/rejection\.detail\)\.slice/.test(src));
   const page = readFileSync(new URL('./shell.html', import.meta.url), 'utf8');
-  check('the page says what is kept, and for how long', /your post is never stored/.test(page) && /for 7 days/.test(page) && /any rewrite are never stored/.test(page) && !/cached for 30 days/.test(page));
+  check('the page says what is kept, and for how long', /your post is never stored/.test(page) && /nothing about your post is stored: not the post, not the image, not the AI's notes, not a rewrite/.test(page) && !/for 7 days/.test(page));
   llmBehaviour = 'good'; customPayload = null;
 }
 
@@ -1870,7 +1771,7 @@ console.log('\n=== is the tool right, and is it fast: the tallies ===');
   check('  ...and how long the write-up took', Object.keys(s).filter(k => k.startsWith('ai:wait:analyze:')).length === 1);
   await (await worker.fetch(post({ post: BAD }), env, ctx)).json(); await settle();
   s = await readStats(env);
-  check('a cache hit is a request, not a new post, and not a wait', s['analyze:all'] === 2 && s['analyze:mode:cache'] === 1 && s['post:all'] === 1 && s['post:band:' + rules.band.key] === 1 && Object.entries(s).filter(([k]) => k.startsWith('analyze:wait:')).reduce((a, [, n]) => a + n, 0) === 1, JSON.stringify(s).slice(0, 200));
+  check('the same post pasted twice is two posts, and two waits', s['analyze:all'] === 2 && s['analyze:mode:llm'] === 2 && s['post:all'] === 2 && s['post:band:' + rules.band.key] === 2 && Object.entries(s).filter(([k]) => k.startsWith('analyze:wait:')).reduce((a, [, n]) => a + n, 0) === 2, JSON.stringify(s).slice(0, 200));
   const off = baseEnv(); off.COUNTERS = mockCounters(); delete off.ANTHROPIC_API_KEY;
   await (await worker.fetch(post({ post: BAD }), off, ctx)).json(); await settle();
   const so = await readStats(off);

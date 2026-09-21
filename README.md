@@ -185,7 +185,7 @@ only gates the expensive path.
 | Layer | Where | What it does |
 |---|---|---|
 | Bail-out | engine, pre-network | Sensitive posts are declined. Zero cost. |
-| Cache | KV, 30d, keyed on post hash | On a viral day everyone pastes the same famous posts. Free after the first. |
+| Cache | None, since 2026-09-21 | Everyone who pastes a post gets their own read of it. The daily budget bounds a post that goes round. |
 | Turnstile | edge | Kills bots. Skipped if the secret is unset. |
 | Per-IP limit | Durable Object (KV fallback), hourly | Fairness. `RATE_LIMIT_PER_HOUR`, 30 in `wrangler.toml` for the launch, 12 if unset. |
 | **Daily budget** | Durable Object (KV fallback), per UTC day | **The actual ceiling.** `DAILY_BUDGET_USD`, 30 in `wrangler.toml` for the launch, 5 if unset. |
@@ -239,8 +239,6 @@ tripped everything is exempt: there the writer asked for a rescue, not a trim.
 It sends one extra system block that turns up the register and nothing else:
 same checks, same findings, same score, same validators, and the same hard
 rule that nothing about the person, their job or their life is ever a target.
-It is part of the cache key, so a gentle report is never replayed to someone
-who asked for the harsh one.
 
 **A link is not a post.** Pasting the URL of a post used to score the URL, which
 is how at least one reader got a number about nothing (2.7 for the link, 0.7
@@ -509,7 +507,7 @@ Read the rewrite before you post it.
 **Cheap by default.** A post with zero rules fired never reaches the model.
 `stats.rulesFired === 0` short-circuits to a free "nothing to fix" response,
 the same condition the engine itself uses elsewhere for "no action required."
-A rewrite is never cached: it is built to keep most of the writer's own words, so storing one would be storing their post, and the page promises otherwise. (The main analysis caches the AI's notes for 7 days under a one-way hash of the text, without the ready-to-paste replacement sentences. See "WHAT THIS SITE KEEPS" in src/worker.js.)
+A rewrite is never cached: it is built to keep most of the writer's own words, so storing one would be storing their post, and the page promises otherwise. (Nothing from the main analysis is cached either: see "WHAT THIS SITE KEEPS" in src/worker.js.)
 There is no rules-only fallback: when the budget is spent, the key is
 missing, or the model times out, the reword says so honestly instead of
 returning something. The client only offers the button at all when the

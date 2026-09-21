@@ -120,25 +120,22 @@ const MAX_BODY_BYTES = 3000000;
  * deploys, instead of being replayed from the cache for up to 30 more days. */
 // v4: the identity filter in policed(). Cached prose written before it could
 // still say "you got cut" to someone who lost their job.
-// v5: what is cached was cut down (see REPORT_CACHE_TTL). Everything written
+// v5: the analysis cache was cut down, and on 2026-09-21 removed. Everything written
 // before that stops being read the moment this deploys.
 const CACHE_VERSION = 'v5';
 
 /* WHAT THIS SITE KEEPS. The page says "your post is never stored", and this
  * is the whole of what makes that true:
- *   - the post, the image and any rewrite are never written anywhere;
- *   - the AI's NOTES on a post are cached for 7 days under a one-way SHA-256
- *     of the text, so a post that is going round costs one model call and not
- *     hundreds. The notes can quote a phrase of the post, which the page
- *     says. The ready-to-paste replacement sentences are NOT kept: those are
- *     the writer's own sentences rearranged, so a cache hit serves the
- *     problem and the suggestion without them;
+ *   - the post, the image, the AI's notes and any rewrite are never written
+ *     anywhere. There is no analysis cache: the owner, 2026-09-21, "We can't
+ *     assume it's the same person running the prompt each time." Everyone
+ *     who pastes a post gets their own read of it. The daily budget is what
+ *     bounds a post going round, not a cache;
  *   - counters (spend, rate limit, tallies) hold numbers and fixed words;
  *   - logs carry a reason word and never a detail, because a detail can
  *     quote what somebody typed.
  * A test reads the cache after a report and a reword and fails if any of
  * this stops being so. */
-const REPORT_CACHE_TTL = 604800; // 7 days
 
 /* Haiku 4.5 list prices, in micro-dollars per token: $1/MTok input is exactly
  * one micro-dollar per token, and the rest scale from there. The constants
@@ -2049,13 +2046,13 @@ async function handleAnalyze(request, env, ctx) {
   let report = ENGINE.analyze(post, safeFlags);
   const needsTone = report.toneEligible;
 
-  // 2. Bail-out beats everything, including the cache. No model call.
+  // 2. Bail-out beats everything. No model call.
   if (report.sensitive) return json({ mode: 'declined', report });
 
   // A post the checks cannot read (not English) is reported as unscored by
   // the engine. Asking the model to write commentary on it would spend a
   // call to dress up a non-score, and the model happily invents a one-liner
-  // over the engine's plain "not scored" line. Rules mode, no call, no cache.
+  // over the engine's plain "not scored" line. Rules mode, no call.
   if (report.unscored) return json({ mode: 'rules', reason: 'unscored', report });
 
   // From here on the visitor gets a scored report, whoever ends up writing
@@ -2063,16 +2060,6 @@ async function handleAnalyze(request, env, ctx) {
   tick(env, ctx, request);
 
   const ip = clientIP(request);
-  // hasMedia is in the key because it changes the report the prose was
-  // written against (see MEDIA_SUPPRESS in engine.js): the same caption
-  // with and without a declared graphic gets different findings, and prose
-  // about a missing specific must not be replayed for the version that has
-  // a chart doing that job.
-  // The register is in the key for the same reason hasMedia is: a cached
-  // gentle report replayed for someone who asked for the harsh one is the
-  // wrong answer to the question they asked.
-  const hash = await sha256(CACHE_VERSION + '|' + post.trim() + '|' + safeFlags.styled + '|' + (safeFlags.hasMedia ? 1 : 0) + (meaner ? '|mean' : ''));
-
   const degrade = reason => json({ mode: 'rules', reason, report });
 
   // A failed Turnstile check degrades exactly like every other reason on
@@ -2083,30 +2070,6 @@ async function handleAnalyze(request, env, ctx) {
   // TURNSTILE_MODE), so this path fires for real: an automated browser gets
   // the rules-written report with reason "turnstile", never a bare 403.
   if (!(await turnstileOK(env, body.turnstileToken, ip))) return degrade('turnstile');
-
-  // 3. Cache, AFTER the bot check (Census, episode 4). Read before it, the
-  // answer "mode: cache" told anyone holding a text, for free and without
-  // limit, whether somebody had pasted exactly it this week.
-  // On a viral day everyone pastes the same famous posts. The tone
-  // verdict is deterministic for a given post, so it is cached alongside the
-  // prose and replayed through the (free, local) engine rather than re-asked.
-  // Skipped entirely when an image is attached: the cache key is text-only,
-  // so two different images pasted with the same caption would either read
-  // each other's image-derived commentary, or a later text-only request for
-  // the same caption would get commentary that quietly assumes a picture it
-  // was never given. Neither is acceptable, so an image-bearing request is
-  // never served from the cache and never written to it.
-  // A failing KV read is a cache miss, nothing more: the request proceeds
-  // to the model exactly as if nobody had pasted this post before.
-  if (env.KV && !hasImage) {
-    let hit = null;
-    try { hit = await env.KV.get(`c:${hash}`, 'json'); }
-    catch (e) { console.warn('cache: KV read failed, treating as miss', e && e.message); }
-    if (hit) {
-      const cachedReport = hit.satire ? ENGINE.analyze(post, { ...safeFlags, satire: true }) : report;
-      return json({ mode: 'cache', report: { ...cachedReport, ...hit, ...(meanerSkipped ? { meanerSkipped: true } : {}) } });
-    }
-  }
 
   if (!env.ANTHROPIC_API_KEY) return degrade('no_key');
 
@@ -2171,23 +2134,6 @@ async function handleAnalyze(request, env, ctx) {
     diagnosticsNote: llm.diagnosticsNote || null,
     annotatedNote: llm.annotatedNote || null
   };
-
-  // Same reasoning as the read above: an image-derived report never goes
-  // into the text-keyed cache, or a future text-only request for the same
-  // caption would inherit commentary about a picture it never sent.
-  if (env.KV && !hasImage && !llm.partial) {
-    ctx.waitUntil(env.KV.put(
-      `c:${hash}`,
-      JSON.stringify({
-        satire, oneLiner: merged.oneLiner, roasts: merged.roasts, brutal: merged.brutal,
-        advice: merged.advice, adviceNote: merged.adviceNote,
-        changes: (merged.changes || []).map(c => ({ ...c, rewrite: null })),
-        headline: merged.headline, credits: merged.credits, breakdownNote: merged.breakdownNote,
-        diagnosticsNote: merged.diagnosticsNote, annotatedNote: merged.annotatedNote
-      }),
-      { expirationTtl: REPORT_CACHE_TTL }
-    ).catch(e => console.warn('cache: KV write failed', e && e.message)));
-  }
 
   return json({ mode: 'llm', report: meanerSkipped ? { ...merged, meanerSkipped: true } : merged });
 }
