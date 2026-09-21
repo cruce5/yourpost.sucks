@@ -1112,6 +1112,17 @@ ul.cg-list li::before{content:"\2022";position:absolute;left:0;color:var(--ink-4
   .brand{font-size:21px}
   .brand-flag{margin-right:2px}
   @media (max-width:419px){.brand{font-size:19px}}
+  /* 320 wide is still a phone people have. Tested to 343 the first time, and
+     at 320 the first header button sat on the logo. */
+  @media (max-width:359px){
+    .brand{font-size:17px}
+    .theme-toggle,.head-link{font-size:11px;padding:5px 6px;letter-spacing:0}
+    .head-actions{gap:4px}
+    /* Even at 11px the two buttons and the logo need about 305px and there
+       are 288. One row is the rule down to 360; below that the buttons take
+       their own row, which costs one line and hides nothing. */
+    .masthead-row{flex-wrap:wrap;row-gap:8px}
+  }
   .theme-toggle{font-size:12px;padding:5px 9px;letter-spacing:.04em}
   .head-link{font-size:12px;padding:5px 9px;letter-spacing:.04em}
   .head-actions{gap:6px}
@@ -6338,6 +6349,12 @@ ul.cg-list li::before{content:"\2022";position:absolute;left:0;color:var(--ink-4
       b.tabIndex = on ? 0 : -1;
       p.hidden = !on;
     });
+    // The address follows the tab, so a reload (or a shared link) lands on
+    // the tab that was showing and not on whichever one loaded first.
+    // replaceState, not a hash assignment: no history entry per tab press, and
+    // no hashchange event to chase its own tail.
+    var hash = which === 'explain' ? '#how-it-works' : which === 'lab' ? '#soon' : '';
+    try { if ((location.hash || '') !== hash) history.replaceState(null, '', location.pathname + location.search + hash); } catch (e) {}
     if (tabShown[which]) tabShown[which]();
   }
   TAB_KEYS.forEach(function(k){ $('#tab-' + k).addEventListener('click', function(){ selectTab(k); }); });
@@ -6396,7 +6413,12 @@ ul.cg-list li::before{content:"\2022";position:absolute;left:0;color:var(--ink-4
     if (!given){ input.focus(); return; }
     btn.disabled = true; btn.textContent = 'Checking';
     err.hidden = true; err.textContent = '';
-    fetch('api/lab/unlock', { method: 'POST', credentials: 'same-origin', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ password: given }) })
+    // A guess carries a bot-check token when the site has one to give, the
+    // same as every request that spends money. Without it the only brake on
+    // guessing is a per-address cap, which slows a person and not a botnet.
+    getTurnstileToken().then(function(token){
+      return fetch('api/lab/unlock', { method: 'POST', credentials: 'same-origin', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ password: given, turnstileToken: token }) });
+    })
       .then(function(r){
         input.value = '';
         if (r.ok) return labFetchUI().then(function(ok){ if (ok){ labSay('Unlocked.'); return; } throw { status: 0 }; });
@@ -6407,6 +6429,7 @@ ul.cg-list li::before{content:"\2022";position:absolute;left:0;color:var(--ink-4
         err.textContent = s === 401 ? 'That is not it.'
           : s === 429 ? 'Too many tries from this connection. Come back in an hour.'
           : s === 404 ? 'There is nothing behind this door yet.'
+          : s === 403 ? 'The bot check did not pass. Reload the page and try again.'
           : 'Could not check that just now. Try again in a minute.';
         err.hidden = false;
         input.focus();
@@ -6443,8 +6466,9 @@ ul.cg-list li::before{content:"\2022";position:absolute;left:0;color:var(--ink-4
     bandFor: bandFor,
     showTab: selectTab,
     handoff: function(text, noticeAfter){
+      var arrived = String(text == null ? '' : text);
       selectTab('tool');
-      $('#post').value = String(text == null ? '' : text);
+      $('#post').value = arrived;
       pasteFlags = {};
       $('#hasmedia').checked = false;
       clearAttachedImage();
@@ -6453,10 +6477,15 @@ ul.cg-list li::before{content:"\2022";position:absolute;left:0;color:var(--ink-4
       run();
       // run() cleans the text and rewrites the notices with whatever it
       // cleaned, so an extra notice goes on after it, alongside those.
+      // Cleaned from the text as it arrived. By now run() has already cleaned
+      // the box, and cleaning clean text finds nothing, which used to wipe
+      // the hygiene notices the moment they were written.
       if (noticeAfter){
-        var cleaned = (YPS.cleanPaste($('#post').value).notices || []);
+        var cleaned = (YPS.cleanPaste(arrived).notices || []);
         showNotices(cleaned.concat([String(noticeAfter)]), cleaned.length ? undefined : 'Before scoring');
       }
+      // A tab just changed under the reader without their pressing it.
+      labSay('Sent to the first tab, Roast my post. The report follows.');
     }
   };
 

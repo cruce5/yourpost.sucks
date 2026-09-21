@@ -917,8 +917,26 @@ await api.keyboard.press('Home');
 check('Home moves to the first tab', await api.evaluate(() => document.activeElement.id === 'tab-tool' && document.getElementById('tab-tool').getAttribute('aria-selected') === 'true'));
 await api.keyboard.press('ArrowLeft');
 check('Left from the first tab wraps to the last', await api.evaluate(() => document.activeElement.id === 'tab-lab'));
+check('the address follows the tab, so a reload comes back to it', await api.evaluate(() => location.hash === '#soon'));
 await api.keyboard.press('ArrowRight');
+check('  ...and the first tab has no hash at all', await api.evaluate(() => location.hash === ''));
 check('Right from the last tab wraps to the first, and only one tab is in the Tab order', await api.evaluate(() => document.activeElement.id === 'tab-tool' && document.querySelectorAll('.tab-btn[tabindex="0"]').length === 1 && document.querySelectorAll('[role=tabpanel]:not([hidden])').length === 1));
+
+// 11b. the masthead at 320, the narrowest phone still in use
+{
+  const narrow = await b.newPage({ viewport: { width: 320, height: 640 }, isMobile: true, hasTouch: true });
+  await narrow.goto(httpUrl);
+  await narrow.evaluate(v => { try { localStorage.setItem('yps_whatsnew_seen', v); } catch (e) {} }, WHATSNEW_VERSION);
+  await narrow.goto(httpUrl);
+  await narrow.waitForTimeout(400);
+  const m = await narrow.evaluate(() => {
+    const br = document.querySelector('.brand').getBoundingClientRect(), ha = document.querySelector('.head-actions').getBoundingClientRect();
+    return { overlap: br.right > ha.left + 0.5 && br.bottom > ha.top && ha.bottom > br.top, sideways: document.documentElement.scrollWidth > innerWidth, targets: ['whatsnewbtn', 'themetoggle'].every(id => document.getElementById(id).getBoundingClientRect().height >= 44) };
+  });
+  check('320px: the header buttons do not sit on the logo', !m.overlap, JSON.stringify(m));
+  check('320px: nothing scrolls sideways and the targets are still 44px', !m.sideways && m.targets, JSON.stringify(m));
+  await narrow.close();
+}
 
 // 12. the locked room: a door, and nothing about what is behind it
 {
@@ -955,6 +973,7 @@ check('Right from the last tab wraps to the first, and only one tab is in the Ta
   await api.fill('#lab-pass', 'not-the-password');
   await api.click('#lab-go');
   await api.waitForTimeout(500);
+  check('locked room: a guess goes with a bot-check field, null here because this test site has no widget', 'turnstileToken' in unlockBodies[0]);
   check('locked room: a wrong password is told so, and the field is emptied', /That is not it/.test(await api.textContent('#lab-err')) && (await api.inputValue('#lab-pass')) === '' && unlockBodies.length === 1 && unlockBodies[0].password === 'not-the-password');
   check('  ...and nothing about it is kept in the browser', await api.evaluate(() => !JSON.stringify(Object.assign({}, localStorage, sessionStorage)).includes('not-the-password')));
   unlockStatus = 404;
@@ -982,7 +1001,12 @@ check('Right from the last tab wraps to the first, and only one tab is in the Ta
   check('locked room: someone already let in does not meet the padlock again', await api.evaluate(() => document.getElementById('lab-lock').hidden && !document.getElementById('panel-lab').hidden));
   await api.evaluate(() => window.YPSLab.handoff('We shipped the invoicing redesign this week and support tickets about billing dropped by a third in four days.', 'A note from the room.'));
   await api.waitForSelector('#report:not([hidden])', { timeout: 20000 });
-  check('locked room: a handoff lands in the analyzer like a paste, with its note', await api.evaluate(() => !document.getElementById('panel-tool').hidden && /invoicing redesign/.test(document.getElementById('post').value) && /A note from the room/.test(document.getElementById('notices').textContent)));
+  check('locked room: a handoff is said aloud, since a tab changed without being pressed', /Sent to the first tab/.test(await api.textContent('#live')) || /Report ready/.test(await api.textContent('#live')));
+  // Text that needs cleaning: the hygiene notice and the room's own note must both survive.
+  await api.evaluate(() => window.YPSLab.handoff('hashtag#leadership is the future ​ of work, and we shipped the invoicing redesign this week with a third fewer billing tickets.', 'A second note.'));
+  await api.waitForSelector('#report:not([hidden])', { timeout: 20000 });
+  check('locked room: a handoff keeps the hygiene notices as well as its own note', await api.evaluate(() => { const n = document.getElementById('notices').textContent; return /A second note/.test(n) && n.replace('A second note.', '').trim().length > 20; }), await api.textContent('#notices'));
+  check('locked room: a handoff lands in the analyzer like a paste, with its note', await api.evaluate(() => !document.getElementById('panel-tool').hidden && /invoicing redesign/.test(document.getElementById('post').value) && /A second note/.test(document.getElementById('notices').textContent)));
   await api.unroute('**/api/lab/ui'); await api.unroute('**/api/lab/unlock'); await api.unroute('**/api/lab/interest');
 }
 
