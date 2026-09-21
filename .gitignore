@@ -28,3 +28,6 @@ data/
 round4/posts/*
 !round4/posts/_example.txt
 round4/lock.json
+
+# Words the public page must never contain (see client.test.mjs).
+.private-words

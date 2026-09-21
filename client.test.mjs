@@ -912,9 +912,79 @@ check('notices header reads Cleaned before scoring', await api.evaluate(async ()
 await api.goto(httpUrl);
 await api.focus('#tab-tool');
 await api.keyboard.press('End');
-check('End moves to the last tab', await api.evaluate(() => document.activeElement.id === 'tab-explain' && document.getElementById('tab-explain').getAttribute('aria-selected') === 'true'));
+check('End moves to the last tab', await api.evaluate(() => document.activeElement.id === 'tab-lab' && document.getElementById('tab-lab').getAttribute('aria-selected') === 'true'));
 await api.keyboard.press('Home');
 check('Home moves to the first tab', await api.evaluate(() => document.activeElement.id === 'tab-tool' && document.getElementById('tab-tool').getAttribute('aria-selected') === 'true'));
+await api.keyboard.press('ArrowLeft');
+check('Left from the first tab wraps to the last', await api.evaluate(() => document.activeElement.id === 'tab-lab'));
+await api.keyboard.press('ArrowRight');
+check('Right from the last tab wraps to the first, and only one tab is in the Tab order', await api.evaluate(() => document.activeElement.id === 'tab-tool' && document.querySelectorAll('.tab-btn[tabindex="0"]').length === 1 && document.querySelectorAll('[role=tabpanel]:not([hidden])').length === 1));
+
+// 12. the locked room: a door, and nothing about what is behind it
+{
+  let uiAsks = 0, unlockBodies = [], interestBodies = [], unlockStatus = 401, uiOpen = false;
+  await api.route('**/api/lab/ui', route => { uiAsks++; return uiOpen
+    ? route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ css: '.lab-proof{color:rgb(1,2,3)}', html: '<div class="panel"><p class="lab-proof" id="lab-proof">inside</p></div>', js: 'window.__labRan = typeof window.YPSLab.handoff === "function" && typeof window.YPSLab.token === "function";' }) })
+    : route.fulfill({ status: 401, contentType: 'application/json', body: '{"error":"locked"}' }); });
+  await api.route('**/api/lab/unlock', route => { unlockBodies.push(route.request().postDataJSON()); if (unlockStatus === 200) uiOpen = true; return route.fulfill({ status: unlockStatus, contentType: 'application/json', body: '{}' }); });
+  await api.route('**/api/lab/interest', route => { interestBodies.push(route.request().postDataJSON()); return route.fulfill({ status: 200, contentType: 'application/json', body: '{"ok":true}' }); });
+
+  await api.goto(httpUrl);
+  await api.waitForTimeout(500);
+  check('locked room: an ordinary visit never asks the server about it', uiAsks === 0, uiAsks + ' asks');
+  // The words that must never appear in the public page live in a local,
+  // gitignored file, one per line, so this public test does not spell out
+  // the thing it is guarding. Without the file the check says it was
+  // skipped, the way the corpus-backed checks do.
+  {
+    let words = null;
+    try { words = (await readFile(resolve(import.meta.dirname, '.private-words'), 'utf8')).split(/\r?\n/).map(w => w.trim().toLowerCase()).filter(Boolean); } catch {}
+    if (!words || !words.length) console.log('NOTE: .private-words is not in this checkout. The page-source guard is skipped.');
+    else {
+      const found = await api.evaluate(list => { const src = document.documentElement.outerHTML.toLowerCase(); return list.filter(w => src.includes(w)).length; }, words);
+      check('locked room: the page source says nothing about what is behind the door', found === 0, found + ' of ' + words.length + ' private words found');
+    }
+  }
+  await api.click('#tab-lab');
+  await api.waitForTimeout(500);
+  check('locked room: opening the tab asks once, and shows the padlock when the answer is no', uiAsks === 1 && await api.evaluate(() => !document.getElementById('lab-lock').hidden && document.getElementById('lab-mount').hidden));
+  check('locked room: a password field that browsers will not offer to fill or remember', await api.evaluate(() => { const i = document.getElementById('lab-pass'); return i.type === 'password' && i.autocomplete === 'off'; }));
+  check('locked room: every control is a 44px target', await api.evaluate(() => ['lab-pass', 'lab-go', 'lab-email', 'lab-int-go'].every(id => document.getElementById(id).getBoundingClientRect().height >= 44)));
+  check('locked room: no em dash at the door', !/—/.test(await api.textContent('#lab-lock')));
+
+  await api.fill('#lab-pass', 'not-the-password');
+  await api.click('#lab-go');
+  await api.waitForTimeout(500);
+  check('locked room: a wrong password is told so, and the field is emptied', /That is not it/.test(await api.textContent('#lab-err')) && (await api.inputValue('#lab-pass')) === '' && unlockBodies.length === 1 && unlockBodies[0].password === 'not-the-password');
+  check('  ...and nothing about it is kept in the browser', await api.evaluate(() => !JSON.stringify(Object.assign({}, localStorage, sessionStorage)).includes('not-the-password')));
+  unlockStatus = 404;
+  await api.fill('#lab-pass', 'x'); await api.click('#lab-go'); await api.waitForTimeout(400);
+  check('locked room: no secret on the server reads as no door', /nothing behind this door yet/.test(await api.textContent('#lab-err')));
+  unlockStatus = 429;
+  await api.fill('#lab-pass', 'x'); await api.click('#lab-go'); await api.waitForTimeout(400);
+  check('locked room: too many tries is said plainly', /Too many tries/.test(await api.textContent('#lab-err')));
+
+  await api.fill('#lab-email', 'not an email'); await api.click('#lab-int-go'); await api.waitForTimeout(200);
+  check('locked room: a bad email never leaves the page', interestBodies.length === 0 && /does not look like an email/.test(await api.textContent('#lab-int-msg')));
+  await api.fill('#lab-email', 'reader@example.com'); await api.click('#lab-int-go'); await api.waitForTimeout(400);
+  check('locked room: a good email is sent, alone, and acknowledged', interestBodies.length === 1 && JSON.stringify(interestBodies[0]) === '{"email":"reader@example.com"}' && /Noted/.test(await api.textContent('#lab-int-msg')) && (await api.inputValue('#lab-email')) === '');
+
+  unlockStatus = 200;
+  await api.fill('#lab-pass', 'right'); await api.click('#lab-go');
+  await api.waitForSelector('#lab-proof', { timeout: 5000 });
+  check('locked room: the right password mounts what the server hands over', await api.evaluate(() => document.getElementById('lab-lock').hidden && !document.getElementById('lab-mount').hidden && getComputedStyle(document.getElementById('lab-proof')).color === 'rgb(1, 2, 3)' && window.__labRan === true));
+  check('  ...and the padlock on the tab opens', await api.evaluate(() => document.getElementById('lab-ico').textContent === '\u{1F513}'));
+  // A real reload: going to the same address with only a new hash keeps the
+  // old document, and the mount from the unlock above with it.
+  await api.goto('about:blank');
+  await api.goto(httpUrl + '#soon');
+  await api.waitForSelector('#lab-proof', { timeout: 5000 });
+  check('locked room: someone already let in does not meet the padlock again', await api.evaluate(() => document.getElementById('lab-lock').hidden && !document.getElementById('panel-lab').hidden));
+  await api.evaluate(() => window.YPSLab.handoff('We shipped the invoicing redesign this week and support tickets about billing dropped by a third in four days.', 'A note from the room.'));
+  await api.waitForSelector('#report:not([hidden])', { timeout: 20000 });
+  check('locked room: a handoff lands in the analyzer like a paste, with its note', await api.evaluate(() => !document.getElementById('panel-tool').hidden && /invoicing redesign/.test(document.getElementById('post').value) && /A note from the room/.test(document.getElementById('notices').textContent)));
+  await api.unroute('**/api/lab/ui'); await api.unroute('**/api/lab/unlock'); await api.unroute('**/api/lab/interest');
+}
 
 // 12. reduced motion: no idle loop, no bob
 const rm = await b.newPage({ viewport: { width: 900, height: 1200 }, reducedMotion: 'reduce' });

@@ -849,6 +849,31 @@ ol.changes .crewrite .lbl{
 .ticker[hidden]{display:none}
 .ticker-n{color:var(--ink);font-weight:600;font-variant-numeric:tabular-nums}
 
+/* The locked room. Existing tokens only. */
+#panel-lab[hidden]{display:none}
+.lab-lock{text-align:left}
+.lab-pad{font-size:34px;line-height:1;margin:0 0 10px;filter:grayscale(1);opacity:.85}
+.lab-h{margin:0 0 8px;font-size:20px;line-height:1.3;font-weight:600;color:var(--ink);letter-spacing:-0.01em}
+.lab-h3{margin:0 0 6px;font-size:16px;font-weight:600;color:var(--ink)}
+.lab-p{margin:0 0 14px;font-size:15px;color:var(--ink-2);line-height:1.55;max-width:56ch}
+.lab-label{display:block;font-family:var(--mono);font-size:14px;letter-spacing:.09em;text-transform:uppercase;color:var(--ink-3);margin:0 0 6px}
+.lab-row{display:flex;gap:10px;flex-wrap:wrap;align-items:stretch}
+.lab-input{
+  flex:1 1 220px;min-width:0;min-height:44px;background:var(--surface-2);border:1px solid var(--rule);border-radius:4px;
+  color:var(--ink);font-family:var(--mono);font-size:16px;padding:9px 12px;
+}
+.lab-input:hover{border-color:var(--rule-2)}
+.lab-rule{height:1px;background:var(--hair);margin:22px 0 18px}
+.lab-msg{margin:10px 0 0;font-size:14px;color:var(--ink-3);line-height:1.5;min-height:1.5em}
+.lab-msg.ok{color:var(--cool-text)}
+.lab-ico{filter:grayscale(1)}
+#lab-mount[hidden]{display:none}
+@media (max-width:599px){
+  /* Three tabs do not fit one line of 14px mono at 375. They share the row. */
+  .tabs{gap:14px}
+  .tab-btn{font-size:13px;letter-spacing:.04em}
+}
+
 /* One line, after the thing it paid for, only when a model actually ran. */
 .tipline{margin:18px 0 0;font-size:14px;color:var(--ink-3);line-height:1.55}
 .tipline a{color:var(--cool-text)}
@@ -1163,6 +1188,7 @@ ul.cg-list li::before{content:"\2022";position:absolute;left:0;color:var(--ink-4
 <div class="tabs" role="tablist" aria-label="Site sections">
   <button class="tab-btn" id="tab-tool" role="tab" type="button" aria-selected="true" aria-controls="panel-tool">Roast my post</button>
   <button class="tab-btn" id="tab-explain" role="tab" type="button" aria-selected="false" tabindex="-1" aria-controls="panel-explain">How this works</button>
+  <button class="tab-btn" id="tab-lab" role="tab" type="button" aria-selected="false" tabindex="-1" aria-controls="panel-lab"><span class="lab-ico" id="lab-ico" aria-hidden="true">&#128274;</span> Soon</button>
 </div>
 
 <main>
@@ -1215,6 +1241,39 @@ ul.cg-list li::before{content:"\2022";position:absolute;left:0;color:var(--ink-4
 
 <div id="live" class="sr-only" role="status" aria-live="polite"></div>
 <div id="report" hidden tabindex="-1"></div>
+</div>
+
+<!-- The locked room. This page holds the door and only the door: what is
+     behind it is not in this file, not in this repository, and is handed
+     over by the server only to someone it has let in (see /api/lab/ui).
+     The password is checked on the server against a secret that exists
+     nowhere but there, so reading this source gets nobody any closer. -->
+<div id="panel-lab" role="tabpanel" aria-labelledby="tab-lab" tabindex="-1" hidden>
+  <div class="panel lab-lock" id="lab-lock">
+    <div class="lab-pad" aria-hidden="true">&#128274;</div>
+    <h2 class="lab-h" id="lab-h" tabindex="-1">Something is being built in here.</h2>
+    <p class="lab-p">It is not finished, so it is locked. A few people have the password. If you are one of them, you know what to do.</p>
+    <form class="lab-form" id="lab-form" autocomplete="off">
+      <label class="lab-label" for="lab-pass">Password</label>
+      <div class="lab-row">
+        <input class="lab-input" type="password" id="lab-pass" name="password" autocomplete="off" autocapitalize="off" spellcheck="false" aria-describedby="lab-err" maxlength="200">
+        <button class="btn-primary" id="lab-go" type="submit">Unlock</button>
+      </div>
+      <p class="field-err" id="lab-err" role="alert" hidden></p>
+    </form>
+    <div class="lab-rule" aria-hidden="true"></div>
+    <h3 class="lab-h3">No password?</h3>
+    <p class="lab-p">Leave an email and I will write when there is something to test. One email, from me, and then I lose the list.</p>
+    <form class="lab-form" id="lab-interest" novalidate>
+      <label class="lab-label" for="lab-email">Email</label>
+      <div class="lab-row">
+        <input class="lab-input" type="email" id="lab-email" name="email" autocomplete="email" inputmode="email" aria-describedby="lab-int-msg" maxlength="254">
+        <button class="btn-ghost" id="lab-int-go" type="submit">Tell me when</button>
+      </div>
+      <p class="lab-msg" id="lab-int-msg" role="status"></p>
+    </form>
+  </div>
+  <div id="lab-mount" hidden></div>
 </div>
 
 <div id="panel-explain" role="tabpanel" aria-labelledby="tab-explain" tabindex="-1" hidden>
@@ -5742,7 +5801,7 @@ ul.cg-list li::before{content:"\2022";position:absolute;left:0;color:var(--ink-4
      English under a pirate flag. The skip list above is what keeps this
      broad list safe: a root can be as wide as the page, because the
      visitor's own words are excluded by what they are, not by where. */
-  var PIRATE_ROOTS = ['header .tagline', 'header .intro', 'header .head-actions', '.tabs', '#panel-tool', '#report', '#panel-explain', '#whatsnew', '#tipask', 'footer'];
+  var PIRATE_ROOTS = ['header .tagline', 'header .intro', 'header .head-actions', '.tabs', '#panel-tool', '#report', '#panel-explain', '#lab-lock', '#whatsnew', '#tipask', 'footer'];
   var PIRATE_PHRASES = [
     [/post quality assurance/gi, 'Plunder quality assurance'],
     [/unsympathetic/gi, 'no quarter given'],
@@ -6266,34 +6325,150 @@ ul.cg-list li::before{content:"\2022";position:absolute;left:0;color:var(--ink-4
     $('#checkgroups').innerHTML = html;
   }
 
+  /* A roving tablist over however many tabs the page has, in DOM order:
+     the selected tab is the only one in the Tab order, Left and Right wrap,
+     Home and End jump, and only the selected panel is shown. */
+  var TAB_KEYS = ['tool', 'explain', 'lab'];
+  var tabShown = {};
   function selectTab(which){
-    var showExplain = which === 'explain';
-    var toolBtn = $('#tab-tool'), explainBtn = $('#tab-explain');
-    var toolPanel = $('#panel-tool'), explainPanel = $('#panel-explain');
-    toolBtn.setAttribute('aria-selected', showExplain ? 'false' : 'true');
-    toolBtn.tabIndex = showExplain ? -1 : 0;
-    explainBtn.setAttribute('aria-selected', showExplain ? 'true' : 'false');
-    explainBtn.tabIndex = showExplain ? 0 : -1;
-    toolPanel.hidden = showExplain;
-    explainPanel.hidden = !showExplain;
+    if (TAB_KEYS.indexOf(which) < 0) which = 'tool';
+    TAB_KEYS.forEach(function(k){
+      var on = k === which, b = $('#tab-' + k), p = $('#panel-' + k);
+      b.setAttribute('aria-selected', on ? 'true' : 'false');
+      b.tabIndex = on ? 0 : -1;
+      p.hidden = !on;
+    });
+    if (tabShown[which]) tabShown[which]();
   }
-  $('#tab-tool').addEventListener('click', function(){ selectTab('tool'); });
-  $('#tab-explain').addEventListener('click', function(){ selectTab('explain'); });
+  TAB_KEYS.forEach(function(k){ $('#tab-' + k).addEventListener('click', function(){ selectTab(k); }); });
   Array.prototype.forEach.call(document.querySelectorAll('.tab-btn'), function(btn){
     btn.addEventListener('keydown', function(e){
-      var target;
-      if (e.key === 'ArrowLeft' || e.key === 'ArrowRight') target = btn.id === 'tab-tool' ? $('#tab-explain') : $('#tab-tool');
-      else if (e.key === 'Home') target = $('#tab-tool');
-      else if (e.key === 'End') target = $('#tab-explain');
+      var i = TAB_KEYS.indexOf(btn.id.replace('tab-', '')), n = TAB_KEYS.length, to;
+      if (e.key === 'ArrowRight') to = (i + 1) % n;
+      else if (e.key === 'ArrowLeft') to = (i + n - 1) % n;
+      else if (e.key === 'Home') to = 0;
+      else if (e.key === 'End') to = n - 1;
       else return;
       e.preventDefault();
-      selectTab(target.id === 'tab-explain' ? 'explain' : 'tool');
-      target.focus();
+      selectTab(TAB_KEYS[to]);
+      $('#tab-' + TAB_KEYS[to]).focus();
     });
   });
 
+  /* ---------------- the locked room ----------------
+     This page knows three addresses and nothing else about what it guards:
+       POST api/lab/unlock    a password; the server answers yes or no
+       GET  api/lab/ui        what is behind the door, only for someone let in
+       POST api/lab/interest  an email address, for people who want in early
+     The server sets an HttpOnly cookie on a right answer, so nothing this
+     script can read would let a stranger in, and the password itself is
+     never kept anywhere here. What comes back from api/lab/ui is a fragment
+     of markup, a stylesheet and a script from this site's own Worker; it is
+     mounted below and handed window.YPSLab, the short list of things on
+     this page it is allowed to use. */
+  var lab = { asked: false, open: false };
+  function labSay(msg){ var l = $('#live'); if (l) l.textContent = msg; }
+  function labMount(p){
+    if (lab.open || !p || typeof p.html !== 'string') return;
+    lab.open = true;
+    if (p.css){ var st = document.createElement('style'); st.textContent = p.css; document.head.appendChild(st); }
+    $('#lab-mount').innerHTML = p.html;
+    $('#lab-lock').hidden = true;
+    $('#lab-mount').hidden = false;
+    $('#lab-ico').textContent = '\uD83D\uDD13';
+    if (p.js){ var sc = document.createElement('script'); sc.textContent = p.js; document.body.appendChild(sc); }
+  }
+  function labFetchUI(){
+    return fetch('api/lab/ui', { credentials: 'same-origin', cache: 'no-store' })
+      .then(function(r){ return r.ok ? r.json() : null; })
+      .then(function(p){ if (p) labMount(p); return !!p; })
+      .catch(function(){ return false; });
+  }
+  // Someone already let in (the cookie lasts a while) should not meet the
+  // padlock again. Asked once, and only when the tab is actually opened, so
+  // an ordinary visit to the site never makes this request at all.
+  tabShown.lab = function(){ if (!lab.asked){ lab.asked = true; labFetchUI(); } };
+
+  $('#lab-form').addEventListener('submit', function(e){
+    e.preventDefault();
+    var input = $('#lab-pass'), err = $('#lab-err'), btn = $('#lab-go');
+    var given = input.value;
+    if (!given){ input.focus(); return; }
+    btn.disabled = true; btn.textContent = 'Checking';
+    err.hidden = true; err.textContent = '';
+    fetch('api/lab/unlock', { method: 'POST', credentials: 'same-origin', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ password: given }) })
+      .then(function(r){
+        input.value = '';
+        if (r.ok) return labFetchUI().then(function(ok){ if (ok){ labSay('Unlocked.'); return; } throw { status: 0 }; });
+        throw { status: r.status };
+      })
+      .catch(function(x){
+        var s = x && x.status;
+        err.textContent = s === 401 ? 'That is not it.'
+          : s === 429 ? 'Too many tries from this connection. Come back in an hour.'
+          : s === 404 ? 'There is nothing behind this door yet.'
+          : 'Could not check that just now. Try again in a minute.';
+        err.hidden = false;
+        input.focus();
+      })
+      .then(function(){ btn.disabled = false; btn.textContent = 'Unlock'; });
+  });
+
+  $('#lab-interest').addEventListener('submit', function(e){
+    e.preventDefault();
+    var input = $('#lab-email'), msg = $('#lab-int-msg'), btn = $('#lab-int-go');
+    var email = input.value.trim();
+    msg.className = 'lab-msg';
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(email) || email.length > 254){ msg.textContent = 'That does not look like an email address.'; input.focus(); return; }
+    btn.disabled = true;
+    fetch('api/lab/interest', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ email: email }) })
+      .then(function(r){
+        if (r.ok){ msg.className = 'lab-msg ok'; msg.textContent = 'Noted. One email, when there is something to test.'; input.value = ''; return; }
+        msg.textContent = r.status === 400 ? 'That does not look like an email address.'
+          : r.status === 429 ? 'That is enough sign-ups from one connection for now.'
+          : 'Could not save that just now. Try again later.';
+      })
+      .catch(function(){ msg.textContent = 'Could not save that just now. Try again later.'; })
+      .then(function(){ btn.disabled = false; });
+  });
+
+  /* What the room is allowed to use. Deliberately short and generic: find an
+     element, say something, get a bot-check token, and hand a piece of text
+     to the analyzer as if the visitor had pasted it. */
+  window.YPSLab = {
+    $: $,
+    toast: toast,
+    say: labSay,
+    token: function(){ return getTurnstileToken(); },
+    bandFor: bandFor,
+    showTab: selectTab,
+    handoff: function(text, noticeAfter){
+      selectTab('tool');
+      $('#post').value = String(text == null ? '' : text);
+      pasteFlags = {};
+      $('#hasmedia').checked = false;
+      clearAttachedImage();
+      showNotices([]);
+      updateCounter();
+      run();
+      // run() cleans the text and rewrites the notices with whatever it
+      // cleaned, so an extra notice goes on after it, alongside those.
+      if (noticeAfter){
+        var cleaned = (YPS.cleanPaste($('#post').value).notices || []);
+        showNotices(cleaned.concat([String(noticeAfter)]), cleaned.length ? undefined : 'Before scoring');
+      }
+    }
+  };
+
   buildCheckGroups();
-  if (location.hash === '#how-it-works') selectTab('explain');
+  // A link to a tab works on arrival and when only the hash changes, which
+  // does not reload the page and so never reaches the line above it.
+  function tabFromHash(){
+    if (location.hash === '#how-it-works') selectTab('explain');
+    else if (location.hash === '#soon') selectTab('lab');
+  }
+  tabFromHash();
+  window.addEventListener('hashchange', tabFromHash);
 
   $('#rulecount').textContent = YPS.RULES.length;
   Array.prototype.forEach.call(document.querySelectorAll('.rulecount-inline'), function(e){ e.textContent = YPS.RULES.length; });
