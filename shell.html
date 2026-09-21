@@ -308,8 +308,10 @@ header{border-bottom:1px solid var(--rule);padding-bottom:20px;margin-bottom:28p
 .mx-tiles{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px;margin:24px 0 0}
 @media (min-width:760px){.mx-tiles{grid-template-columns:repeat(4,minmax(0,1fr))}}
 .mx-tile{padding:16px 14px;border:1px solid var(--rule);border-radius:10px;background:var(--surface);min-width:0}
-.mx-tile .v{display:block;font:700 clamp(30px,5.4vw,44px)/1 var(--display);color:var(--ink);font-variant-numeric:tabular-nums;letter-spacing:-.01em}
-.mx-tile .k{display:block;margin-top:9px;font:500 12px/1.3 var(--mono);letter-spacing:.1em;text-transform:uppercase;color:var(--ink-2)}
+/* The number is one line and the label is one line, in every tile, so the
+   four line up whatever the figures are. Anything longer goes in the note. */
+.mx-tile .v{display:block;white-space:nowrap;font:700 clamp(30px,5.4vw,44px)/1 var(--display);color:var(--ink);font-variant-numeric:tabular-nums;letter-spacing:-.01em}
+.mx-tile .k{display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;margin-top:9px;font:500 12px/1.3 var(--mono);letter-spacing:.1em;text-transform:uppercase;color:var(--ink-2)}
 .mx-tile .n{display:block;margin-top:6px;font-size:14px;line-height:1.4;color:var(--ink-3);overflow-wrap:anywhere}
 .mx-sec{margin:44px 0 0;padding:34px 0 0;border-top:1px solid var(--hair)}
 .mx-num{display:block;font:500 12px/1 var(--mono);letter-spacing:.14em;text-transform:uppercase;color:var(--ink-3)}
@@ -320,8 +322,11 @@ header{border-bottom:1px solid var(--rule);padding-bottom:20px;margin-bottom:28p
 .mx-card svg text{font-family:var(--mono);font-size:12.5px;fill:var(--ink-3)}
 .mx-card svg text.mx-val{fill:var(--ink-2)}
 .mx-card svg text.mx-top{fill:var(--ink);font-weight:600}
-.mx-legend{display:flex;flex-wrap:wrap;gap:8px 18px;margin:14px 0 0;padding:0;list-style:none;font-size:14px;color:var(--ink-2)}
-.mx-legend li{display:inline-flex;align-items:center;gap:7px}
+/* One row when there is room, one item per row when there is not. A
+   wrapping row left three on top and one underneath. */
+.mx-legend{display:grid;grid-auto-flow:column;justify-content:start;gap:8px 20px;margin:14px 0 0;padding:0;list-style:none;font-size:14px;color:var(--ink-2)}
+@media (max-width:780px){.mx-legend{grid-auto-flow:row}}
+.mx-legend li{display:inline-flex;align-items:center;gap:7px;white-space:nowrap}
 .mx-legend i{display:inline-block;width:11px;height:11px;border-radius:3px;background:var(--c)}
 .mx-legend b{font:500 13px/1 var(--mono);color:var(--ink-3);font-variant-numeric:tabular-nums}
 .mx-bars{list-style:none;margin:0;padding:0}
@@ -3620,13 +3625,16 @@ ul.cg-list li::before{content:"\2022";position:absolute;left:0;color:var(--ink-4
     function section(n, eyebrow, headline, dek, body){
       return '<section class="mx-sec"><span class="mx-num">' + n + ' &nbsp;/&nbsp; ' + E(eyebrow) + '</span><h2 class="mx-h" tabindex="-1">' + E(headline) + '</h2><p class="mx-dek">' + dek + '</p><div class="mx-card">' + body + '</div></section>';
     }
+    // In a legend the total is already on the card, so under MX_MIN it is
+    // just the count.
+    var legendVal = function(n, d){ return d < MX_MIN ? num(n) : share(n, d); };
     function legend(rows){
       return '<ul class="mx-legend">' + rows.map(function(r){ return '<li><i style="--c:' + r[0] + '"></i>' + E(r[1]) + ' <b>' + E(r[2]) + '</b></li>'; }).join('') + '</ul>';
     }
     function stack(rows, total){
       return '<div class="mx-stack" role="img" aria-label="' + E(rows.map(function(r){ return r[1] + ': ' + share(r[2], total); }).join(', ')) + '">' +
         rows.filter(function(r){ return r[2] > 0; }).map(function(r){ return '<span style="--c:' + r[0] + ';flex:' + r[2] + ' 1 0"></span>'; }).join('') + '</div>' +
-        legend(rows.map(function(r){ return [r[0], r[1], share(r[2], total)]; }));
+        legend(rows.map(function(r){ return [r[0], r[1], legendVal(r[2], total)]; }));
     }
     function bars(rows, d, max, id){
       return '<ul class="mx-bars"' + (id ? ' id="' + id + '"' : '') + '>' + rows.map(function(x){
@@ -3653,7 +3661,7 @@ ul.cg-list li::before{content:"\2022";position:absolute;left:0;color:var(--ink-4
         var x0 = l + iw * bd[3] / 10, x1 = l + iw * bd[4] / 10;
         s += '<rect x="' + (x0 + 1).toFixed(1) + '" y="' + (H - 14) + '" width="' + Math.max(1, x1 - x0 - 2).toFixed(1) + '" height="5" rx="2.5" fill="' + bandColor(i) + '"/>';
       });
-      return s + '</svg>' + legend(BANDS.map(function(bd, i){ return [bandColor(i), bd[2], share(d.bands[bd[0]] || 0, d.scored)]; }));
+      return s + '</svg>' + legend(BANDS.map(function(bd, i){ return [bandColor(i), bd[2], legendVal(d.bands[bd[0]] || 0, d.scored)]; }));
     }
 
     // Every check in one grey: the question is how often, not which kind.
@@ -3694,9 +3702,9 @@ ul.cg-list li::before{content:"\2022";position:absolute;left:0;color:var(--ink-4
 
       html += '<div class="mx-tiles">' +
         '<div class="mx-tile"><span class="v">' + num(d.scored) + '</span><span class="k">Posts scored</span><span class="n">Real pastes since ' + E(sinceText(d.since)) + '. The examples don’t count.</span></div>' +
-        '<div class="mx-tile"><span class="v">' + E(share(d.clean, d.scored)) + '</span><span class="k">Tripped nothing</span><span class="n">Zero of the ' + d.rules.length + ' checks. Respect.</span></div>' +
-        '<div class="mx-tile"><span class="v">' + (mid === null ? 'None yet' : mid + ' to ' + mid + '.9') + '</span><span class="k">Middle score</span><span class="n">At least half of everyone lands here or better.</span></div>' +
-        '<div class="mx-tile"><span class="v">' + never + '</span><span class="k">Sins nobody has committed</span><span class="n">Out of ' + countable.length + '. Give it time.</span></div>' +
+        '<div class="mx-tile"><span class="v">' + (quiet ? num(d.clean) : E(share(d.clean, d.scored))) + '</span><span class="k">Spotless</span><span class="n">' + (quiet ? 'Of ' + num(d.scored) + ' posts. ' : '') + 'Zero of the ' + d.rules.length + ' checks. Respect.</span></div>' +
+        '<div class="mx-tile"><span class="v">' + (mid === null ? '0' : mid) + '</span><span class="k">Middle score</span><span class="n">' + (mid === null ? 'Nothing scored yet.' : 'The post in the middle scores ' + mid + ' to ' + mid + '.9. Lower is better.') + '</span></div>' +
+        '<div class="mx-tile"><span class="v">' + never + '</span><span class="k">Unseen sins</span><span class="n">Of the ' + countable.length + ' checks we can count. Give it time.</span></div>' +
         '</div>';
 
       html += section('01', 'Where the scores land',
