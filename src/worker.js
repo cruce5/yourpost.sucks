@@ -394,7 +394,7 @@ const latBucket = ms => ms < 5000 ? 'lt5s' : ms < 10000 ? '5to10s' : ms < 20000 
  * came from in the x-yps-source header; anything but "paste" (or no header)
  * is not a post. A cache hit is not a new post. A bot-check failure is not a
  * post. Those are still counted as requests, privately, under analyze:*.
- * Posts are counted under post:* so the series restarts clean, with a stamp
+ * Posts are counted under posts:* so the series restarts clean, with a stamp
  * of when it began. */
 export const POST_SOURCES = ['paste', 'specimen', 'rewrite', 'lab', 'permalink'];
 const NOT_A_POST_REASONS = ['turnstile'];
@@ -418,15 +418,17 @@ export function statKeys(kind, status, p, ms, source) {
   const aPost = kind === 'analyze' && src === 'paste' && mode !== 'cache' && !NOT_A_POST_REASONS.includes(p && p.reason);
   if (aPost && r && r.band && typeof r.overall === 'number' && !r.unscored && !r.sensitive) {
     const fired = (r.stats && r.stats.firedIds) || [];
-    keys.push('post:all', `post:band:${r.band.key}`, `post:score:${Math.min(9, Math.floor(r.overall))}`);
-    for (const id of fired) keys.push(`post:rule:${id}`);
+    // The score to a tenth: the tab bins it in steps of 0.4, which is where
+    // every verdict line (3.2, 5.6, 8) falls on a bin edge.
+    keys.push('posts:all', `posts:band:${r.band.key}`, `posts:tenth:${Math.max(0, Math.min(99, Math.round(r.overall * 10)))}`);
+    for (const id of fired) keys.push(`posts:rule:${id}`);
     // Clean means none of the published checks fired. A finding outside them
     // (fake bold) is counted under its own id and does not hide a clean post.
-    if (!fired.some(id => RULE_IDS.has(id))) keys.push('post:rule:none');
-    if (r.satireApplied) keys.push('post:flag:satire');
-    if (r.mediaAttached) keys.push('post:flag:media');
-    if (r.meanerSkipped) keys.push('post:flag:meaner_skipped');
-    if (r.narrative) keys.push('post:flag:narrative');
+    if (!fired.some(id => RULE_IDS.has(id))) keys.push('posts:rule:none');
+    if (r.satireApplied) keys.push('posts:flag:satire');
+    if (r.mediaAttached) keys.push('posts:flag:media');
+    if (r.meanerSkipped) keys.push('posts:flag:meaner_skipped');
+    if (r.narrative) keys.push('posts:flag:narrative');
   }
   if (kind === 'reword' && p && p.after && p.before && typeof p.after.overall === 'number') {
     keys.push('reword:gain:' + gainBucket(p.before.overall, p.after.overall));
@@ -436,7 +438,7 @@ export function statKeys(kind, status, p, ms, source) {
 async function bumpStats(env, keys) {
   const ns = counters(env);
   if (!ns || !keys.length) return;
-  try { await counterCall(ns, 'stats', '/bump', { keys: keys.map(k => 's:' + k.toLowerCase().replace(/[^a-z0-9:_.-]/g, '_')), stamp: keys.includes('post:all') ? 's:post:since' : undefined }); }
+  try { await counterCall(ns, 'stats', '/bump', { keys: keys.map(k => 's:' + k.toLowerCase().replace(/[^a-z0-9:_.-]/g, '_')), stamp: keys.includes('posts:all') ? 's:posts:since' : undefined }); }
   catch (e) { console.warn('stats: not counted', e && e.message); }
 }
 /** Every tally, with the prefix stripped, or null. For lab.js and the tests. */
@@ -532,20 +534,22 @@ async function handleMetricsUnlock(request, env) {
 export function publicFigures(all, at) {
   const s = all || {};
   const under = prefix => Object.fromEntries(Object.entries(s).filter(([k]) => k.startsWith(prefix)).map(([k, n]) => [k.slice(prefix.length), n]));
-  const bands = under('post:band:'), fired = under('post:rule:'), why = under('reword:why:'), mode = under('reword:mode:');
+  const bands = under('posts:band:'), fired = under('posts:rule:'), why = under('reword:why:'), mode = under('reword:mode:');
   const tried = { better: mode.reworded || 0, couldNotBeat: why.no_improvement || 0, unusable: why.llm_unavailable || 0 };
   const outcomes = Object.values(mode).reduce((a, n) => a + n, 0);
-  const since = s['post:since'] ? new Date(s['post:since']).toISOString().slice(0, 10) : null;
+  const since = s['posts:since'] ? new Date(s['posts:since']).toISOString().slice(0, 10) : null;
   return {
     ok: true, since, at,
     scored: Object.values(bands).reduce((a, n) => a + n, 0),
     bands,
-    scores: Array.from({ length: 10 }, (_, i) => s['post:score:' + i] || 0),
+    // 25 bins of 0.4: 0 to 0.3, 0.4 to 0.7, ... 9.6 to 9.9. The verdict lines
+    // at 3.2, 5.6 and 8 are bin edges, so every bin is one verdict.
+    bins: Array.from({ length: 25 }, (_, i) => [0, 1, 2, 3].reduce((t, k) => t + (s['posts:tenth:' + (i * 4 + k)] || 0), 0)),
     // Every check, fired or not: one that never fires is a finding too. One
     // can never be counted here: a post it catches is not scored at all.
     rules: ENGINE.RULES.map(r => ({ id: r.id, label: r.label, dim: r.dim, n: fired[r.id.toLowerCase()] || 0, ...(r.id === 'not-english' ? { countable: false } : {}) })),
     clean: fired.none || 0,
-    flags: { media: s['post:flag:media'] || 0, satire: s['post:flag:satire'] || 0, narrative: s['post:flag:narrative'] || 0 },
+    flags: { media: s['posts:flag:media'] || 0, satire: s['posts:flag:satire'] || 0, narrative: s['posts:flag:narrative'] || 0 },
     // Tried and not tried, never mixed. "Not attempted" is one number: why
     // (no key, the bot check, the budget, the hourly limit, nothing to fix,
     // a declined post) is the operation's business, not the page's.

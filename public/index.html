@@ -6539,34 +6539,17 @@ ul.cg-list li::before{content:"\2022";position:absolute;left:0;color:var(--ink-4
     var clearLead = function(a, b){ return !b || (a - b) >= 2 * Math.sqrt(a + b); };
     var bandColor = function(i){ return 'var(--mx-b' + (i + 1) + ')'; };
     var bandOf = function(v){ for (var i = 0; i < BANDS.length; i++) if (v < BANDS[i][4]) return i; return 3; };
-    // Whole-point bars 3 and 5 each hold two verdicts: grey, not one of them.
-    var straddles = function(i){ return CUTS.some(function(c){ return c > i && c < i + 1; }); };
-    /* Each whole-point bar, split by verdict. Scores are counted to the whole
-       point, but the verdict totals are exact, so the part of a bar that a
-       verdict line cuts through can be worked out: walk the bars from 0,
-       filling each verdict's total in order. Bar 3 is whatever "barely" has
-       left after bars 0 to 2, and the rest of it is "normal". Returns, per
-       bar, [[band index, count], ...] from the bottom up. */
-    function splitBars(d){
-      var left = BANDS.map(function(bd){ return d.bands[bd[0]] || 0; });
-      return d.scores.map(function(n, i){
-        var parts = [], rest = n;
-        BANDS.forEach(function(bd, b){
-          if (!rest || bd[3] >= i + 1 || bd[4] <= i) return;
-          var take = straddles(i) && bd[4] < i + 1 ? Math.min(rest, Math.max(0, left[b])) : rest;
-          if (take > 0){ parts.push([b, take]); left[b] -= take; rest -= take; }
-        });
-        if (rest > 0) parts.push([bandOf(i + 0.99), rest]); // figures that do not tie: never drop a post
-        return parts;
-      });
-    }
-    var bandsIn = function(i){ return BANDS.filter(function(bd){ return bd[3] < i + 1 && bd[4] > i; }).map(function(bd){ return bd[2]; }).join(' or '); };
+    // Scores in steps of 0.4: 25 bins, and every verdict line (3.2, 5.6, 8)
+    // is a bin edge, so each bin is exactly one verdict.
+    var BIN = 0.4, NB = 25;
+    var binBand = function(i){ return bandOf(i * BIN + 0.01); };
+    var binLabel = function(i){ return (i * BIN).toFixed(1) + ' to ' + Math.min(9.9, i * BIN + BIN - 0.1).toFixed(1); };
 
     // Sample figures, for looking at the tab on a laptop before there is
     // anything real to draw. Only ever on localhost, and it says so.
     function sample(){
       var rules = YPS.RULES.map(function(r, i){ return { id: r.id, label: r.label, dim: r.dim, n: i % 9 === 8 || r.id === 'not-english' ? 0 : Math.round(620 * Math.pow(0.86, i) * (0.7 + ((i * 37) % 10) / 16)), countable: r.id === 'not-english' ? false : undefined }; });
-      return { ok: true, sample: true, live: true, since: '2026-09-21', at: new Date().toISOString(), scored: 1184, clean: 96, bands: { barely: 498, normal: 441, lot: 203, completely: 42 }, scores: [38, 142, 231, 219, 187, 122, 98, 74, 47, 26],
+      return { ok: true, sample: true, live: true, since: '2026-09-21', at: new Date().toISOString(), scored: 1184, clean: 96, bands: { barely: 498, normal: 441, lot: 203, completely: 42 }, bins: [12, 26, 44, 60, 71, 84, 92, 88, 64, 58, 52, 44, 40, 37, 30, 27, 24, 22, 20, 18, 15, 12, 8, 5, 3],
         rules: rules, flags: { media: 312, satire: 41, narrative: 188 }, reword: { tried: { better: 131, couldNotBeat: 44, unusable: 8 }, notAttempted: 31, gain: { under1: 38, '1to2': 61, '2plus': 32 } },
         wait: { lt5s: 402, '5to10s': 511, '10to20s': 96, gt20s: 11 } };
     }
@@ -6594,30 +6577,31 @@ ul.cg-list li::before{content:"\2022";position:absolute;left:0;color:var(--ink-4
       }).join('') + '</ul>';
     }
 
-    // One bar per point of the score. One viewBox unit is one CSS pixel, so
-    // a 12.5px label is 12.5px on a phone too.
+    // One bar per 0.4 of the score. One viewBox unit is one CSS pixel, so a
+    // 12.5px label is 12.5px on a phone too. With 25 bars only the tallest
+    // carries its figure; every bar's figure is in the spoken description.
     function histogram(d, W){
-      var H = 250, l = 6, r = 6, t = 26, b = 44, iw = W - l - r, ih = H - t - b;
-      var max = Math.max.apply(null, d.scores.concat([1])), step = iw / 10, bw = Math.min(46, step * 0.72), top = d.scores.indexOf(max), parts = splitBars(d);
-      var s = '<svg viewBox="0 0 ' + W + ' ' + H + '" role="img" aria-label="' + E('Posts by score. ' + d.scores.map(function(n, i){ return i + ' to ' + (i === 9 ? '9.9' : i + '.9') + ', ' + bandsIn(i) + ': ' + share(n, d.scored); }).join('; ')) + '">';
+      var H = 240, l = 6, r = 6, t = 26, b = 46, iw = W - l - r, ih = H - t - b;
+      var max = Math.max.apply(null, d.bins.concat([1])), step = iw / NB, bw = Math.max(2, step - 3), top = d.bins.indexOf(max);
+      var said = d.bins.map(function(n, i){ return n ? binLabel(i) + ', ' + BANDS[binBand(i)][2] + ': ' + legendVal(n, d.scored) : null; }).filter(Boolean);
+      var s = '<svg viewBox="0 0 ' + W + ' ' + H + '" role="img" aria-label="' + E('Posts by score, in steps of 0.4. ' + (said.length ? said.join('; ') + '. No posts at any other score.' : 'No posts yet.')) + '">';
       s += '<line x1="' + l + '" x2="' + (W - r) + '" y1="' + (t + ih) + '" y2="' + (t + ih) + '" stroke="var(--rule-2)" stroke-width="1"/>';
-      d.scores.forEach(function(n, i){
-        var h = n ? Math.max(2, ih * n / max) : 0, x = l + step * i + (step - bw) / 2, y = t + ih - h;
-        // Bottom up, one rect per verdict in the bar; a 2px gap between parts.
-        var yy = t + ih;
-        parts[i].forEach(function(pt, k){
-          var ph = n ? h * pt[1] / n : 0, gap = k ? 2 : 0;
-          if (ph - gap <= 0) return;
-          s += '<rect x="' + x.toFixed(1) + '" y="' + (yy - ph).toFixed(1) + '" width="' + bw.toFixed(1) + '" height="' + (ph - gap).toFixed(1) + '" rx="2" fill="' + bandColor(pt[0]) + '"/>';
-          yy -= ph;
-        });
-        s += '<text class="' + (i === top ? 'mx-top' : 'mx-val') + '" text-anchor="middle" x="' + (x + bw / 2).toFixed(1) + '" y="' + (y - 7).toFixed(1) + '">' + E(d.scored < MX_MIN ? num(n) : share(n, d.scored)) + '</text>';
-        s += '<text text-anchor="middle" x="' + (x + bw / 2).toFixed(1) + '" y="' + (t + ih + 18) + '">' + i + '</text>';
+      d.bins.forEach(function(n, i){
+        if (!n) return;
+        var h = Math.max(2, ih * n / max), x = l + step * i + (step - bw) / 2, y = t + ih - h;
+        s += '<rect x="' + x.toFixed(1) + '" y="' + y.toFixed(1) + '" width="' + bw.toFixed(1) + '" height="' + h.toFixed(1) + '" rx="2" fill="' + bandColor(binBand(i)) + '"/>';
+        if (i === top) s += '<text class="mx-top" text-anchor="middle" x="' + (x + bw / 2).toFixed(1) + '" y="' + (y - 7).toFixed(1) + '">' + E(legendVal(n, d.scored)) + '</text>';
       });
-      // The scale underneath, in the same units as the bars above it.
+      // Whole-number ticks under the bars, in the same units.
+      [0, 2, 4, 6, 8, 10].forEach(function(v){
+        var x = l + iw * v / 10;
+        s += '<line x1="' + x.toFixed(1) + '" x2="' + x.toFixed(1) + '" y1="' + (t + ih) + '" y2="' + (t + ih + 4) + '" stroke="var(--rule-2)" stroke-width="1"/>';
+        s += '<text text-anchor="' + (v === 0 ? 'start' : v === 10 ? 'end' : 'middle') + '" x="' + x.toFixed(1) + '" y="' + (t + ih + 19) + '">' + v + '</text>';
+      });
+      // The verdicts underneath, in the same units as the bars above them.
       BANDS.forEach(function(bd, i){
         var x0 = l + iw * bd[3] / 10, x1 = l + iw * bd[4] / 10;
-        s += '<rect x="' + (x0 + 1).toFixed(1) + '" y="' + (H - 14) + '" width="' + Math.max(1, x1 - x0 - 2).toFixed(1) + '" height="5" rx="2.5" fill="' + bandColor(i) + '"/>';
+        s += '<rect x="' + (x0 + 1).toFixed(1) + '" y="' + (H - 12) + '" width="' + Math.max(1, x1 - x0 - 2).toFixed(1) + '" height="5" rx="2.5" fill="' + bandColor(i) + '"/>';
       });
       return s + '</svg>' + legend(BANDS.map(function(bd, i){ return [bandColor(i), bd[2], legendVal(d.bands[bd[0]] || 0, d.scored)]; }));
     }
@@ -6634,9 +6618,9 @@ ul.cg-list li::before{content:"\2022";position:absolute;left:0;color:var(--ink-4
       return html;
     }
 
-    function typical(scores, total){
+    function typical(bins, total){
       var half = total / 2, run = 0;
-      for (var i = 0; i < scores.length; i++){ run += scores[i]; if (run >= half) return i; }
+      for (var i = 0; i < bins.length; i++){ run += bins[i]; if (run >= half && total) return i; }
       return null;
     }
 
@@ -6656,12 +6640,12 @@ ul.cg-list li::before{content:"\2022";position:absolute;left:0;color:var(--ink-4
       var countable = d.rules.filter(function(x){ return x.countable !== false; });
       var fired = countable.filter(function(x){ return x.n > 0; }).sort(function(a, b){ return b.n - a.n; }), sin = fired[0], sin2 = fired[1];
       var never = countable.length - fired.length;
-      var mid = typical(d.scores, d.scored);
+      var mid = typical(d.bins, d.scored);
 
       html += '<div class="mx-tiles">' +
         '<div class="mx-tile"><span class="v">' + num(d.scored) + '</span><span class="k">Posts scored</span><span class="n">Real pastes since ' + E(sinceText(d.since)) + '. The examples don’t count.</span></div>' +
         '<div class="mx-tile"><span class="v">' + (quiet ? num(d.clean) : E(share(d.clean, d.scored))) + '</span><span class="k">Spotless</span><span class="n">' + (quiet ? 'Of ' + num(d.scored) + ' posts. ' : '') + 'Zero of the ' + d.rules.length + ' checks. Respect.</span></div>' +
-        '<div class="mx-tile"><span class="v">' + (mid === null ? '0' : mid) + '</span><span class="k">Middle score</span><span class="n">' + (mid === null ? 'Nothing scored yet.' : 'The post in the middle scores ' + mid + ' to ' + mid + '.9. Lower is better.') + '</span></div>' +
+        '<div class="mx-tile"><span class="v">' + (mid === null ? '0' : (mid * BIN).toFixed(1)) + '</span><span class="k">Middle score</span><span class="n">' + (mid === null ? 'Nothing scored yet.' : 'The post in the middle scores ' + binLabel(mid) + '. Lower is better.') + '</span></div>' +
         '<div class="mx-tile"><span class="v">' + never + '</span><span class="k">Unseen sins</span><span class="n">Of the ' + countable.length + ' checks we can count. Give it time.</span></div>' +
         '</div>';
 
@@ -6669,7 +6653,7 @@ ul.cg-list li::before{content:"\2022";position:absolute;left:0;color:var(--ink-4
         quiet ? few : b1 >= d.scored ? 'Every post so far ' + bandRank[0][2]
           : clearLead(b1, b2) ? share(b1, d.scored) + ' of posts ' + bandRank[0][1]
           : 'Too close to call: ' + share(b1, d.scored) + ' ' + bandRank[0][1] + ', ' + share(b2, d.scored) + ' ' + bandRank[1][1],
-        'One bar per point of the score, colored by verdict. Higher is worse. The verdict lines fall at 3.2, 5.6 and 8, so bars 3 and 5 can hold two colors. ' + num(d.scored) + ' posts.',
+        'Scores in steps of 0.4, colored by verdict. Higher is worse. The steps line up with where the verdicts change, at 3.2, 5.6 and 8. ' + num(d.scored) + ' posts.',
         histogram(d, W));
 
       html += section('02', 'The sins, ranked',

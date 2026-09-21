@@ -943,7 +943,7 @@ check('Right from the last tab wraps to the first, and only one tab is in the Ta
 {
   const figures = (scored) => ({ ok: true, live: true, at: '2026-09-21T20:00:00.000Z', since: '2026-09-21', scored, clean: Math.round(scored * 0.1),
     bands: { barely: Math.round(scored * 0.6), normal: Math.round(scored * 0.3), lot: Math.round(scored * 0.08), completely: Math.round(scored * 0.02) },
-    scores: [2, 20, 38, 18, 8, 4, 5, 3, 1, 1].map(p => Math.round(scored * p / 100)),
+    bins: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 9, 8, 7, 6, 5, 4, 3, 2, 1, 1, 1, 1, 1, 1, 1].map(p => Math.max(1, Math.round(scored * p / 106))),
     rules: [{ id: 'announce', label: 'Excited to announce', dim: 'auth', n: Math.round(scored * 0.44) }, { id: 'hashwall', label: 'A wall of hashtags', dim: 'bait', n: Math.round(scored * 0.2) }, { id: 'quiet', label: 'A check nobody trips', dim: 'clar', n: 0 }, { id: 'not-english', label: 'Not in English', dim: 'clar', n: 0, countable: false }],
     flags: { media: Math.round(scored * 0.25), satire: 3, narrative: 12 },
     reword: { tried: { better: 50, couldNotBeat: 15, unusable: 5 }, notAttempted: 10, gain: { under1: 10, '1to2': 25, '2plus': 15 } },
@@ -989,7 +989,7 @@ check('Right from the last tab wraps to the first, and only one tab is in the Ta
     ['the top two sins within noise of each other', d => { d.rules[0].n = 100; d.rules[1].n = 95; }],
     ['one post short of all', d => { d.flags.media = d.scored - 1; }],
     ['nobody waited on the AI', d => { d.wait = { lt5s: 0, '5to10s': 0, '10to20s': 0, gt20s: 0 }; }],
-    ['every post in one score bucket', d => { d.scores = [0, 0, 500, 0, 0, 0, 0, 0, 0, 0]; d.bands = { barely: 500 }; }],
+    ['every post in one score bucket', d => { d.bins = Array(25).fill(0); d.bins[5] = 500; d.bands = { barely: 500 }; }],
     ['a check whose name has a quote and an angle bracket in it', d => { d.rules[0].label = 'Says "synergy" <b>twice</b>'; }]
   ];
   const drift = [];
@@ -1018,7 +1018,7 @@ check('Right from the last tab wraps to the first, and only one tab is in the Ta
     text: document.getElementById('panel-metrics').textContent,
     scroll: document.documentElement.scrollWidth <= innerWidth + 1
   }));
-  check('the numbers: the address opens the tab, and it draws from api/metrics', seen.selected === 'true' && hits >= 1 && seen.tiles[0] === '500' && seen.bars === 10, JSON.stringify(seen.tiles) + ' bars=' + seen.bars + ' hits=' + hits);
+  check('the numbers: the address opens the tab, and it draws from api/metrics', seen.selected === 'true' && hits >= 1 && seen.tiles[0] === '500' && seen.bars === 25, JSON.stringify(seen.tiles) + ' bars=' + seen.bars + ' hits=' + hits);
   check('the numbers: every headline states a finding, written from the figures', /^60% of posts barely suck$/.test(seen.heads[0]) && /^The most popular sin is "Excited to announce", in 44% of posts$/.test(seen.heads[1]) && /^When Reword runs, it beats the original 71% of the time$/.test(seen.heads[2]) && /^80% of AI write-ups arrive in under ten seconds$/.test(seen.heads[3]) && /^25% of posts came with an image or video$/.test(seen.heads[4]), JSON.stringify(seen.heads));
   check('the numbers: every legend is one row or one item per row, and the four tiles line up', await api.evaluate(() => { const rows = el => new Set([...el.querySelectorAll('li')].map(li => Math.round(li.getBoundingClientRect().top))).size; const legendsOk = [...document.querySelectorAll('#panel-metrics .mx-legend')].every(l => { const n = l.querySelectorAll('li').length, r = rows(l); return (r === 1 || r === n) && l.scrollWidth <= l.clientWidth + 1; }); const tops = [...document.querySelectorAll('#panel-metrics .mx-tile .k')].map(k => Math.round(k.getBoundingClientRect().top)); const rowsOfTiles = new Set(tops).size; return legendsOk && (rowsOfTiles === 1 || rowsOfTiles === 2) && [...document.querySelectorAll('#panel-metrics .mx-tile .v, #panel-metrics .mx-tile .k')].every(e => e.scrollWidth <= e.clientWidth + 1); }));
   check('the numbers: the sins are one grey, with the category written under each name', await api.evaluate(() => { const li = document.querySelector('#mx-rules li'); return /Inauthenticity/.test(li.querySelector('.c').textContent) && !document.querySelector('#mx-rules .mx-fill[style*="--c"]'); }));
@@ -1027,7 +1027,7 @@ check('Right from the last tab wraps to the first, and only one tab is in the Ta
   await api.click('#mx-more');
   check('the numbers: "show all" lists the check that never fired, and says never', await api.evaluate(() => /A check nobody trips[\s\S]*never/.test(document.querySelector('#panel-metrics .mx-bars li.zero').textContent) && document.activeElement.id === 'mx-more' && document.activeElement.getAttribute('aria-expanded') === 'true'));
   check('the numbers: no em dash, no sample notice off localhost data, no sideways scroll', !/\u2014/.test(seen.text) && !/Sample figures/.test(seen.text) && seen.scroll);
-  check('the numbers: the chart says what it shows to a screen reader', await api.evaluate(() => (l => /^Posts by score\. 0 to 0\.9, barely sucks: 2%;/.test(l) && /3 to 3\.9, barely sucks or sucks a normal amount: /.test(l))(document.querySelector('#panel-metrics svg').getAttribute('aria-label'))));
+  check('the numbers: the chart says what it shows to a screen reader', await api.evaluate(() => (l => /^Posts by score, in steps of 0\.4\. 0\.0 to 0\.3, barely sucks: /.test(l) && /3\.2 to 3\.5, sucks a normal amount: /.test(l) && /9\.6 to 9\.9, sucks completely: /.test(l))(document.querySelector('#panel-metrics svg').getAttribute('aria-label'))));
 
   body = figures(12);
   await api.goto(httpUrl + '#how-it-works'); await api.goto(httpUrl + '#the-numbers'); await api.reload();
@@ -1035,11 +1035,11 @@ check('Right from the last tab wraps to the first, and only one tab is in the Ta
   check('the numbers: under 30 posts the headlines refuse to generalise', await api.evaluate(() => /^Only 12 posts so far, not enough to say anything true$/.test(document.querySelector('#panel-metrics .mx-h').textContent)));
   check('  ...and the tiles and bars print counts, not percentages', await api.evaluate(() => { const tiles = [...document.querySelectorAll('#panel-metrics .mx-tile .v')].map(v => v.textContent); return tiles[1] === '1' && ![...document.querySelectorAll('#panel-metrics .mx-bars .p')].some(p => /%/.test(p.textContent)); }));
 
-  // Bars split by verdict: bar 3 holds the last barely-sucks post and two normal ones.
-  body = { ...figures(20), bands: { barely: 18, normal: 2, lot: 0, completely: 0 }, scores: [9, 3, 5, 3, 0, 0, 0, 0, 0, 0] };
+  // Every bin is one verdict: 2.8 to 3.1 barely sucks, 3.2 to 3.5 does not.
+  { const bins = Array(25).fill(0); bins[7] = 3; bins[8] = 2; body = { ...figures(20), bands: { barely: 3, normal: 2, lot: 0, completely: 0 }, bins }; }
   await api.reload();
   await api.waitForSelector('#panel-metrics svg', { timeout: 5000 });
-  check('the numbers: a bar a verdict line runs through is drawn in both colors, in the right amounts', await api.evaluate(() => { const r = [...document.querySelectorAll('#panel-metrics svg rect[rx="2"]')].map(x => [x.getAttribute('fill'), +x.getAttribute('height')]); const b3 = r.slice(3); return r.length === 5 && b3[0][0] === 'var(--mx-b1)' && b3[1][0] === 'var(--mx-b2)' && b3[1][1] > b3[0][1]; }));
+  check('the numbers: each 0.4 bin is one verdict, so the bars either side of 3.2 are two colors, one each', await api.evaluate(() => { const r = [...document.querySelectorAll('#panel-metrics svg rect[rx="2"]')].map(x => x.getAttribute('fill')); return r.length === 2 && r[0] === 'var(--mx-b1)' && r[1] === 'var(--mx-b2)'; }));
 
   body = { ok: false };
   await api.reload();
