@@ -320,10 +320,10 @@ header{border-bottom:1px solid var(--rule);padding-bottom:20px;margin-bottom:28p
 .mx-bars li:last-child{border-bottom:none}
 .mx-bars .t{font-size:14.5px;color:var(--ink);overflow-wrap:anywhere}
 .mx-bars .p{font:500 13px/1 var(--mono);color:var(--ink-2);text-align:right;font-variant-numeric:tabular-nums}
-.mx-bars .track{grid-column:1 / -1;height:6px;border-radius:3px;background:var(--hair);overflow:hidden}
-.mx-bars .fill{display:block;height:100%;width:calc(var(--w) * 1%);min-width:2px;border-radius:0 3px 3px 0;background:var(--c, var(--cool))}
+.mx-bars .mx-track{grid-column:1 / -1;height:6px;border-radius:3px;background:var(--hair);overflow:hidden}
+.mx-bars .mx-fill{display:block;height:100%;width:calc(var(--w) * 1%);min-width:2px;border-radius:0 3px 3px 0;background:var(--c, var(--cool))}
 .mx-bars li.zero .t,.mx-bars li.zero .p{color:var(--ink-3)}
-.mx-bars li.zero .fill{display:none}
+.mx-bars li.zero .mx-fill{display:none}
 .mx-more{margin:12px 0 0;font:500 13px/1 var(--mono);letter-spacing:.06em;text-transform:uppercase;color:var(--ink-3);background:transparent;border:1px solid var(--rule);border-radius:4px;padding:6px 12px;min-height:44px;cursor:pointer}
 .mx-more:hover{border-color:var(--cool);color:var(--ink)}
 .mx-stack{display:flex;height:22px;border-radius:4px;overflow:hidden;background:var(--hair);gap:2px}
@@ -3580,7 +3580,7 @@ ul.cg-list li::before{content:"\2022";position:absolute;left:0;color:var(--ink-4
       var rows = d.rules.slice().sort(function(a, b){ return b.n - a.n; });
       var max = Math.max(1, rows[0] ? rows[0].n : 1), shown = state.all ? rows : rows.filter(function(x){ return x.n > 0; }).slice(0, 12);
       var html = '<ul class="mx-bars">' + shown.map(function(x){
-        return '<li' + (x.n ? '' : ' class="zero"') + '><span class="t">' + YPS.esc(x.label) + '</span><span class="p">' + (x.n ? (pct(x.n, d.scored) || '<1') + '%' : 'never') + '</span><span class="track"><span class="fill" style="--w:' + (100 * x.n / max).toFixed(1) + ';--c:var(--dim-' + x.dim + ')"></span></span></li>';
+        return '<li' + (x.n ? '' : ' class="zero"') + '><span class="t">' + YPS.esc(x.label) + '</span><span class="p">' + (x.n ? (pct(x.n, d.scored) || '<1') + '%' : 'never') + '</span><span class="mx-track"><span class="mx-fill" style="--w:' + (100 * x.n / max).toFixed(1) + ';--c:var(--dim-' + x.dim + ')"></span></span></li>';
       }).join('') + '</ul>';
       if (rows.length > shown.length || state.all) html += '<button type="button" class="mx-more" id="mx-more" aria-expanded="' + (state.all ? 'true' : 'false') + '">' + (state.all ? 'Show the top 12' : 'Show all ' + rows.length + ' checks') + '</button>';
       var dims = dimLabels(), seen = {};
@@ -3639,7 +3639,7 @@ ul.cg-list li::before{content:"\2022";position:absolute;left:0;color:var(--ink-4
         quiet ? few : pct(d.flags.media, d.scored) + '% of posts came with an image or video',
         'Three things the page notes about a post, as shares of scored posts. A post can be more than one, or none.',
         '<ul class="mx-bars">' + [['Had an image or video', d.flags.media], ['Read as a story, so the checks went easier on length', d.flags.narrative], ['Read as satire, and was scored as the joke it was', d.flags.satire]].map(function(x){
-          return '<li><span class="t">' + YPS.esc(x[0]) + '</span><span class="p">' + pct(x[1], d.scored) + '%</span><span class="track"><span class="fill" style="--w:' + pct(x[1], d.scored) + '"></span></span></li>'; }).join('') + '</ul>');
+          return '<li><span class="t">' + YPS.esc(x[0]) + '</span><span class="p">' + pct(x[1], d.scored) + '%</span><span class="mx-track"><span class="mx-fill" style="--w:' + pct(x[1], d.scored) + '"></span></span></li>'; }).join('') + '</ul>');
 
       host.innerHTML = html;
       var more = $('#mx-more');
