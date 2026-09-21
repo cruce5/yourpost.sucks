@@ -118,7 +118,25 @@ const MAX_BODY_BYTES = 3000000;
  * deploys, instead of being replayed from the cache for up to 30 more days. */
 // v4: the identity filter in policed(). Cached prose written before it could
 // still say "you got cut" to someone who lost their job.
-const CACHE_VERSION = 'v4';
+// v5: what is cached was cut down (see REPORT_CACHE_TTL). Everything written
+// before that stops being read the moment this deploys.
+const CACHE_VERSION = 'v5';
+
+/* WHAT THIS SITE KEEPS. The page says "your post is never stored", and this
+ * is the whole of what makes that true:
+ *   - the post, the image and any rewrite are never written anywhere;
+ *   - the AI's NOTES on a post are cached for 7 days under a one-way SHA-256
+ *     of the text, so a post that is going round costs one model call and not
+ *     hundreds. The notes can quote a phrase of the post, which the page
+ *     says. The ready-to-paste replacement sentences are NOT kept: those are
+ *     the writer's own sentences rearranged, so a cache hit serves the
+ *     problem and the suggestion without them;
+ *   - counters (spend, rate limit, tallies) hold numbers and fixed words;
+ *   - logs carry a reason word and never a detail, because a detail can
+ *     quote what somebody typed.
+ * A test reads the cache after a report and a reword and fails if any of
+ * this stops being so. */
+const REPORT_CACHE_TTL = 604800; // 7 days
 
 /* Haiku 4.5 list prices, in micro-dollars per token: $1/MTok input is exactly
  * one micro-dollar per token, and the rest scale from there. The constants
@@ -1581,7 +1599,9 @@ function validateReword(out, originalPost, factsText) {
   // there was no server-side trace of which of these gates had fired.
   const reject = (why, extra) => {
     const detail = extra === undefined ? '' : String(extra);
-    console.warn('reword rejected:', why, detail);
+    // The reason and never the detail: a detail can quote the post (a number
+    // the rewrite invented, the emoji in somebody's name).
+    console.warn('reword rejected:', why);
     return { ok: false, reason: why, detail };
   };
   // See policed(): the post's own vocabulary is not a prediction about it.
@@ -1922,11 +1942,12 @@ async function handleAnalyze(request, env, ctx) {
       `c:${hash}`,
       JSON.stringify({
         satire, oneLiner: merged.oneLiner, roasts: merged.roasts, brutal: merged.brutal,
-        advice: merged.advice, adviceNote: merged.adviceNote, changes: merged.changes,
+        advice: merged.advice, adviceNote: merged.adviceNote,
+        changes: (merged.changes || []).map(c => ({ ...c, rewrite: null })),
         headline: merged.headline, credits: merged.credits, breakdownNote: merged.breakdownNote,
         diagnosticsNote: merged.diagnosticsNote, annotatedNote: merged.annotatedNote
       }),
-      { expirationTtl: 2592000 } // 30 days
+      { expirationTtl: REPORT_CACHE_TTL }
     ).catch(e => console.warn('cache: KV write failed', e && e.message)));
   }
 
@@ -1957,30 +1978,10 @@ async function handleReword(request, env, ctx) {
   if (before.stats.rulesFired === 0) return json({ mode: 'clean', before });
 
   const ip = clientIP(request);
-  // No hasMedia here, unlike analyze: the rewrite never depends on it (the
-  // model is not told about it), and the after-score is re-derived from
-  // this request's own flags on every hit below.
-  const hash = await sha256(CACHE_VERSION + '|reword|' + post.trim() + '|' + safeFlags.styled);
-
-  if (env.KV) {
-    let hit = null;
-    try { hit = await env.KV.get(`w:${hash}`, 'json'); }
-    catch (e) { console.warn('cache: KV read failed, treating as miss', e && e.message); }
-    if (hit) {
-      // The rewrite itself is cached (it never depends on hasMedia - the
-      // model isn't told about it), but its "after" score is re-derived
-      // fresh every time using THIS request's flags, so a graphic-post
-      // scoring context stays consistent between before and after even
-      // when the rewrite came out of cache.
-      const after = ENGINE.analyze(hit.rewritten, safeFlags);
-      // The checks change between deploys. A rewrite that was ahead when it
-      // was cached but is not ahead now is treated as a miss and regenerated,
-      // never served with a "scored worse" tag.
-      if (after.overall < before.overall) { tick(env, ctx, request); return json({ mode: 'cache', before, after, rewritten: hit.rewritten, summary: hit.summary }); }
-      console.warn('reword: cached rewrite no longer scores better under the current checks; regenerating');
-    }
-  }
-
+  // A rewrite is never cached. It used to be, for 30 days, under a hash of
+  // the post. But a rewrite is built to keep most of the writer's own words,
+  // so a stored rewrite was their post in all but name, and the page says
+  // "never stored". The saving was small: few people reword one text twice.
   const degrade = reason => json({ mode: 'unavailable', reason, before });
 
   if (!env.ANTHROPIC_API_KEY) return degrade('no_key');
@@ -2018,7 +2019,7 @@ async function handleReword(request, env, ctx) {
     const rejection = best
       ? { reason: 'overwritten', detail: Math.round(best.ratio * 100) + '%' }
       : verdict;
-    console.warn('reword: retrying once after', rejection.reason, String(rejection.detail).slice(0, 120));
+    console.warn('reword: retrying once after', rejection.reason);
     m = meter(REWORD_COST_MICROS_PER_CALL);
     const second = await callReword(env, post, before, rejection, m);
     await settleCharge(env, REWORD_COST_MICROS_PER_CALL, [m]);
@@ -2033,14 +2034,6 @@ async function handleReword(request, env, ctx) {
   if (!best) return degrade(verdict.reason === 'scored_worse' ? 'no_improvement' : 'llm_unavailable');
   llm = best.llm;
   const after = best.after;
-
-  if (env.KV) {
-    ctx.waitUntil(env.KV.put(
-      `w:${hash}`,
-      JSON.stringify({ rewritten: llm.rewritten, summary: llm.summary }),
-      { expirationTtl: 2592000 } // 30 days
-    ).catch(e => console.warn('cache: KV write failed', e && e.message)));
-  }
 
   tick(env, ctx, request);
   return json({ mode: 'reworded', before, after, rewritten: llm.rewritten, summary: llm.summary });

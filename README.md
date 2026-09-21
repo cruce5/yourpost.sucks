@@ -509,7 +509,7 @@ Read the rewrite before you post it.
 **Cheap by default.** A post with zero rules fired never reaches the model.
 `stats.rulesFired === 0` short-circuits to a free "nothing to fix" response,
 the same condition the engine itself uses elsewhere for "no action required."
-Identical reword requests are cached for 30 days, same as the main analysis.
+A rewrite is never cached: it is built to keep most of the writer's own words, so storing one would be storing their post, and the page promises otherwise. (The main analysis caches the AI's notes for 7 days under a one-way hash of the text, without the ready-to-paste replacement sentences. See "WHAT THIS SITE KEEPS" in src/worker.js.)
 There is no rules-only fallback: when the budget is spent, the key is
 missing, or the model times out, the reword says so honestly instead of
 returning something. The client only offers the button at all when the

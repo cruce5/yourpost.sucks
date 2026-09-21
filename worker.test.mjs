@@ -849,18 +849,6 @@ console.log('  --- never worse ---');
   rewordQueue = null;
 }
 {
-  // A cached rewrite that no longer beats the original under the current checks is a miss.
-  const env = baseEnv(); rewordBehaviour = 'good'; rewordCalls = 0;
-  await worker.fetch(reword({ post: NEUTRAL }), env, ctx);
-  let poisoned = 0;
-  for (const [k, v] of env.KV._m) if (k.startsWith('w:')) { env.KV._m.set(k, JSON.stringify({ rewritten: 'Excited to announce we shipped the invoicing redesign this week! Humbled and grateful. Thoughts?', summary: 'x' })); poisoned++; }
-  const r = await (await worker.fetch(reword({ post: NEUTRAL }), env, ctx)).json();
-  // Four calls, not two: NEUTRAL trips one check, and the stand-in rewrite
-  // shares no words with it, so each generation also spends its one
-  // keep-their-words retry (see KEEP_MIN). Two generations, two calls each.
-  check('a cached rewrite that scores worse now is regenerated instead of served', poisoned === 1 && r.mode === 'reworded' && rewordCalls === 4 && r.after.overall < r.before.overall, `poisoned=${poisoned} mode=${r.mode} calls=${rewordCalls}`);
-}
-{
   const env = baseEnv(); rewordBehaviour = 'summaryCitesWordCount'; rewordCalls = 0;
   const r = await (await worker.fetch(reword({ post: BAD }), env, ctx)).json();
   check('a summary citing the word count the model was given is not a fabrication', r.mode === 'reworded' && rewordCalls === 1, 'mode=' + r.mode + ', ' + rewordCalls + ' calls');
@@ -915,8 +903,8 @@ console.log('  --- cache ---');
   const env = baseEnv(); rewordBehaviour = 'good'; rewordCalls = 0;
   const first = await (await worker.fetch(reword({ post: BAD }), env, ctx)).json();
   const second = await (await worker.fetch(reword({ post: BAD }), env, ctx)).json();
-  check('identical reword request served from cache', second.mode === 'cache' && rewordCalls === 1, rewordCalls + ' model calls for 2 requests');
-  check('  ...and the after score is still engine-verified on cache hit', second.after.overall === first.after.overall);
+  check('a rewrite is never cached: the same post twice is two calls', first.mode === 'reworded' && second.mode === 'reworded' && rewordCalls === 2, rewordCalls + ' model calls for 2 requests');
+  check('  ...and nothing a rewrite produced is left in storage', ![...env.KV._m].some(([k, v]) => k.startsWith('w:') || String(v).includes(first.rewritten.slice(0, 40))), [...env.KV._m.keys()].join(' '));
 }
 
 console.log('\n=== image attachment ===');
@@ -1658,7 +1646,7 @@ console.log('\n=== the ticker ===');
   const rw = await (await go(env, from('/api/reword', { post: BAD }))).json();
   check('ticker: a Reword that returns a rewrite is one', rw.mode === 'reworded' && count(env) === 5, 'mode=' + rw.mode + ' n=' + count(env));
   const rwCached = await (await go(env, from('/api/reword', { post: BAD }))).json();
-  check('ticker: a cached rewrite is one too', rwCached.mode === 'cache' && count(env) === 6, 'mode=' + rwCached.mode + ' n=' + count(env));
+  check('ticker: the same post reworded again is another one (a rewrite is never cached)', rwCached.mode === 'reworded' && count(env) === 6, 'mode=' + rwCached.mode + ' n=' + count(env));
   rewordQueue = ['toolong', 'good'];
   await go(env, from('/api/reword', { post: BAD + ' Day one is Monday.' }));
   check('ticker: a retried rewrite is one click, so one', count(env) === 7, 'n=' + count(env));
@@ -1683,6 +1671,31 @@ console.log('\n=== the ticker ===');
   const noDO = baseEnv();
   const r = await (await go(noDO, from('/api/analyze', { post: NEUTRAL }))).json();
   check('ticker: no counter bound means no count, no error, and no number', r.mode === 'llm' && (await status(noDO)).ticker === null);
+}
+
+console.log('\n=== your post is never stored ===');
+{
+  const env = baseEnv(); env.COUNTERS = mockCounters(); llmBehaviour = 'custom'; rewordBehaviour = 'good';
+  const MARK = 'Quarterly zebra invoices';
+  const POST = 'Excited to announce I am joining TechCorp! ' + MARK + ' were humbling. Grateful and humbled. Thoughts? #blessed';
+  customPayload = { one_liner: 'A clean post.', brutal: 'Nothing here is desperate.', advice: [],
+    roasts: [{ label: 'Mild', text: 'It reads like a status update because that is what it is.' }],
+    changes: [{ type: 'Opening', problem: 'It opens on an announcement.', suggestion: 'Lead with the role.', rewrite: 'I am joining TechCorp. ' + MARK + ' were humbling.' }] };
+  const first = await (await worker.fetch(post({ post: POST }), env, ctx)).json();
+  await (await worker.fetch(reword({ post: POST }), env, ctx)).json();
+  await new Promise(z => setTimeout(z, 60));
+  const kv = [...env.KV._m].map(([k, v]) => k + '=' + v).join('\n');
+  const stats = JSON.stringify(await readStats(env));
+  check('a fresh report still carries the ready-to-paste sentence', first.mode === 'llm' && first.report.changes[0].rewrite.includes(MARK));
+  check('after a report and a reword, the post is nowhere in storage: not in the cache, not in a key, not in a tally', !kv.includes(MARK) && !kv.includes('TechCorp') && !stats.includes('zebra'), kv.slice(0, 200));
+  const hit = await (await worker.fetch(post({ post: POST }), env, ctx)).json();
+  check('a cache hit serves the notes without the replacement sentence, which is the writer\'s own words rearranged', hit.mode === 'cache' && hit.report.changes.length === 1 && hit.report.changes[0].rewrite === null && hit.report.changes[0].suggestion === 'Lead with the role.', JSON.stringify(hit.report.changes));
+  const src = readFileSync(new URL('./src/worker.js', import.meta.url), 'utf8');
+  check('the notes are kept for 7 days, not 30', /REPORT_CACHE_TTL = 604800/.test(src) && !/expirationTtl: 2592000/.test(src));
+  check('no log line carries a rejection\'s detail', !/console\.warn\('reword rejected:', why, detail\)/.test(src) && !/rejection\.detail\)\.slice/.test(src));
+  const page = readFileSync(new URL('./shell.html', import.meta.url), 'utf8');
+  check('the page says what is kept, and for how long', /your post is never stored/.test(page) && /for 7 days/.test(page) && /any rewrite are never stored/.test(page) && !/cached for 30 days/.test(page));
+  llmBehaviour = 'good'; customPayload = null;
 }
 
 console.log('\n=== is the tool right, and is it fast: the tallies ===');
