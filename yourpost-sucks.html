@@ -1363,6 +1363,7 @@ ul.cg-list li::before{content:"\2022";position:absolute;left:0;color:var(--ink-4
   <div class="credit">Built by <a href="https://www.linkedin.com/in/billyost/" target="_blank" rel="noopener noreferrer"><span aria-hidden="true">🏴‍☠️ </span>Bill Yost</a>, who is aware of the irony. <a class="tip" data-tip="footer" href="https://buymeacoffee.com/billyost" target="_blank" rel="noopener noreferrer">Buy him a coffee.</a></div>
   <div><span id="rulecount"></span> fixed checks decide the score. AI never touches that number. <a href="https://github.com/cruce5/yourpost.sucks" target="_blank" rel="noopener noreferrer">Read the code.</a></div>
   <div>It measures the writing, not the reach.</div>
+  <div>Found a bug, or a check that got it wrong? <a id="contactmail" href="mailto:hello@yourpost.sucks">hello@yourpost.sucks</a></div>
   <div>More things nobody asked for: <a href="https://billyost.com/" target="_blank" rel="noopener noreferrer">billyost.com</a></div>
 </footer>
 
@@ -5811,7 +5812,9 @@ ul.cg-list li::before{content:"\2022";position:absolute;left:0;color:var(--ink-4
   var PIRATE_SKIP = '#sharebox, canvas, .annotated, textarea, script, style, .num, #ticker-n, #run, #clear, #themetoggle, ' +
     '#rewordbtn, #analyzereword, .reword-text, .game-wrap, #counter, #limit-err, [aria-live], .toast, #pirateflag, ' +
     // The name of a file the visitor attached is theirs, not the site's.
-    '#mediapreview-name';
+    '#mediapreview-name, ' +
+    // An address has to stay an address: "hello" is a word the pirate knows.
+    '#contactmail';
   /* Everywhere the site speaks. It used to be six places, from when the site
      had six places; the input panel, the what's-new notes, the thank-you
      card and the header link had all been added since and stayed in plain

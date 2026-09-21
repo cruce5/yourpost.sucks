@@ -80,6 +80,10 @@ check('textarea is described by the counter, the limit error and the link error'
 check('preamble is the tagline plus one intro sentence', await p.evaluate(() => {
   return document.querySelectorAll('header p').length === 2 && !document.querySelector('.tagline-sub') && !document.querySelector('.intro-more');
 }));
+check('the footer has a contact address, and it is a working mailto', await p.evaluate(() => {
+  const a = document.getElementById('contactmail');
+  return !!a && a.closest('footer') && a.getAttribute('href') === 'mailto:hello@yourpost.sucks' && a.textContent === 'hello@yourpost.sucks';
+}));
 check('pirate flag in the footer is aria-hidden', await p.evaluate(() => {
   const a = document.querySelector('footer .credit a');
   return a.querySelector('[aria-hidden="true"]') !== null && a.textContent.includes('Bill Yost');
