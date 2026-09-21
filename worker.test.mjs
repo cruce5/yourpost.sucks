@@ -1673,6 +1673,30 @@ console.log('\n=== the ticker ===');
   check('ticker: no counter bound means no count, no error, and no number', r.mode === 'llm' && (await status(noDO)).ticker === null);
 }
 
+console.log('\n=== a roast list that came back wrong is mended, not thrown away ===');
+{
+  const good = { one_liner: 'A clean post.', brutal: 'Nothing here is desperate.', advice: [], changes: [] };
+  const roast = (i) => ({ label: 'Tag ' + i, text: 'Callout number ' + 'abcdefghijkl'[i] + ' about the opening line of this post.' });
+  const run = async payload => { const env = baseEnv(); env.COUNTERS = mockCounters(); llmBehaviour = 'custom'; customPayload = payload; const r = await (await worker.fetch(post({ post: BAD }), env, ctx)).json(); await new Promise(z => setTimeout(z, 30)); const ai = (await (await worker.fetch(new Request('https://yourpost.sucks/api/status'), env, ctx)).json()).aiReport; return { r, ai }; };
+
+  const many = await run({ ...good, roasts: Array.from({ length: 11 }, (_, i) => roast(i)) });
+  check('eleven callouts: the first eight ship, where the whole report used to be discarded', many.r.mode === 'llm' && many.r.report.roasts.length === 8 && many.ai['mend:roasts_trimmed'] === 1, many.r.mode + ' ' + JSON.stringify(many.ai));
+
+  const stringy = await run({ ...good, roasts: JSON.stringify([roast(0), roast(1)]) });
+  check('a list sent as a string of JSON is parsed', stringy.r.mode === 'llm' && stringy.r.report.roasts.length === 2 && stringy.r.report.roasts[0].id === 'llm' && stringy.ai['mend:list_parsed'] === 1, stringy.r.mode + ' ' + JSON.stringify(stringy.ai));
+
+  const rules = ENGINE.analyze(BAD, {});
+  const none = await run({ ...good, roasts: [] });
+  check('no callouts at all, with both lines good: the engine\'s callouts stand in and the AI\'s lines ship', none.r.mode === 'llm' && none.r.report.oneLiner === 'A clean post.' && none.r.report.roasts.length === rules.roasts.length && none.r.report.roasts[0].id !== 'llm' && none.ai.partial === 1 && none.ai['mend:roasts_none_sent'] === 1, none.r.mode + ' ' + JSON.stringify(none.ai));
+
+  const hollow = await run({ one_liner: 'Your grammar is foreign and it shows.', brutal: 'Nothing here is desperate.', roasts: [], advice: [], changes: [] });
+  check('no callouts AND a bad line: that is the rules-only report, and it is served as one', hollow.r.mode === 'rules' && hollow.ai['fail:nothing_usable'] === 1, hollow.r.mode + ' ' + JSON.stringify(hollow.ai));
+
+  const junk = await run({ nonsense: true });
+  check('a response with nothing in it is never dressed up as an AI report', junk.r.mode === 'rules' && junk.r.reason === 'llm_unavailable', junk.r.mode + ' ' + JSON.stringify(junk.ai));
+  llmBehaviour = 'good'; customPayload = null;
+}
+
 console.log('\n=== your post is never stored ===');
 {
   const env = baseEnv(); env.COUNTERS = mockCounters(); llmBehaviour = 'custom'; rewordBehaviour = 'good';

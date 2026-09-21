@@ -338,7 +338,9 @@ async function countTipClick(env, ip, where) {
 export const AI_OUTCOMES = Object.freeze(['ok', 'repaired', 'partial',
   'fail:lines_unusable', 'fail:lines_compromised', 'fail:all_roasts_policed', 'fail:roasts_count', 'fail:no_object', 'fail:rejected',
   'fail:cut_off', 'fail:no_tool_block', 'fail:timeout', 'fail:http_429', 'fail:http_5xx', 'fail:http_other', 'fail:call_failed',
-  'calls:image', 'calls:meaner', 'fail:with_image', 'fail:with_meaner']);
+  'calls:image', 'calls:meaner', 'fail:with_image', 'fail:with_meaner',
+  // What had to be mended on a report that shipped (a report can have several).
+  'fail:no_roasts', 'fail:nothing_usable', 'mend:list_parsed', 'mend:roasts_trimmed', 'mend:roasts_none_sent', 'mend:roasts_policed', 'mend:line_replaced']);
 const AI_TTL = 315360000;
 async function countAiOutcome(env, keys) {
   const ns = counters(env);
@@ -1067,7 +1069,22 @@ function validateLLM(out, post, factsText, maxCredits, report, note) {
   if (!lineOK(brutal)) { brutal = report && report.brutal; partial.push('brutal'); }
   if (!str(oneLiner) || !str(brutal)) return reject('lines_unusable');
   if (partial.length) { note.partial = partial; console.warn('report: engine line used for', partial.join(' and ')); }
-  if (!Array.isArray(out.roasts) || out.roasts.length < 1 || out.roasts.length > 8) return reject('roasts_count');
+  // The first day of counting (2026-09-21) had "roasts_count" as the commonest
+  // failure: 8 of 11. The list came back wrong in one of three ways, each of
+  // which used to discard a paid report and none of which needs to:
+  //   a list sent as a STRING of JSON (small models do this under a tool
+  //     schema): parse it;
+  //   more than the eight the page can show: keep the first eight;
+  //   none at all, which on a clean post is an honest answer, or none that
+  //     survive policing: the engine's own callouts stand in, and the AI's
+  //     opening, closing, advice and changes still ship.
+  const listOf = (v, flag) => {
+    if (typeof v === 'string' && /^\s*\[/.test(v)) { try { const p = JSON.parse(v); if (Array.isArray(p)) { note[flag] = true; return p; } } catch (e) { /* not a list after all */ } }
+    return Array.isArray(v) ? v : [];
+  };
+  let rawRoasts = listOf(out.roasts, 'listParsed');
+  if (rawRoasts.length > 8) { rawRoasts = rawRoasts.slice(0, 8); note.roastsTrimmed = true; }
+  out = { ...out, roasts: rawRoasts, advice: listOf(out.advice, 'listParsed'), changes: listOf(out.changes, 'listParsed'), credits: listOf(out.credits, 'listParsed') };
 
   // The length check above already rejects anything the label pill can't
   // hold; slicing here on top of that used to silently chop a validated
@@ -1082,7 +1099,21 @@ function validateLLM(out, post, factsText, maxCredits, report, note) {
     .filter(r => r && str(r.text) && str(r.label) && r.label.length < 40 && clean(r.text) && clean(r.label) && emojiOK(r.text) && emojiOK(r.label) &&
       sounds(r.text) && r.label.indexOf(':') < 0)
     .map(r => ({ id: 'llm', label: r.label, text: r.text }));
-  if (!roasts.length) return reject('all_roasts_policed');
+  let finalRoasts = roasts;
+  if (!roasts.length) {
+    // The engine may stand in for the callouts only when BOTH of the AI's own
+    // lines survived. Standing in for the callouts and a line too would ship
+    // a page that says "AI" over what is mostly, or wholly, the engine's
+    // words, which is the rules-only report with the wrong badge on it.
+    if (partial.length) return reject(rawRoasts.length ? 'all_roasts_policed' : 'nothing_usable');
+    const own = (report && Array.isArray(report.roasts)) ? report.roasts : [];
+    if (!own.length) return reject(rawRoasts.length ? 'all_roasts_policed' : 'no_roasts');
+    finalRoasts = own;
+    partial.push('roasts');
+    note.partial = partial;
+    note.roastsFrom = rawRoasts.length ? 'policed' : 'none_sent';
+    console.warn('report: engine callouts used,', note.roastsFrom);
+  }
 
   const advice = (Array.isArray(out.advice) ? out.advice : [])
     .filter(a => str(a) && clean(a) && emojiOK(a))
@@ -1128,7 +1159,7 @@ function validateLLM(out, post, factsText, maxCredits, report, note) {
   const diagnosticsNote = (shortStr(out.diagnostics_note, 240) && clean(out.diagnostics_note) && noFabricatedNumbers(out.diagnostics_note, factsText)) ? out.diagnostics_note.trim() : null;
   const annotatedNote = (shortStr(out.annotated_note, 240) && clean(out.annotated_note) && noFabricatedNumbers(out.annotated_note, factsText)) ? out.annotated_note.trim() : null;
 
-  return { oneLiner, roasts, brutal, advice, changes, headline, credits, breakdownNote, diagnosticsNote, annotatedNote, partial: partial.length ? partial : null };
+  return { oneLiner, roasts: finalRoasts, brutal, advice, changes, headline, credits, breakdownNote, diagnosticsNote, annotatedNote, partial: partial.length ? partial : null };
 }
 
 /** `m` is the call's meter (see meter() above): filled in with the usage
@@ -1222,6 +1253,7 @@ async function callClaude(env, post, report, image, m, meaner) {
     const valid = validateLLM(block.input, post, userMessage, report.credits.length, report, note);
     m.why = valid ? null : (note.why || 'rejected');
     m.repaired = !!note.repaired;
+    m.note = note;
     return valid;
   } catch (e) {
     console.warn('report: call failed', e && e.name);
@@ -1910,6 +1942,11 @@ async function handleAnalyze(request, env, ctx) {
     if (meaner) keys.push('calls:meaner');
     if (!llm) { keys.push('fail:' + (reportMeter.why || 'rejected')); if (hasImage) keys.push('fail:with_image'); if (meaner) keys.push('fail:with_meaner'); }
     else keys.push(llm.partial ? 'partial' : reportMeter.repaired ? 'repaired' : 'ok');
+    const mended = reportMeter.note || {};
+    if (mended.listParsed) keys.push('mend:list_parsed');
+    if (mended.roastsTrimmed) keys.push('mend:roasts_trimmed');
+    if (mended.roastsFrom) keys.push('mend:roasts_' + mended.roastsFrom);
+    if (llm && llm.partial && llm.partial.some(x => x !== 'roasts')) keys.push('mend:line_replaced');
     ctx.waitUntil(countAiOutcome(env, keys));
   }
   if (!llm) return degrade('llm_unavailable');
