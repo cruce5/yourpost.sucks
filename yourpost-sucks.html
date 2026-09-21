@@ -1322,11 +1322,11 @@ ul.cg-list li::before{content:"\2022";position:absolute;left:0;color:var(--ink-4
      nowhere but there, so reading this source gets nobody any closer. -->
 <!-- The numbers: what the posts were like, never how the site is doing. -->
 <div id="panel-metrics" role="tabpanel" aria-labelledby="tab-metrics" tabindex="-1" hidden>
-  <p class="mx-intro">What everyone's posts have in common, counted. A score, which checks it tripped, how long the write-up took. No post text is in any of it.</p>
+  <p class="mx-intro">Everyone's posts, added up. Scores, sins, and how long the AI took. Not one word of anyone's post is in here. Just the damage.</p>
   <div class="panel lab-lock" id="mx-lock" hidden>
     <div class="lab-pad" aria-hidden="true">&#128274;</div>
-    <h2 class="lab-h" id="mx-lock-h" tabindex="-1">The numbers are being checked before they go up.</h2>
-    <p class="lab-p">Nothing here is secret for long. It is locked while the counting is looked over by the one person who can tell if it is wrong.</p>
+    <h2 class="lab-h" id="mx-lock-h" tabindex="-1">The numbers are locked while someone checks them.</h2>
+    <p class="lab-p">It's one person. They're checking every number. It's taking a while, on purpose.</p>
     <form class="lab-form" id="mx-form" autocomplete="off">
       <label class="lab-label" for="mx-pass">Password</label>
       <div class="lab-row">
@@ -1479,8 +1479,8 @@ ul.cg-list li::before{content:"\2022";position:absolute;left:0;color:var(--ink-4
          wrangler.toml AND move WHATSNEW_VERSION on, or returning visitors
          are never shown this. -->
     <li id="wn-metrics" hidden>
-      <b>There is a tab of numbers now.</b>
-      <i>The numbers</i> counts what everyone's posts have in common: where the scores land, and which sins are the most popular. It counts. No words from any post are in it.
+      <b>There's a numbers tab now.</b>
+      <i>The numbers</i> adds up everyone's posts: where the scores land and which sins are the most popular. It counts them. It doesn't keep a word of them.
     </li>
   </ul>
   <p class="wn-tip">Every AI-written report costs me about a penny, and the site is free with no sign-up and no ads. If it has made one of your posts less bad, <a data-tip="whatsnew" href="https://buymeacoffee.com/billyost" target="_blank" rel="noopener noreferrer">buy me a coffee</a>.</p>
@@ -6594,11 +6594,11 @@ ul.cg-list li::before{content:"\2022";position:absolute;left:0;color:var(--ink-4
       var d = state.data, W = Math.max(200, Math.min(760, (host.clientWidth || 640) - 34));
       state.w = W;
       if (!d || !d.ok){
-        host.innerHTML = '<p class="mx-wait">' + (d && d.net ? 'Could not reach the site just now. Check the connection, then open this tab again.' : 'The counter did not answer just now. Try again in a minute. No score on this site depends on it.') + '</p>';
+        host.innerHTML = '<p class="mx-wait">' + (d && d.net ? 'Can’t reach the site. Check your connection and open this tab again.' : 'The counter isn’t answering. Try again in a minute. Your score doesn’t depend on it.') + '</p>';
         $('#mx-foot').hidden = true;
         return;
       }
-      var quiet = d.scored < MX_MIN, html = '', few = 'Too few posts to say anything true yet: ' + num(d.scored) + ' so far';
+      var quiet = d.scored < MX_MIN, html = '', few = 'Only ' + num(d.scored) + ' posts so far, not enough to say anything true';
       if (d.sample) html += '<p class="mx-sample">Sample figures, made up, for looking at the layout. Only ever shown on localhost.</p>';
 
       var bandRank = BANDS.slice().sort(function(a, b){ return (d.bands[b[0]] || 0) - (d.bands[a[0]] || 0); });
@@ -6609,50 +6609,50 @@ ul.cg-list li::before{content:"\2022";position:absolute;left:0;color:var(--ink-4
       var mid = typical(d.scores, d.scored);
 
       html += '<div class="mx-tiles">' +
-        '<div class="mx-tile"><span class="v">' + num(d.scored) + '</span><span class="k">Posts scored</span><span class="n">Pasted by a person, since ' + E(sinceText(d.since)) + '.</span></div>' +
-        '<div class="mx-tile"><span class="v">' + E(share(d.clean, d.scored)) + '</span><span class="k">Tripped nothing</span><span class="n">Not one of the ' + d.rules.length + ' checks.</span></div>' +
-        '<div class="mx-tile"><span class="v">' + (mid === null ? 'None yet' : mid + ' to ' + mid + '.9') + '</span><span class="k">The middle score</span><span class="n">The post in the middle lands here.</span></div>' +
-        '<div class="mx-tile"><span class="v">' + never + '</span><span class="k">Checks never tripped</span><span class="n">Of the ' + countable.length + ' this tab can count.</span></div>' +
+        '<div class="mx-tile"><span class="v">' + num(d.scored) + '</span><span class="k">Posts scored</span><span class="n">Real pastes since ' + E(sinceText(d.since)) + '. The examples don’t count.</span></div>' +
+        '<div class="mx-tile"><span class="v">' + E(share(d.clean, d.scored)) + '</span><span class="k">Tripped nothing</span><span class="n">Zero of the ' + d.rules.length + ' checks. Respect.</span></div>' +
+        '<div class="mx-tile"><span class="v">' + (mid === null ? 'None yet' : mid + ' to ' + mid + '.9') + '</span><span class="k">Middle score</span><span class="n">At least half of everyone lands here or better.</span></div>' +
+        '<div class="mx-tile"><span class="v">' + never + '</span><span class="k">Sins nobody has committed</span><span class="n">Out of ' + countable.length + '. Give it time.</span></div>' +
         '</div>';
 
       html += section('01', 'Where the scores land',
         quiet ? few : b1 >= d.scored ? 'Every post so far ' + bandRank[0][2]
           : clearLead(b1, b2) ? share(b1, d.scored) + ' of posts ' + bandRank[0][1]
-          : 'Posts split between "' + bandRank[0][2] + '" and "' + bandRank[1][2] + '", at ' + share(b1, d.scored) + ' and ' + share(b2, d.scored),
-        'One bar for each point of the score, 0 to 9.9, with the four verdicts marked underneath. Higher is worse. Bars 3 and 5 are grey because each holds two verdicts. ' + num(d.scored) + ' posts.',
+          : 'Too close to call: ' + share(b1, d.scored) + ' ' + bandRank[0][1] + ', ' + share(b2, d.scored) + ' ' + bandRank[1][1],
+        'One bar per point of the score. Higher is worse. Bars 3 and 5 are grey because each holds two verdicts and won’t pick one. ' + num(d.scored) + ' posts.',
         histogram(d, W));
 
       html += section('02', 'The sins, ranked',
-        quiet ? few : !sin ? 'Not one check has fired on ' + num(d.scored) + ' posts, which is either very good news or a bug'
-          : clearLead(sin.n, sin2 && sin2.n) ? 'The most common sin is "' + sin.label + '", in ' + share(sin.n, d.scored) + ' of posts'
-          : 'Two sins lead, too close to separate: "' + sin.label + '" and "' + sin2.label + '", in ' + share(sin.n, d.scored) + ' and ' + share(sin2.n, d.scored) + ' of posts',
-        'The share of scored posts that tripped each check, the bar scaled to the most common one. ' + (never ? never + ' of the ' + countable.length + ' checks this tab can count have not fired once. ' : '') + 'One check, "Not in English", is never counted: a post it catches is not scored at all.',
+        quiet ? few : !sin ? 'Not one check has fired in ' + num(d.scored) + ' posts. Either everyone got better or something is broken'
+          : clearLead(sin.n, sin2 && sin2.n) ? 'The most popular sin is "' + sin.label + '", in ' + share(sin.n, d.scored) + ' of posts'
+          : 'Two sins, neck and neck: "' + sin.label + '" at ' + share(sin.n, d.scored) + ' and "' + sin2.label + '" at ' + share(sin2.n, d.scored),
+        'How often each check fires. The longest bar is the most common sin, not the worst one. ' + (never ? never + ' of the ' + countable.length + ' countable checks have never fired. ' : '') + '"Not in English" can’t be counted here: a post it catches never gets a score.',
         ruleBars(d));
 
       var rw = d.reword, T = rw.tried, tried = T.better + T.couldNotBeat + T.unusable;
       var rwRows = [['var(--cool)', 'beat the original', T.better], ['var(--mx-mid)', 'nothing it wrote scored lower', T.couldNotBeat], ['var(--ink-3)', 'the AI came back unusable', T.unusable]];
       var gainRows = [['var(--mx-s2)', 'under a point', rw.gain.under1 || 0], ['var(--mx-s3)', '1 to 2 points', rw.gain['1to2'] || 0], ['var(--mx-s4)', '2 points or more', rw.gain['2plus'] || 0]];
       html += section('03', 'What Reword manages',
-        tried < MX_MIN ? 'Reword has tried ' + num(tried) + ' times, which is too few to say anything true'
-          : say(T.better, tried, 'Reword has yet to beat an original, in ' + num(tried) + ' tries', 'Reword has beaten the original every time it tried', 'Reword beat the original ' + share(T.better, tried) + ' of the times it tried'),
-        'A rewrite is only shown if the same checks score it lower than the original. These are the ' + num(tried) + ' times Reword actually ran. ' + (rw.notAttempted ? 'Another ' + num(rw.notAttempted) + ' asks never reached it: nothing to fix, a declined post, or the AI out of reach for a moment.' : ''),
-        '<p class="mx-cardlabel">How a try ended</p>' + stack(rwRows, tried) +
-        (sum(rw.gain) ? '<p class="mx-cardlabel mx-gap">Points taken off, when it won</p>' + stack(gainRows, sum(rw.gain)) : ''));
+        tried < MX_MIN ? 'Reword has only run ' + num(tried) + ' times, not enough to brag about'
+          : say(T.better, tried, 'Reword has run ' + num(tried) + ' times and beaten the original zero of them', 'Reword has beaten the original every time it ran. So far', 'When Reword runs, it beats the original ' + share(T.better, tried) + ' of the time'),
+        'A rewrite only shows up if the same checks score it lower. Otherwise you get nothing, which is at least honest. ' + num(tried) + ' runs. ' + (rw.notAttempted ? 'Another ' + num(rw.notAttempted) + ' asks never got that far: nothing to fix, a declined post, or the AI stepped out.' : ''),
+        '<p class="mx-cardlabel">How it went</p>' + stack(rwRows, tried) +
+        (sum(rw.gain) ? '<p class="mx-cardlabel mx-gap">Points off, when it won</p>' + stack(gainRows, sum(rw.gain)) : ''));
 
       var waited = sum(d.wait), fast = (d.wait.lt5s || 0) + (d.wait['5to10s'] || 0);
       var waitRows = [['var(--mx-s4)', 'under 5 seconds', d.wait.lt5s || 0], ['var(--mx-s3)', '5 to 10 seconds', d.wait['5to10s'] || 0], ['var(--mx-s2)', '10 to 20 seconds', d.wait['10to20s'] || 0], ['var(--mx-s1)', 'over 20 seconds', d.wait.gt20s || 0]];
       html += section('04', 'The wait',
-        waited < MX_MIN ? 'Too few AI write-ups to time yet: ' + num(waited) + ' so far'
-          : say(fast, waited, 'No AI write-up has taken under ten seconds yet', 'Every AI write-up so far took under ten seconds', share(fast, waited) + ' of AI write-ups take under ten seconds'),
-        'How long the AI took to write a report, timed on the server from the moment the request arrived. Only write-ups that arrived are counted, and only reports, not rewrites. The score does not depend on the AI: when it fails, the checklist score still shows.',
+        waited < MX_MIN ? 'Only ' + num(waited) + ' AI write-ups so far, too few to time'
+          : say(fast, waited, 'Not one AI write-up has arrived in under ten seconds', 'Every AI write-up so far arrived in under ten seconds', share(fast, waited) + ' of AI write-ups arrive in under ten seconds'),
+        'Timed on the server, from request to write-up. Only write-ups that actually arrived, and only reports. The score never needs the AI: if it falls over, you still get the checklist.',
         '<p class="mx-cardlabel">' + num(waited) + ' write-ups</p>' + stack(waitRows, waited));
 
-      var flagRows = [{ label: 'Had an image or video', verb: 'came with an image or video', n: d.flags.media }, { label: 'Read as a told story', verb: 'read as a told story', n: d.flags.narrative }, { label: 'Read as satire, so the checks that assume the writer means it stood down', verb: 'read as satire', n: d.flags.satire }]
+      var flagRows = [{ label: 'Had an image or video', verb: 'came with an image or video', n: d.flags.media }, { label: 'Read as a told story', verb: 'read as a told story', n: d.flags.narrative }, { label: 'Read as satire, so the sincerity checks stood down', verb: 'read as satire', n: d.flags.satire }]
         .sort(function(a, b){ return b.n - a.n; });
       var ftop = flagRows[0];
       html += section('05', 'What came with the post',
-        quiet ? few : say(ftop.n, d.scored, 'None of these has come up in a post yet', 'Every post so far ' + ftop.verb, share(ftop.n, d.scored) + ' of posts ' + ftop.verb),
-        'Three things the checks notice about a post, as shares of scored posts, the bar scaled to the largest of the three. A post can be more than one, or none.',
+        quiet ? few : say(ftop.n, d.scored, 'None of these has come up yet', 'Every post so far ' + ftop.verb, share(ftop.n, d.scored) + ' of posts ' + ftop.verb),
+        'Three things the checks notice. A post can be all three, or none. Bars are scaled to the biggest of the three.',
         bars(flagRows, d.scored, Math.max(1, ftop.n)));
 
       host.innerHTML = html;
@@ -6660,10 +6660,10 @@ ul.cg-list li::before{content:"\2022";position:absolute;left:0;color:var(--ink-4
       if (more) more.addEventListener('click', function(){ state.all = !state.all; draw(); var again = $('#mx-more'); if (again) again.focus(); });
       var at = d.at ? new Date(d.at) : null, when = at && !isNaN(at) ? at.toLocaleString([], { weekday: 'short', hour: 'numeric', minute: '2-digit' }) : null;
       var foot = $('#mx-foot');
-      foot.innerHTML = 'Counted since ' + E(sinceText(d.since)) + '. A post is something a person pasted: the four example posts, a rewrite sent back through, a shared link opened again, a repeat of a post seen this week and a request that failed the bot check are not counted. ' +
-        'Counts only: a score, the checks that fired, a rewrite’s gain, a wait. No words from any post, and nothing about who pasted one. ' +
-        (d.live ? 'These are live, because you are behind the door' + (when ? ' (read ' + E(when) + ')' : '') + '. Everyone else sees them an hour at a time.' : 'These figures are as of ' + E(when || 'the last count') + '. They move at most once an hour, and only after at least ten more posts, so no one can tell one person’s post from the next.') +
-        ' Under ' + MX_MIN + ' a share is shown as a count. The raw figures are at <a href="api/metrics">api/metrics</a>.';
+      foot.innerHTML = 'Counted since ' + E(sinceText(d.since)) + '. A post means something a person pasted. The example posts, rewrites sent back through, shared links opened again, the same post twice in a week and anything that failed the bot check don’t count. ' +
+        'Counts only: scores, fired checks, rewrite gains, wait times. No words from any post. Nothing about who pasted it. ' +
+        (d.live ? 'You’re behind the door, so these are live' + (when ? ' (read ' + E(when) + ')' : '') + '. Everyone else gets them an hour at a time.' : 'As of ' + E(when || 'the last count') + '. These move once an hour at most, and only after ten more posts, so nobody can work out whose post was whose.') +
+        ' Under ' + MX_MIN + ' posts you get counts, not percentages, because 2 of 3 is not 67% of anything. Raw figures: <a href="api/metrics">api/metrics</a>.';
       foot.hidden = false;
     }
     function sinceText(iso){
