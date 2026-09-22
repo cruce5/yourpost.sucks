@@ -777,7 +777,7 @@ check('error is above the kept rewrite, not replacing it', await api.evaluate(()
   check('reading rule: meaner mode wipes it back on in red', bar.ruleOn && bar.ruleRed && !bar.ruleBlue && bar.barRed, JSON.stringify(bar));
   check('  ...and the page behind the panels takes a faint red wash, the panels do not', await api.evaluate(() => document.body.classList.contains('meaner') && getComputedStyle(document.body, '::after').backgroundColor === 'rgba(222, 52, 44, 0.05)' && getComputedStyle(document.querySelector('.panel')).backgroundColor === getComputedStyle(document.querySelector('.panel')).backgroundColor));
   await api.waitForTimeout(500);
-  check('  ...and the pirate flag turns red, drawn not typed, 32px', await api.evaluate(() => { const f = document.getElementById('pirateflag'); return getComputedStyle(f).color === 'rgb(198, 47, 42)' && !!f.querySelector('svg') && f.querySelector('svg').getAttribute('width') === '32' && f.getAttribute('aria-label') === 'Pirate mode'; }));
+  check('  ...and the pirate flag crossfades to the red one', await api.evaluate(() => { const f = document.getElementById('pirateflag'); const red = f.querySelector('.flag-red'), black = f.querySelector('.flag-black'); return getComputedStyle(red).opacity === '1' && getComputedStyle(black).opacity === '0' && red.naturalWidth > 0 && f.getAttribute('aria-label') === 'Pirate mode'; }));
   // With a report on the page there is somewhere to scroll to.
   await api.click('[data-spec="0"]');
   await api.waitForSelector('#report:not([hidden])', { timeout: 20000 });

@@ -36,3 +36,7 @@
   Cache-Control: public, max-age=86400
 /apple-touch-icon.png
   Cache-Control: public, max-age=86400
+/flag-black.png
+  Cache-Control: public, max-age=86400
+/flag-red.png
+  Cache-Control: public, max-age=86400
