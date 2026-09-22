@@ -198,10 +198,15 @@ header{border-bottom:1px solid var(--rule);padding-bottom:20px;margin-bottom:28p
 .brand-wrap{display:flex;align-items:center;min-width:0}
 .brand-flag{
   margin:0 10px 0 0;padding:0;border:0;background:transparent;cursor:pointer;
-  font-size:22px;line-height:1;min-width:44px;min-height:44px;margin-left:-8px;
+  line-height:1;min-width:44px;min-height:44px;margin-left:-8px;
   display:inline-flex;align-items:center;justify-content:center;border-radius:4px;
   transform-origin:20% 80%;
+  /* The flag's colour. Black, whatever the theme; the meaner edit turns it
+     the same red as its bar. */
+  color:#141311;transition:color .4s ease;
 }
+.brand-flag svg{display:block}
+body.meaner .brand-flag{color:#c62f2a}
 .brand-flag:focus-visible{outline:2px solid var(--cool);outline-offset:2px}
 @keyframes flagwave{0%{transform:rotate(0)}25%{transform:rotate(-14deg)}50%{transform:rotate(9deg)}75%{transform:rotate(-5deg)}100%{transform:rotate(0)}}
 @media (prefers-reduced-motion: no-preference){
@@ -1274,7 +1279,18 @@ ul.cg-list li::before{content:"\2022";position:absolute;left:0;color:var(--ink-4
 <header>
   <div class="masthead-row">
     <div class="brand-wrap">
-      <button class="brand-flag" id="pirateflag" type="button" aria-pressed="false" aria-label="Pirate mode">🏴‍☠️</button>
+      <button class="brand-flag" id="pirateflag" type="button" aria-pressed="false" aria-label="Pirate mode"><!--
+        Drawn, not the emoji, so it can be bigger and can turn red with the
+        meaner edit. The flag is currentColor; the pole and the bones are not.
+        --><svg viewBox="0 0 32 32" width="32" height="32" aria-hidden="true" focusable="false">
+        <rect x="3" y="2" width="2.2" height="28" rx="1.1" fill="var(--ink-3)"/>
+        <path d="M5.2 3.5h22.3c-2.6 3-2.6 6 0 9c-2.6 3-2.6 6 0 9H5.2z" fill="currentColor" stroke="var(--rule-2)" stroke-width=".8" stroke-linejoin="round"/>
+        <path d="M10.6 19.6l9.2-6.2M19.8 19.6l-9.2-6.2" stroke="#fff" stroke-width="1.7" stroke-linecap="round"/>
+        <circle cx="15.2" cy="11.2" r="3.4" fill="#fff"/>
+        <rect x="13.4" y="13.6" width="3.6" height="1.9" rx=".5" fill="#fff"/>
+        <circle cx="14" cy="11" r=".95" fill="currentColor"/><circle cx="16.4" cy="11" r=".95" fill="currentColor"/>
+        <path d="M15.2 12.3l-.6 1h1.2z" fill="currentColor"/>
+      </svg></button>
       <h1 class="brand">yourpost<span>.sucks</span></h1>
     </div>
     <div class="head-actions">
