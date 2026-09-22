@@ -448,11 +448,18 @@ export function statKeys(kind, status, p, ms, source, asked) {
   }
   return keys;
 }
-async function bumpStats(env, keys) {
+const BUMP_CHUNK = 100;
+export async function bumpStats(env, keys) {
   const ns = counters(env);
   if (!ns || !keys.length) return;
-  try { await counterCall(ns, 'stats', '/bump', { keys: keys.map(k => 's:' + k.toLowerCase().replace(/[^a-z0-9:_.-]/g, '_')), stamps: [keys.includes('post:all') && 's:post:since', keys.includes('post:m:all') && 's:post:m:since', keys.includes('post:c:all') && 's:post:c:since'].filter(Boolean) }); }
-  catch (e) { console.warn('stats: not counted', e && e.message); }
+  // Storage takes at most 128 keys per read or write. A post that trips
+  // many checks makes over a hundred pair keys, so the batch is sent in
+  // chunks well under the limit; the stamps ride with the first.
+  const clean = keys.map(k => 's:' + k.toLowerCase().replace(/[^a-z0-9:_.-]/g, '_'));
+  const stamps = [keys.includes('post:all') && 's:post:since', keys.includes('post:m:all') && 's:post:m:since', keys.includes('post:c:all') && 's:post:c:since'].filter(Boolean);
+  try {
+    for (let i = 0; i < clean.length; i += BUMP_CHUNK) await counterCall(ns, 'stats', '/bump', { keys: clean.slice(i, i + BUMP_CHUNK), stamps: i === 0 ? stamps : [] });
+  } catch (e) { console.warn('stats: not counted', e && e.message); }
 }
 /** Every tally, with the prefix stripped, or null. For lab.js and the tests. */
 export async function readStats(env) {
@@ -483,6 +490,7 @@ export async function readStats(env) {
  * been counted. Someone behind the door (the owner) always reads live.
  * ------------------------------------------------------------------ */
 export const METRICS_SINCE = '2026-09-21';
+const PAIR_MIN = 3;
 const MX_SNAP_KEY = 'mx:snap';
 const MX_SNAP_MIN = 10;
 
@@ -578,13 +586,20 @@ export function publicFigures(all, at) {
   tenth.forEach((n, t) => { wholeBand[bandOfTenth(t)] = (wholeBand[bandOfTenth(t)] || 0) - n; });
   const spread = tenth.slice();
   const left = { barely: wholeBand.barely || 0, normal: wholeBand.normal || 0, lot: wholeBand.lot || 0, completely: wholeBand.completely || 0 };
+  // Within a whole point, spread by the pattern of the posts that do have a
+  // tenth (the engine floors a score at 0.2 and clean posts land at 0.4 to
+  // 0.9, so an even spread drew a tall 0.0 bar where no post is). With no
+  // tenths yet in that point, even.
+  const spreadOver = (from, to, n) => {
+    const seen = tenth.slice(from, to), total = seen.reduce((a, x) => a + x, 0);
+    for (let t = from; t < to; t++) spread[t] += total ? n * seen[t - from] / total : n / (to - from);
+  };
   whole.forEach((n, k) => {
     if (!n) return;
     const lo = k * 10, cut = CUT_TENTHS.find(c => c > lo && c < lo + 10);
-    if (cut === undefined) { for (let t = lo; t < lo + 10; t++) spread[t] += n / 10; left[bandOfTenth(lo)] -= n; return; }
+    if (cut === undefined) { spreadOver(lo, lo + 10, n); left[bandOfTenth(lo)] -= n; return; }
     const below = Math.min(n, Math.max(0, left[bandOfTenth(lo)])), above = n - below;
-    for (let t = lo; t < cut; t++) spread[t] += below / (cut - lo);
-    for (let t = cut; t < lo + 10; t++) spread[t] += above / (lo + 10 - cut);
+    spreadOver(lo, cut, below); spreadOver(cut, lo + 10, above);
     left[bandOfTenth(lo)] -= below; left[bandOfTenth(cut)] -= above;
   });
   const why = under('reword:why:'), mode = under('reword:mode:');
@@ -603,7 +618,9 @@ export function publicFigures(all, at) {
     // Checks that fired on the same post, the ten most common pairs. Newer
     // than the rest, so its own denominator and its own start date.
     pairs: { of: s['post:c:all'] || 0, since: s['post:c:since'] ? new Date(s['post:c:since']).toISOString().slice(0, 10) : null,
-      top: Object.entries(under('post:pair:')).map(([k, n]) => { const [a, b] = k.split('+'); return { a, b, n }; }).filter(x => RULE_IDS.has(x.a) && RULE_IDS.has(x.b)).sort((x, y) => y.n - x.n).slice(0, 10) },
+      // Written as a+b, stored as a_b (the counter allows no "+"); read either.
+      // Published only at three or more: one wild post used to fill the top ten.
+      top: Object.entries(under('post:pair:')).map(([k, n]) => { const [a, b] = k.split(/[+_]/); return { a, b, n }; }).filter(x => RULE_IDS.has(x.a) && RULE_IDS.has(x.b) && x.n >= PAIR_MIN).sort((x, y) => y.n - x.n).slice(0, 10) },
     // Newer than the rest: its own denominator and its own start date.
     meaner: { n: s['post:flag:meaner'] || 0, of: s['post:m:all'] || 0, since: s['post:m:since'] ? new Date(s['post:m:since']).toISOString().slice(0, 10) : null },
     reword: { tried, notAttempted: Math.max(0, outcomes - tried.better - tried.couldNotBeat - tried.unusable), gain: under('reword:gain:') },
@@ -617,15 +634,18 @@ async function handleMetrics(request, env) {
   // Behind the door (a cookie) is always live, open or not.
   const owner = env.METRICS_PASSWORD && await (async () => { const shut = { ...env, METRICS_OPEN: undefined }; return metricsAllowed(request, shut); })();
   if (!open && !owner) return json({ error: 'locked' }, 401, { 'cache-control': 'no-store' });
-  if (owner || !env.KV) {
+  if (owner) {
     const all = await readStats(env);
     if (!all) return json({ ok: false }, 200, priv);
     return json({ ...publicFigures(all, new Date().toISOString()), live: true }, 200, priv);
   }
+  // No store for the snapshot means no public figures: live reads are for
+  // the owner only, whatever else has gone wrong (Census, episode 5).
+  if (!env.KV) return json({ ok: false }, 200, priv);
   // Public: the stored snapshot, replaced only in a new UTC hour and only
   // after MX_SNAP_MIN more posts. Within the hour the counter is not read.
   let snap = null;
-  try { snap = await env.KV.get(MX_SNAP_KEY, 'json'); } catch (e) { snap = null; }
+  try { snap = await env.KV.get(MX_SNAP_KEY, 'json'); } catch (e) { return json({ ok: false }, 200, priv); }
   const hourOf = iso => String(iso || '').slice(0, 13);
   const now = new Date().toISOString();
   if (snap && hourOf(snap.at) === hourOf(now)) return json({ ...snap, live: false }, 200, priv);
@@ -633,7 +653,9 @@ async function handleMetrics(request, env) {
   if (!all) return snap ? json({ ...snap, live: false }, 200, priv) : json({ ok: false }, 200, priv);
   const fresh = publicFigures(all, now);
   if (snap && fresh.scored - (snap.scored || 0) < MX_SNAP_MIN) return json({ ...snap, live: false }, 200, priv);
-  try { await env.KV.put(MX_SNAP_KEY, JSON.stringify(fresh)); } catch (e) { console.warn('metrics: snapshot not stored', e && e.message); }
+  // A snapshot that could not be stored is never served: the old one is,
+  // or nothing. Otherwise every request would compute its own fresh read.
+  try { await env.KV.put(MX_SNAP_KEY, JSON.stringify(fresh)); } catch (e) { console.warn('metrics: snapshot not stored', e && e.message); return snap ? json({ ...snap, live: false }, 200, priv) : json({ ok: false }, 200, priv); }
   return json({ ...fresh, live: false }, 200, priv);
 }
 
@@ -908,7 +930,7 @@ export class Counters {
     if (body && typeof body === 'object' && url.pathname === '/bump') {
       const given = Array.isArray(body.keys) ? body.keys : [];
       const ok = given.filter(k => typeof k === 'string' && /^[a-z0-9:_.-]{1,64}$/.test(k));
-      const keys = [...new Set(ok)].slice(0, 160);
+      const keys = [...new Set(ok)].slice(0, 120); // storage takes 128 per call, stamps included
       // Silently losing a tally is how a count drifts, so say so.
       if (keys.length < given.length) console.warn('stats: keys dropped', given.length - keys.length);
       // One read and one write for the whole batch, not one of each per key.

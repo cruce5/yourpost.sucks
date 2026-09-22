@@ -4474,13 +4474,13 @@ ul.cg-list li::before{content:"\2022";position:absolute;left:0;color:var(--ink-4
    * tab). Written from the test above each one: a claim here has to match
    * what actually fires. Kept beside the rules so the two move together. */
   var RULE_WHY = {
-    'announce': 'Opens with "excited to announce" or one of its cousins.',
-    'cantwait': 'Excited, and also cannot wait, and also thrilled. The excitement stack.',
+    'announce': 'Says "excited to announce" or one of its cousins. Anywhere counts.',
+    'cantwait': 'Excited, and also cannot wait. The excitement stack.',
     'newchapter': 'A new chapter, a new journey, a new adventure. The job is a job.',
     'officially': 'Officially. As opposed to the unofficial announcement nobody made.',
     'bignews': 'Promises some news, big news, an update, and makes you read on to find out what.',
-    'gratitude': 'Grateful, blessed, humbled and thankful, in bulk.',
-    'thanks-count': 'Thanks three or more separate people or teams. A credits roll, not a post.',
+    'gratitude': 'Grateful, thankful, blessed. One is enough to count.',
+    'thanks-count': 'Two or more thank-yous, or three or more people tagged. A credits roll, not a post.',
     'believed': 'Thanks everyone who believed in me, a group that has never once been named.',
     'emoji-volume': 'Two or more emoji doing the work the words were supposed to do.',
     'emoji-repeat': 'The same emoji twice or more. Once was already a lot.',
@@ -4490,7 +4490,7 @@ ul.cg-list li::before{content:"\2022";position:absolute;left:0;color:var(--ink-4
     'impact': 'Making an impact, driving impact, impact at scale. Nobody says what changed.',
     'dreamjob': 'Dream job, dream role, dream team. Dreams are private.',
     'rejection-arc': 'Rejected, then triumphant, in the same post. The comeback is the brag.',
-    'numeric-flex': 'A number that is there to impress, not to inform: revenue, followers, offers.',
+    'numeric-flex': 'A number that is there to impress, not to inform: money, followers, growth.',
     'casually': 'Not to brag, no big deal, little did I know. The disclaimer is the brag.',
     'ask-comment': 'Asks the reader to comment, agree, or share their thoughts.',
     'ask-follow': 'Asks the reader to follow, repost, ring the bell, or spread the word.',
@@ -4501,25 +4501,25 @@ ul.cg-list li::before{content:"\2022";position:absolute;left:0;color:var(--ink-4
     'perf-vuln': 'Announces that it is being vulnerable, honest, raw or transparent. Being it is different.',
     'silver-lining': 'A layoff or burnout, followed at once by the lesson it taught. The spin is faster than the grief.',
     'pivot-lang': 'Pivoting into, making a pivot, the pivot. A verb that has become a career stage.',
-    'broetry': 'More than half the lines are eight words or fewer, each in its own paragraph.',
+    'broetry': 'Most lines, 55% or more, are eight words or fewer, each in its own paragraph.',
     'orphan-line': 'A one or two word line in the middle of the post, standing alone for effect.',
     'allcaps': 'A run of capital letters. Acronyms and citations are let through.',
     'ai-isms': 'Delve, navigate the complexities, a testament to. The phrases a model reaches for.',
     'not-just': 'It is not just X, it is Y. The construction, wherever it turns up.',
-    'emdash': 'Three or more em dashes, at more than one per hundred words.',
-    'corporate': 'Leverage, stakeholders, learnings, north star, at scale. Two or more of them.',
+    'emdash': 'Three or more em dashes, at 1.2 or more per hundred words.',
+    'corporate': 'Leverage, stakeholders, learnings, north star, at scale. One is enough.',
     'no-specifics': 'Forty-five words or more with at most one number, name, date or place in them.',
     'long-sentences': 'Sentences averaging twenty-six words or more. A paragraph in a trench coat.',
-    'too-long': 'Three hundred and twenty words or more. Told stories get more room.',
+    'too-long': 'Three hundred and twenty words or more. Stories included.',
     'too-short-empty': 'Under sixteen words and nothing specific in them. A caption with no picture.',
-    'vague-nouns': 'Things, stuff, the work, this space, many people. Two or more of them.',
-    'repetition': 'The same sentence more than once.',
+    'vague-nouns': 'Things, stuff, the work, this space, many people. Two different ones.',
+    'repetition': 'The same sentence three times, or repeats making up most of the post.',
     'gibberish': 'Most of the words are not words.',
     'not-english': 'Not written in English, so the checks cannot read it and it is not scored.',
     'promo-lede': 'Opens with the logistics: join us, tune in, register, new episode.',
     'plug-signoff': 'A P.S. or a sign-off line that turns out to be a plug.',
     'hedging': 'Probably, sort of, kind of, I could be wrong but. The claim is retreating as it is made.',
-    'question-opener': 'Opens with a question aimed at the reader, under 130 characters.',
+    'question-opener': 'Opens with a question aimed at the reader, 130 characters or fewer, in a post of more than twelve words.',
     'fragment': 'A short post leaning on this, that or it, with no this, that or it in sight.'
   };
 
@@ -6637,6 +6637,9 @@ ul.cg-list li::before{content:"\2022";position:absolute;left:0;color:var(--ink-4
     // A lead worth naming: more than two standard errors of the difference,
     // roughly. Otherwise the top two are named together.
     var clearLead = function(a, b){ return !b || (a - b) >= 2 * Math.sqrt(a + b); };
+    // The leaders: the top one and everyone within noise of it.
+    var leaders = function(rows){ if (!rows.length) return []; var top = rows[0].n; return rows.filter(function(x, i){ return i === 0 || !clearLead(top, x.n); }); };
+    var listOf = function(names){ return names.length === 2 ? names[0] + ' and ' + names[1] : names.slice(0, -1).join(', ') + ' and ' + names[names.length - 1]; };
     var bandColor = function(i){ return 'var(--mx-b' + (i + 1) + ')'; };
     var bandOf = function(v){ for (var i = 0; i < BANDS.length; i++) if (v < BANDS[i][4]) return i; return 3; };
     // Scores in steps of 0.4: 25 bins, and every verdict line (3.2, 5.6, 8)
@@ -6695,8 +6698,11 @@ ul.cg-list li::before{content:"\2022";position:absolute;left:0;color:var(--ink-4
       shape.forEach(function(n, i){
         if (!n) return;
         var h = Math.max(2, ih * n / max), x = l + step * i + (step - bw) / 2, y = t + ih - h;
-        var whole = Math.floor(i * BIN), exact = (d.scores || [])[whole] || 0;
-        s += '<rect x="' + x.toFixed(1) + '" y="' + y.toFixed(1) + '" width="' + bw.toFixed(1) + '" height="' + h.toFixed(1) + '" rx="2" fill="' + bandColor(binBand(i)) + '"' + tip('Scores ' + binLabel(i), BANDS[binBand(i)][2] + '. The whole point, ' + whole + ' to ' + whole + '.9, holds ' + num(exact) + ' of ' + num(d.scored) + ' posts (' + share(exact, d.scored) + ').', '') + '/>';
+        var whole = Math.floor(i * BIN + 1e-9), w1 = Math.floor(i * BIN + BIN - 0.1 + 1e-9), exact = (d.scores || [])[whole] || 0, exact1 = (d.scores || [])[w1] || 0;
+        var body = w1 === whole
+          ? BANDS[binBand(i)][2] + '. The whole point, ' + whole + ' to ' + whole + '.9, holds ' + num(exact) + ' of ' + num(d.scored) + ' posts (' + share(exact, d.scored) + ').'
+          : BANDS[binBand(i)][2] + '. It straddles two whole points: ' + whole + ' to ' + whole + '.9 holds ' + num(exact) + ' (' + share(exact, d.scored) + '), ' + w1 + ' to ' + w1 + '.9 holds ' + num(exact1) + ' (' + share(exact1, d.scored) + ').';
+        s += '<rect x="' + x.toFixed(1) + '" y="' + y.toFixed(1) + '" width="' + bw.toFixed(1) + '" height="' + h.toFixed(1) + '" rx="2" fill="' + bandColor(binBand(i)) + '"' + tip('Scores ' + binLabel(i), body, '') + '/>';
       });
       // Whole-number ticks under the bars, in the same units.
       [0, 2, 4, 6, 8, 10].forEach(function(v){
@@ -6777,11 +6783,12 @@ ul.cg-list li::before{content:"\2022";position:absolute;left:0;color:var(--ink-4
       var fired = countable.filter(function(x){ return x.n > 0; }).sort(function(a, b){ return b.n - a.n; }), sin = fired[0], sin2 = fired[1];
       var never = countable.length - fired.length;
       var mid = typical(d.scores || [], d.scored);
+      var under = mid === null ? 0 : (d.scores || []).slice(0, mid + 1).reduce(function(a, n){ return a + n; }, 0);
 
       html += '<div class="mx-tiles">' +
-        '<div class="mx-tile"' + tip('Posts scored', 'Every post a person pasted and got a score for, since the counting began. The example posts and repeat loads of a shared link are not in it.', num(d.scored)) + '><span class="v">' + num(d.scored) + '</span><span class="k">Posts scored</span><span class="n">Since ' + E(sinceText(d.since)) + '.</span></div>' +
+        '<div class="mx-tile"' + tip('Posts scored', 'Posts that got a score, added up since 21 September 2026. The same post pasted by two people counts twice, because it is two people.', num(d.scored)) + '><span class="v">' + num(d.scored) + '</span><span class="k">Posts scored</span><span class="n">Since ' + E(sinceText(d.since)) + '.</span></div>' +
         '<div class="mx-tile"' + tip('Spotless', 'Posts that tripped none of the ' + d.rules.length + ' checks. Not the same as good: the checks find bad habits, and a post can have none of those and still be nothing.', num(d.clean) + ' of ' + num(d.scored)) + '><span class="v">' + (quiet ? num(d.clean) : E(share(d.clean, d.scored))) + '</span><span class="k">Spotless</span><span class="n">' + (quiet ? 'Of ' + num(d.scored) + ' posts. ' : '') + 'Zero of the ' + d.rules.length + ' checks. Respect.</span></div>' +
-        '<div class="mx-tile"' + tip('Median score', 'Line every post up by score, take the one in the middle. Half score lower than it, half higher. Lower is better.', mid === null ? '' : 'The middle post scores ' + mid + '.something') + '><span class="v">' + (mid === null ? '0' : mid) + '</span><span class="k">Median score</span><span class="n">' + (mid === null ? 'Nothing scored yet.' : 'Half of all posts score under ' + (mid + 1) + '.') + '</span></div>' +
+        '<div class="mx-tile"' + tip('Median score', 'Line every post up by score, take the one in the middle. Half score lower than it, half higher. Lower is better.', mid === null ? '' : num(under) + ' of ' + num(d.scored) + ' score under ' + (mid + 1)) + '><span class="v">' + (mid === null ? '0' : mid) + '</span><span class="k">Median score</span><span class="n">' + (mid === null ? 'Nothing scored yet.' : 'The middle post scores ' + mid + '.something. ' + E(share(under, d.scored)) + ' score under ' + (mid + 1) + '.') + '</span></div>' +
         '<div class="mx-tile"' + tip('Unseen sins', 'Checks that have not fired on a single post yet. Open "Show all" in the sins list to see which.', never + ' of ' + countable.length) + '><span class="v">' + never + '</span><span class="k">Unseen sins</span><span class="n">Of the ' + countable.length + ' checks we can count. Give it time.</span></div>' +
         '</div>';
 
@@ -6794,29 +6801,29 @@ ul.cg-list li::before{content:"\2022";position:absolute;left:0;color:var(--ink-4
 
       html += section('02', 'The sins, ranked',
         quiet ? few : !sin ? 'Not one check has fired in ' + num(d.scored) + ' posts. Either everyone got better or something is broken'
-          : clearLead(sin.n, sin2 && sin2.n) ? 'The most popular sin is "' + sin.label + '", in ' + share(sin.n, d.scored) + ' of posts'
-          : 'Two sins, neck and neck: "' + sin.label + '" at ' + share(sin.n, d.scored) + ' and "' + sin2.label + '" at ' + share(sin2.n, d.scored),
+          : (function(L){ return L.length === 1 ? 'The most popular sin is "' + sin.label + '", in ' + share(sin.n, d.scored) + ' of posts'
+              : 'No clear winner: ' + listOf(L.map(function(x){ return '"' + x.label + '" at ' + share(x.n, d.scored); })); })(leaders(fired)),
         'How often each check fires. A full bar would be every post. The longest bar is the most common sin, not the worst one. ' + (never ? never + ' of the ' + countable.length + ' countable checks have never fired. ' : '') + '"Not in English" can’t be counted here: a post it catches never gets a score.',
         ruleBars(d));
 
       var rw = d.reword, T = rw.tried, tried = T.better + T.couldNotBeat + T.unusable;
-      var rwRows = [['var(--cool)', 'beat the original', T.better, 'The rewrite scored lower than the original on the same 47 checks, so it was shown.'], ['var(--mx-mid)', 'nothing it wrote scored lower', T.couldNotBeat, 'Two attempts, neither scored lower than the original. Nothing was shown.'], ['var(--ink-3)', 'the AI came back unusable', T.unusable, 'The AI answered, but with something the rules will not pass on: an invented number, a name that was not in the post, a dash, or a line about the score. Thrown out rather than shown.']];
+      var rwRows = [['var(--cool)', 'beat the original', T.better, 'The rewrite scored lower than the original on the same 47 checks, so it was shown.'], ['var(--mx-mid)', 'nothing it wrote scored lower', T.couldNotBeat, 'Nothing it wrote scored lower than the original, so nothing was shown.'], ['var(--ink-3)', 'the AI came back unusable', T.unusable, 'Nothing the AI sent got past the rules, or nothing came back. A made-up number is enough, or a dash. Thrown out rather than shown.']];
       var gainRows = [['var(--mx-s2)', 'under a point', rw.gain.under1 || 0, 'The rewrite scored lower, but by less than a point.'], ['var(--mx-s3)', '1 to 2 points', rw.gain['1to2'] || 0, 'A point or more off the score, under two.'], ['var(--mx-s4)', '2 points or more', rw.gain['2plus'] || 0, 'Two points or more off. A different post, in the good way.']];
       html += section('03', 'What Reword manages',
         tried < MX_MIN ? 'Reword has only run ' + num(tried) + ' times, not enough to brag about'
           : say(T.better, tried, 'Reword has run ' + num(tried) + ' times and beaten the original zero of them', 'Reword has beaten the original every time it ran. So far', 'When Reword runs, it beats the original ' + share(T.better, tried) + ' of the time'),
-        'A rewrite only shows up if the same checks score it lower. Otherwise you get nothing, which is at least honest. ' + num(tried) + ' runs. ' + (rw.notAttempted ? 'Another ' + num(rw.notAttempted) + ' asks never got that far: nothing to fix, a declined post, or the AI stepped out.' : ''),
+        'A rewrite only shows up if the same checks score it lower. Otherwise you get nothing, which is at least honest. ' + num(tried) + ' runs. ' + (rw.notAttempted ? 'Another ' + num(rw.notAttempted) + ' asks never got that far: nothing to fix, a declined post, or the site never asked the AI.' : ''),
         '<p class="mx-cardlabel">How it went</p>' + stack(rwRows, tried) +
         (sum(rw.gain) ? '<p class="mx-cardlabel mx-gap">Points off, when it won</p>' + stack(gainRows, sum(rw.gain)) : '') +
-        '<p class="mx-note">Unusable means the AI answered and the rules threw it out: it made up a number, named someone the post never named, reached for a dash, or wrote about the score. A rewrite that does any of that never reaches you. Nothing does, which is the point.</p>');
+        '<p class="mx-note">Unusable means nothing the AI sent got past the rules, or nothing came back at all. A made-up number is enough. So is a dash, a line about the score, or a rewrite that kept too little of your own wording. A rewrite that trips any of them never reaches you. Nothing does, which is the point.</p>');
 
       var waited = sum(d.wait), fast = (d.wait.lt5s || 0) + (d.wait['5to10s'] || 0);
       var waitRows = [['var(--mx-s4)', 'under 5 seconds', d.wait.lt5s || 0, 'Fast. The AI had a short post and a good day.'], ['var(--mx-s3)', '5 to 10 seconds', d.wait['5to10s'] || 0, 'The usual.'], ['var(--mx-s2)', '10 to 20 seconds', d.wait['10to20s'] || 0, 'A long post, an image, or a retry after the first answer broke a rule.'], ['var(--mx-s1)', 'over 20 seconds', d.wait.gt20s || 0, 'Close to the 30 second limit, after which the page gives up and shows the checklist alone.']];
       html += section('04', 'The wait',
-        waited < MX_MIN ? 'Only ' + num(waited) + ' AI write-ups so far, too few to time'
-          : say(fast, waited, 'Not one AI write-up has arrived in under ten seconds', 'Every AI write-up so far arrived in under ten seconds', share(fast, waited) + ' of AI write-ups arrive in under ten seconds'),
-        'Timed on the server, from request to write-up, for every report that reached the AI. Rewrites are not in it. The score never needs the AI: if it falls over, you still get the checklist.',
-        '<p class="mx-cardlabel">' + num(waited) + ' write-ups</p>' + stack(waitRows, waited));
+        waited < MX_MIN ? 'Only ' + num(waited) + ' AI calls so far, too few to time'
+          : say(fast, waited, 'Not one AI call has finished in under ten seconds', 'Every AI call so far finished in under ten seconds', share(fast, waited) + ' of AI calls finish in under ten seconds'),
+        'Timed on the server, from request to finish, for every report call that reached the AI, whether or not a write-up came back. Rewrites are not in it. The score never needs the AI: if it falls over, you still get the checklist.',
+        '<p class="mx-cardlabel">' + num(waited) + ' AI calls</p>' + stack(waitRows, waited));
 
       var flagRows = [{ label: 'Had an image or video', verb: 'came with an image or video', n: d.flags.media, why: 'The box under the post was ticked, or an image was attached. The checks that assume the text is the whole post stand down.' }, { label: 'Read as a told story', verb: 'read as a told story', n: d.flags.narrative, why: 'Six or more past-tense verbs, eighty or more words, four or more specifics. The closing line is gentler; the checks are not.' }, { label: 'Read as satire, so the sincerity checks stood down', verb: 'read as satire', n: d.flags.satire, why: 'A separate AI call said the post was a parody, and the engine re-scored it with the seven checks that assume sincerity switched off.' }]
         .sort(function(a, b){ return b.n - a.n; });
@@ -6825,7 +6832,7 @@ ul.cg-list li::before{content:"\2022";position:absolute;left:0;color:var(--ink-4
       var meanerRow = { label: 'Asked for it meaner', n: mn.n, why: 'Ticked "Be meaner about it". Same score, harsher write-up. Counted since ' + sinceText(mn.since) + ', so this share is of the ' + num(mn.of) + ' posts since then, not of all ' + num(d.scored) + '.' };
       html += section('05', 'What came with the post',
         quiet ? few : say(ftop.n, d.scored, 'None of these has come up yet', 'Every post so far ' + ftop.verb, share(ftop.n, d.scored) + ' of posts ' + ftop.verb),
-        'Three things the checks notice, and one thing the reader asked for. A post can be all of them, or none. A full bar would be every post.',
+        'Three things about the post, and one thing the person pasting it asked for. A post can be all of them, or none. A full bar would be every post.',
         bars(flagRows, d.scored, Math.max(1, d.scored), null, 'none yet') + '<p class="mx-cardlabel mx-gap">And one more, counted since ' + E(sinceText(mn.since)) + '</p>' + bars([meanerRow], mn.of, Math.max(1, mn.of), null, 'none yet'));
 
       var cb = d.pairs || { of: 0, since: null, top: [] }, byId = {};
@@ -6836,14 +6843,15 @@ ul.cg-list li::before{content:"\2022";position:absolute;left:0;color:var(--ink-4
       var c1 = comboRows[0];
       html += section('06', 'Combos',
         cb.of < MX_MIN ? 'Only ' + num(cb.of) + ' posts since the pairing started, not enough to say anything true'
-          : !c1 ? 'No two checks have fired on the same post yet'
-          : 'The most common combo is "' + byId[cb.top[0].a].label + '" with "' + byId[cb.top[0].b].label + '", in ' + share(c1.n, cb.of) + ' of posts',
-        'Checks that fire on the same post. One sin is a habit. Two is a style. Counted since ' + E(sinceText(cb.since)) + ', when the pairing started, so the shares are of the ' + num(cb.of) + ' posts since then.',
-        comboRows.length ? bars(comboRows, cb.of, Math.max(1, cb.of), 'mx-combos', 'none yet') : '<p class="mx-note">Nothing paired up yet.</p>');
+          : !c1 ? 'No pair of checks has come up three times yet'
+          : (function(L){ return L.length === 1 ? 'The most common combo is "' + byId[cb.top[0].a].label + '" with "' + byId[cb.top[0].b].label + '", in ' + share(c1.n, cb.of) + ' of posts'
+              : 'No clear winner: ' + listOf(L.map(function(x){ return x.label + ' at ' + share(x.n, cb.of); })); })(leaders(comboRows)),
+        'Checks that fire on the same post, once a pair has come up three times. One sin is a habit. Two is a style. Counted since ' + E(sinceText(cb.since)) + ', when the pairing started, so the shares are of the ' + num(cb.of) + ' posts since then.',
+        comboRows.length ? bars(comboRows, cb.of, Math.max(1, cb.of), 'mx-combos', 'none yet') : '<p class="mx-note">No pair has come up three times yet.</p>');
 
       html += section('07', 'A chart for no reason',
-        'This chart is beautiful and tells you nothing the list above did not',
-        'The same 47 checks as section 02, arranged around a circle by category and sized by how often they fire. Harder to read, much nicer to look at. Included on purpose.',
+        'This chart is beautiful and tells you nothing section 02 did not',
+        'The same 47 checks as section 02, arranged around a circle by category and sized by how often they fire. Harder to read than the list, much nicer to look at. Included on purpose.',
         rose(d, W));
 
       host.innerHTML = html;
@@ -6852,8 +6860,8 @@ ul.cg-list li::before{content:"\2022";position:absolute;left:0;color:var(--ink-4
       var at = d.at ? new Date(d.at) : null, when = at && !isNaN(at) ? at.toLocaleString([], { weekday: 'short', hour: 'numeric', minute: '2-digit' }) : null;
       var foot = $('#mx-foot');
       foot.innerHTML = 'Counted since ' + E(sinceText(d.since)) + '. The same post pasted by two people counts twice, because it is two people. ' +
-        'Counts only: scores, fired checks, rewrite gains, wait times. No words from any post. Nothing about who pasted it. ' +
-        (d.live ? 'You’re behind the door, so these are live' + (when ? ' (read ' + E(when) + ')' : '') + '. Everyone else gets them an hour at a time.' : 'As of ' + E(when || 'the last count') + '. These move once an hour at most, and only after ten more posts, so nobody can work out whose post was whose.') +
+        'Counts only: scores, which checks fired and which fired together, the flags in section 05, rewrite gains, wait times. No words from any post. Nothing about who pasted it. ' +
+        (d.live ? 'You’re behind the door, so these are live' + (when ? ' (read ' + E(when) + ')' : '') + '. Everyone else gets them an hour at a time.' : 'As of ' + E(when || 'the last count') + '. These move once an hour at most, and only after ten more posts.') +
         ' Under ' + MX_MIN + ' posts you get counts, not percentages, because 2 of 3 is not 67% of anything. Raw figures: <a href="api/metrics">api/metrics</a>.';
       foot.hidden = false;
     }

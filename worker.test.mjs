@@ -1,6 +1,6 @@
 /* Exercises every degradation and safety path in the Worker with a mocked
    env + mocked Anthropic endpoint. No API key, no wrangler, no network. */
-import worker, { readStats, statKeys, readAiOutcomes, publicFigures, Counters, COSTS } from './src/worker.js';
+import worker, { readStats, statKeys, readAiOutcomes, publicFigures, bumpStats, Counters, COSTS } from './src/worker.js';
 import ENGINE from './src/engine.mjs';
 import { readFileSync } from 'node:fs';
 
@@ -1701,6 +1701,43 @@ console.log('\n=== combos: checks that fire together ===');
   check('  ...a wild post is capped at 100 pairs, so nothing else falls off the batch', many.filter(x => x.startsWith('post:pair:')).length === 100 && many.includes('post:flag:meaner') === false && many.includes('post:m:all') && many.length < 160, many.length);
   const f = publicFigures({ 'post:pair:announce+gratitude': 4, 'post:pair:emoji-volume+hashtags': 9, 'post:pair:bogus+hashtags': 50, 'post:c:all': 30 }, 'x');
   check('  ...the public figures carry the top pairs by count, real checks only, on their own denominator', f.pairs.top.length === 2 && f.pairs.top[0].a === 'emoji-volume' && f.pairs.top[0].n === 9 && f.pairs.of === 30, JSON.stringify(f.pairs));
+}
+
+console.log('\n=== episode 5: the pairs come back, the batch fits, the snapshot fails closed ===');
+{
+  // Through the real counter, not hand-built keys: the store mangles "+".
+  const env = baseEnv(); env.COUNTERS = mockCounters(); llmBehaviour = 'good';
+  await (await worker.fetch(post({ post: BAD }), env, ctx)).json(); await (await worker.fetch(post({ post: BAD }), env, ctx)).json(); await (await worker.fetch(post({ post: BAD }), env, ctx)).json();
+  await new Promise(z => setTimeout(z, 60));
+  const s = await readStats(env), f = publicFigures(s, 'x');
+  check('pairs written through the real counter come back out, at three or more', Object.keys(s).some(k => k.startsWith('post:pair:')) && f.pairs.top.length > 0 && f.pairs.top.every(x => x.n >= 3), JSON.stringify(f.pairs.top.slice(0, 2)));
+  check('  ...and a pair seen fewer than three times is not published', publicFigures({ 'post:pair:announce_gratitude': 2, 'post:c:all': 5 }, 'x').pairs.top.length === 0);
+  // A post that trips many checks: every key lands, in chunks under the limit.
+  const many = ENGINE.RULES.slice(0, 18).map(r => r.id);
+  const keys = statKeys('analyze', 200, { mode: 'llm', report: { band: { key: 'completely' }, overall: 9.8, mediaAttached: true, satireApplied: true, narrative: true, stats: { firedIds: many } } }, 100, 'paste', { meaner: true });
+  const env3 = baseEnv(); env3.COUNTERS = mockCounters();
+  const seen = []; const realGet = env3.COUNTERS.get; env3.COUNTERS.get = id => { const stub = realGet.call(env3.COUNTERS, id); return { fetch: (u, i) => { const b = JSON.parse(i.body); if (u.endsWith('/bump')) seen.push(b.keys.length + (b.stamps || []).length); return stub.fetch(u, i); } }; };
+  await bumpStats(env3, keys);
+  const s3 = await readStats(env3);
+  check('a batch is never over 128 keys in one call to storage, stamps included', keys.length > 128 && seen.length >= 2 && seen.every(n => n <= 128), keys.length + ' keys, calls of ' + seen.join(','));
+  check('  ...and every key of a many-check post is counted', keys.every(k => s3[k.toLowerCase().replace(/[^a-z0-9:_.-]/g, '_')] === 1), Object.keys(s3).length + ' of ' + keys.length);
+  // The snapshot fails closed.
+  const pub = baseEnv(); pub.COUNTERS = mockCounters(); pub.METRICS_OPEN = '1'; llmBehaviour = 'good';
+  await (await worker.fetch(post({ post: NEUTRAL }), pub, ctx)).json(); await new Promise(z => setTimeout(z, 40));
+  const noKV = { ...pub }; delete noKV.KV;
+  check('no KV: the public gets nothing, never a live read', (await (await worker.fetch(new Request('https://yourpost.sucks/api/metrics'), noKV, ctx)).json()).ok === false);
+  const badGet = { ...pub, KV: { ...pub.KV, get: async () => { throw new Error('down'); } } };
+  check('  ...a failed read: nothing', (await (await worker.fetch(new Request('https://yourpost.sucks/api/metrics'), badGet, ctx)).json()).ok === false);
+  const first = await (await worker.fetch(new Request('https://yourpost.sucks/api/metrics'), pub, ctx)).json();
+  const badPut = { ...pub, KV: { ...pub.KV, put: async () => { throw new Error('down'); } } };
+  await pub.KV.put('mx:snap', JSON.stringify({ ...first, at: '2000-01-01T00:00:00.000Z' }));
+  for (let i = 0; i < 11; i++) { await (await worker.fetch(post({ post: NEUTRAL + ' ' + i }), pub, ctx)).json(); }
+  await new Promise(z => setTimeout(z, 60));
+  const stale = await (await worker.fetch(new Request('https://yourpost.sucks/api/metrics'), badPut, ctx)).json();
+  check('  ...a failed write serves the old snapshot, never the fresh figures', stale.at === '2000-01-01T00:00:00.000Z' && stale.scored === first.scored, stale.at + ' ' + stale.scored);
+  // The spread follows the tenths.
+  const g = publicFigures({ 'band:barely': 10, 'score:0': 10, 'post:band:barely': 4, 'post:score:0': 4, 'post:tenth:4': 2, 'post:tenth:7': 2 }, 'x');
+  check('whole-point posts are spread by the pattern of the posts with tenths: nothing drawn at 0.0 to 0.3 when no post has landed there', g.shape[0] === 0 && Math.round(g.shape[1] + g.shape[2]) === 14);
 }
 
 console.log('\n=== every series ever counted, added up ===');
