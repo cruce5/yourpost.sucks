@@ -6,7 +6,7 @@
     "build": "node build.mjs",
     "test": "node build.mjs && node engine.test.mjs > /dev/null && node engine.rules.test.mjs && node worker.test.mjs && node parity.mjs && node client.test.mjs",
     "dev": "node build.mjs && wrangler dev",
-    "deploy": "node build.mjs && wrangler deploy"
+    "deploy": "npm test && wrangler deploy"
   },
   "devDependencies": {
     "playwright": "^1.48.0"
