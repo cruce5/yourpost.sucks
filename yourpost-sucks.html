@@ -339,6 +339,7 @@ body.meaner .brand-flag .flag-red{opacity:1}
    wrapping row left three on top and one underneath. */
 .mx-legend{display:grid;grid-auto-flow:column;justify-content:start;gap:8px 20px;margin:14px 0 0;padding:0;list-style:none;font-size:14px;color:var(--ink-2)}
 @media (max-width:780px){.mx-legend{grid-auto-flow:row}}
+.mx-legend.mx-legend-col{grid-auto-flow:row}
 .mx-legend li{display:inline-flex;align-items:center;gap:7px;white-space:nowrap}
 .mx-legend i{display:inline-block;width:11px;height:11px;border-radius:3px;background:var(--c)}
 .mx-legend b{font:500 13px/1 var(--mono);color:var(--ink-3);font-variant-numeric:tabular-nums}
@@ -6658,8 +6659,8 @@ ul.cg-list li::before{content:"\2022";position:absolute;left:0;color:var(--ink-4
     // In a legend the total is already on the card, so under MX_MIN it is
     // just the count.
     var legendVal = function(n, d){ return d < MX_MIN ? num(n) : share(n, d); };
-    function legend(rows){
-      return '<ul class="mx-legend">' + rows.map(function(r){ return '<li><i style="--c:' + r[0] + '"></i>' + E(r[1]) + ' <b>' + E(r[2]) + '</b></li>'; }).join('') + '</ul>';
+    function legend(rows, cls){
+      return '<ul class="mx-legend' + (cls ? ' ' + cls : '') + '">' + rows.map(function(r){ return '<li><i style="--c:' + r[0] + '"></i>' + E(r[1]) + ' <b>' + E(r[2]) + '</b></li>'; }).join('') + '</ul>';
     }
     function stack(rows, total){
       return '<div class="mx-stack" role="img" aria-label="' + E(rows.map(function(r){ return r[1] + ': ' + share(r[2], total); }).join(', ')) + '">' +
@@ -6726,7 +6727,7 @@ ul.cg-list li::before{content:"\2022";position:absolute;left:0;color:var(--ink-4
     // category, area proportional to how often it fires. Decoration, and
     // says so; every wedge still carries its exact figure on hover.
     function rose(d, W){
-      var size = Math.min(520, W), c = size / 2, R = c - 58, r0 = 40, order = ['auth', 'clar', 'cring', 'bait', 'brag'], dims = dimLabels();
+      var size = Math.min(520, W), c = size / 2, R = c - 16, r0 = Math.round(size * 0.08), order = ['auth', 'clar', 'cring', 'bait', 'brag'], dims = dimLabels();
       var rules = d.rules.slice();
       var groups = order.map(function(k){ return rules.filter(function(x){ return x.dim === k; }).sort(function(a, b){ return b.n - a.n; }); });
       var all = [].concat.apply([], groups), n = all.length, max = Math.max.apply(null, all.map(function(x){ return x.n; }).concat([1]));
@@ -6745,12 +6746,13 @@ ul.cg-list li::before{content:"\2022";position:absolute;left:0;color:var(--ink-4
           else s += '<path d="' + arc(a + gap, a + step - gap, r0, r0 + 3) + '" fill="var(--rule-2)"' + tip(x.label, (YPS.RULE_WHY || {})[x.id] || '', x.countable === false ? 'Cannot be counted here' : 'Not once') + '/>';
           i++;
         });
-        var a1 = i * step, mid = (a0 + a1) / 2, lp = pt(mid, R + 14), side = Math.cos(mid - Math.PI / 2);
+        var a1 = i * step;
         s += '<path d="' + arc(a0 + gap, a1 - gap, R + 4, R + 7) + '" fill="var(--dim-' + order[gi] + ')" fill-opacity="0.6"/>';
-        s += '<text x="' + lp[0] + '" y="' + lp[1] + '" text-anchor="' + (side > 0.3 ? 'start' : side < -0.3 ? 'end' : 'middle') + '" dominant-baseline="middle">' + E(dims[order[gi]] || order[gi]) + '</text>';
       });
       s += '<text class="mx-rose-c" x="' + c + '" y="' + (c - 6) + '" text-anchor="middle" dominant-baseline="middle">' + n + '</text><text class="mx-rose-s" x="' + c + '" y="' + (c + 16) + '" text-anchor="middle" dominant-baseline="middle">sins</text>';
-      return s + '</svg>';
+      // The categories as a legend under the chart, not labels around it:
+      // those ran off the edge of a phone.
+      return s + '</svg>' + legend(order.map(function(k, gi){ return ['var(--dim-' + k + ')', dims[k] || k, '']; }), 'mx-legend-col');
     }
     function typical(buckets, total){
       var half = total / 2, run = 0;
