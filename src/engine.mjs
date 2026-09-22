@@ -2915,8 +2915,62 @@
     };
   }
 
+  /* What each check is looking for, in one plain sentence, for anywhere
+   * the check's name is shown to a reader (the explain tab, the numbers
+   * tab). Written from the test above each one: a claim here has to match
+   * what actually fires. Kept beside the rules so the two move together. */
+  var RULE_WHY = {
+    'announce': 'Opens with "excited to announce" or one of its cousins.',
+    'cantwait': 'Excited, and also cannot wait, and also thrilled. The excitement stack.',
+    'newchapter': 'A new chapter, a new journey, a new adventure. The job is a job.',
+    'officially': 'Officially. As opposed to the unofficial announcement nobody made.',
+    'bignews': 'Promises some news, big news, an update, and makes you read on to find out what.',
+    'gratitude': 'Grateful, blessed, humbled and thankful, in bulk.',
+    'thanks-count': 'Thanks three or more separate people or teams. A credits roll, not a post.',
+    'believed': 'Thanks everyone who believed in me, a group that has never once been named.',
+    'emoji-volume': 'Two or more emoji doing the work the words were supposed to do.',
+    'emoji-repeat': 'The same emoji twice or more. Once was already a lot.',
+    'emoji-bullets': 'Lines that start with an emoji instead of a bullet, a word or a thought.',
+    'humbled': 'Humbled, in a post whose purpose is the opposite.',
+    'honored': 'Honored or recognized, which is to say: I won something.',
+    'impact': 'Making an impact, driving impact, impact at scale. Nobody says what changed.',
+    'dreamjob': 'Dream job, dream role, dream team. Dreams are private.',
+    'rejection-arc': 'Rejected, then triumphant, in the same post. The comeback is the brag.',
+    'numeric-flex': 'A number that is there to impress, not to inform: revenue, followers, offers.',
+    'casually': 'Not to brag, no big deal, little did I know. The disclaimer is the brag.',
+    'ask-comment': 'Asks the reader to comment, agree, or share their thoughts.',
+    'ask-follow': 'Asks the reader to follow, repost, ring the bell, or spread the word.',
+    'sink-in': 'Let that sink in. Read that again. Nobody talks about this. They do.',
+    'listicle': 'Promises a numbered list of lessons, things, ways or mistakes.',
+    'question-close': 'Ends on a question aimed at the reader. It is an invitation to comment.',
+    'hashtags': 'Hashtags. Any of them. They are decoration, and this counts the decoration.',
+    'perf-vuln': 'Announces that it is being vulnerable, honest, raw or transparent. Being it is different.',
+    'silver-lining': 'A layoff or burnout, followed at once by the lesson it taught. The spin is faster than the grief.',
+    'pivot-lang': 'Pivoting into, making a pivot, the pivot. A verb that has become a career stage.',
+    'broetry': 'More than half the lines are eight words or fewer, each in its own paragraph.',
+    'orphan-line': 'A one or two word line in the middle of the post, standing alone for effect.',
+    'allcaps': 'A run of capital letters. Acronyms and citations are let through.',
+    'ai-isms': 'Delve, navigate the complexities, a testament to. The phrases a model reaches for.',
+    'not-just': 'It is not just X, it is Y. The construction, wherever it turns up.',
+    'emdash': 'Three or more em dashes, at more than one per hundred words.',
+    'corporate': 'Leverage, stakeholders, learnings, north star, at scale. Two or more of them.',
+    'no-specifics': 'Forty-five words or more with at most one number, name, date or place in them.',
+    'long-sentences': 'Sentences averaging twenty-six words or more. A paragraph in a trench coat.',
+    'too-long': 'Three hundred and twenty words or more. Told stories get more room.',
+    'too-short-empty': 'Under sixteen words and nothing specific in them. A caption with no picture.',
+    'vague-nouns': 'Things, stuff, the work, this space, many people. Two or more of them.',
+    'repetition': 'The same sentence more than once.',
+    'gibberish': 'Most of the words are not words.',
+    'not-english': 'Not written in English, so the checks cannot read it and it is not scored.',
+    'promo-lede': 'Opens with the logistics: join us, tune in, register, new episode.',
+    'plug-signoff': 'A P.S. or a sign-off line that turns out to be a plug.',
+    'hedging': 'Probably, sort of, kind of, I could be wrong but. The claim is retreating as it is made.',
+    'question-opener': 'Opens with a question aimed at the reader, under 130 characters.',
+    'fragment': 'A short post leaning on this, that or it, with no this, that or it in sight.'
+  };
+
   var api = {
-    analyze: analyze, buildContext: buildContext, RULES: RULES, esc: esc,
+    analyze: analyze, buildContext: buildContext, RULES: RULES, RULE_WHY: RULE_WHY, esc: esc,
     cleanPaste: cleanPaste, normalizeText: normalizeText, bandFor: bandFor,
     sensitiveCheck: sensitiveCheck, VERSION: '2.1',
     // exposed for the rule tests: the advice keys have to be checkable

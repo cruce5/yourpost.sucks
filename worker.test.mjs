@@ -1680,6 +1680,17 @@ console.log('\n=== what is a post (Reconcilers, episode 4) ===');
   llmBehaviour = 'good';
 }
 
+console.log('\n=== meaner mode is counted, from now, on its own denominator ===');
+{
+  const env = baseEnv(); env.COUNTERS = mockCounters(); llmBehaviour = 'good';
+  await (await worker.fetch(post({ post: BAD, meaner: true }), env, ctx)).json();
+  await (await worker.fetch(post({ post: NEUTRAL }), env, ctx)).json();
+  await new Promise(z => setTimeout(z, 40));
+  const s = await readStats(env), f = publicFigures(s, 'x');
+  check('a post that asked for it meaner is counted, and so is every post since the flag existed', s['post:flag:meaner'] === 1 && s['post:m:all'] === 2 && s['analyze:meaner'] === 1 && f.meaner.n === 1 && f.meaner.of === 2 && /^\d{4}-\d{2}-\d{2}$/.test(f.meaner.since), JSON.stringify(f.meaner));
+  check('  ...and every check has a one-line definition', ENGINE.RULES.every(r => typeof ENGINE.RULE_WHY[r.id] === 'string' && ENGINE.RULE_WHY[r.id].length > 20));
+}
+
 console.log('\n=== every series ever counted, added up ===');
 {
   // The owner, 2026-09-21: bring the old reports back, added in.

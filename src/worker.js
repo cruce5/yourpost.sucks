@@ -401,7 +401,7 @@ const NOT_A_POST_REASONS = ['turnstile'];
 const RULE_IDS = new Set(ENGINE.RULES.map(r => r.id));
 // Tenths, compared as whole numbers: 1.4 - 0.4 is 0.9999999999999999.
 const gainBucket = (before, after) => { const t = Math.round(before * 10) - Math.round(after * 10); return t >= 20 ? '2plus' : t >= 10 ? '1to2' : t > 0 ? 'under1' : 'none'; };
-export function statKeys(kind, status, p, ms, source) {
+export function statKeys(kind, status, p, ms, source, asked) {
   const keys = [`${kind}:all`];
   if (status >= 400) { keys.push(`${kind}:error:${String(p && p.error || status).slice(0, 24)}`); return keys; }
   const mode = String(p && p.mode || 'none');
@@ -429,7 +429,12 @@ export function statKeys(kind, status, p, ms, source) {
     if (r.mediaAttached) keys.push('post:flag:media');
     if (r.meanerSkipped) keys.push('post:flag:meaner_skipped');
     if (r.narrative) keys.push('post:flag:narrative');
+    // Asked for the meaner edit. Counted from 2026-09-22, alongside a count
+    // of the posts since then, so its share divides by the right number.
+    keys.push('post:m:all');
+    if (asked && asked.meaner) keys.push('post:flag:meaner');
   }
+  if (kind === 'analyze' && asked && asked.meaner) keys.push('analyze:meaner');
   if (kind === 'reword' && p && p.after && p.before && typeof p.after.overall === 'number') {
     keys.push('reword:gain:' + gainBucket(p.before.overall, p.after.overall));
   }
@@ -438,7 +443,7 @@ export function statKeys(kind, status, p, ms, source) {
 async function bumpStats(env, keys) {
   const ns = counters(env);
   if (!ns || !keys.length) return;
-  try { await counterCall(ns, 'stats', '/bump', { keys: keys.map(k => 's:' + k.toLowerCase().replace(/[^a-z0-9:_.-]/g, '_')), stamp: keys.includes('post:all') ? 's:post:since' : undefined }); }
+  try { await counterCall(ns, 'stats', '/bump', { keys: keys.map(k => 's:' + k.toLowerCase().replace(/[^a-z0-9:_.-]/g, '_')), stamps: [keys.includes('post:all') && 's:post:since', keys.includes('post:m:all') && 's:post:m:since'].filter(Boolean) }); }
   catch (e) { console.warn('stats: not counted', e && e.message); }
 }
 /** Every tally, with the prefix stripped, or null. For lab.js and the tests. */
@@ -587,6 +592,8 @@ export function publicFigures(all, at) {
     rules: ENGINE.RULES.map(r => ({ id: r.id, label: r.label, dim: r.dim, n: fired[r.id.toLowerCase()] || 0, ...(r.id === 'not-english' ? { countable: false } : {}) })),
     clean: fired.none || 0,
     flags: { media: flag.media || 0, satire: flag.satire || 0, narrative: flag.narrative || 0 },
+    // Newer than the rest: its own denominator and its own start date.
+    meaner: { n: s['post:flag:meaner'] || 0, of: s['post:m:all'] || 0, since: s['post:m:since'] ? new Date(s['post:m:since']).toISOString().slice(0, 10) : null },
     reword: { tried, notAttempted: Math.max(0, outcomes - tried.better - tried.couldNotBeat - tried.unusable), gain: under('reword:gain:') },
     // Every report that reached the AI, since the counting began.
     wait: Object.fromEntries(['lt5s', '5to10s', '10to20s', 'gt20s'].map(b => [b, s['analyze:wait:' + b] || 0]))
@@ -621,10 +628,14 @@ async function handleMetrics(request, env) {
 async function counted(kind, handler, request, env, ctx) {
   const t0 = Date.now();
   const source = request.headers.get('x-yps-source');
+  // What was asked for, read from a copy of the body before the handler
+  // consumes it. Only fixed flags are ever read out of it.
+  let asked = null;
+  try { const b = await request.clone().json(); asked = { meaner: b && b.meaner === true }; } catch (e) { asked = null; }
   const res = await handler(request, env, ctx);
   try {
     const p = await res.clone().json();
-    ctx.waitUntil(bumpStats(env, statKeys(kind, res.status, p, Date.now() - t0, source)));
+    ctx.waitUntil(bumpStats(env, statKeys(kind, res.status, p, Date.now() - t0, source, asked)));
   } catch (e) { /* a response that is not JSON is not one of ours to count */ }
   return res;
 }
@@ -892,8 +903,9 @@ export class Counters {
       const now = await this.state.storage.get(keys);
       const next = {};
       for (const k of keys) { const r = now.get(k); next[k] = { n: (r && Number(r.n) || 0) + 1 }; }
-      // A stamp, written once and never moved: when this series began.
-      if (typeof body.stamp === 'string' && /^[a-z0-9:_.-]{1,64}$/.test(body.stamp) && !(await this.state.storage.get(body.stamp))) next[body.stamp] = { n: Date.now() };
+      // Stamps, each written once and never moved: when a series began.
+      const stamps = [].concat(body.stamps || [], body.stamp || []).filter(k => typeof k === 'string' && /^[a-z0-9:_.-]{1,64}$/.test(k));
+      for (const st of stamps) if (!(await this.state.storage.get(st))) next[st] = { n: Date.now() };
       await this.state.storage.put(next);
       return json({ ok: true, n: keys.length });
     }
