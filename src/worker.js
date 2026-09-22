@@ -489,7 +489,7 @@ export async function readStats(env) {
  * most once an UTC hour, and only once at least MX_SNAP_MIN more posts have
  * been counted. Someone behind the door (the owner) always reads live.
  * ------------------------------------------------------------------ */
-export const METRICS_SINCE = '2026-09-21';
+const METRICS_SINCE = '2026-09-21';
 const PAIR_MIN = 3;
 const MX_SNAP_KEY = 'mx:snap';
 const MX_SNAP_MIN = 10;
