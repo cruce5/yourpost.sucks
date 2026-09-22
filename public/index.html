@@ -6777,13 +6777,22 @@ ul.cg-list li::before{content:"\2022";position:absolute;left:0;color:var(--ink-4
       var fired = countable.filter(function(x){ return x.n > 0; }).sort(function(a, b){ return b.n - a.n; }), sin = fired[0], sin2 = fired[1];
       var never = countable.length - fired.length;
       var mid = typical(d.scores || [], d.scored);
+      // Every check has fired at least once now, so the fourth tile is the
+      // one that has fired least. Ties are named, up to two, then counted.
+      var lo = fired.length ? fired[fired.length - 1].n : 0;
+      var rare = fired.filter(function(x){ return x.n === lo; });
+      var rarePosts = lo === 1 ? 'One post' : num(lo) + ' posts';
+      var rareNames = rare.length <= 2 ? rare.map(function(x){ return x.label; }).join(' and ') : rare[0].label + ' and ' + (rare.length - 1) + ' others';
+      var rareNote = !rare.length ? 'Nothing has fired yet.' : rareNames + '. ' + rarePosts + (rare.length > 1 ? ' each' : '') + ', so far.';
+      var rareWhy = !rare.length ? '' : rare.length === 1 ? ((YPS.RULE_WHY || {})[rare[0].id] || '') + ' The check that has fired least.' : 'The checks that have fired least, tied: ' + rare.map(function(x){ return x.label; }).join(', ') + '.';
+      var rareFig = rare.length ? num(lo) + ' of ' + num(d.scored) + ' posts' + (rare.length > 1 ? ', each' : '') : '';
       var under = mid === null ? 0 : (d.scores || []).slice(0, mid + 1).reduce(function(a, n){ return a + n; }, 0);
 
       html += '<div class="mx-tiles">' +
         '<div class="mx-tile"' + tip('Posts scored', 'Posts that got a score, added up since 21 September 2026. The same post pasted by two people counts twice, because it is two people.', num(d.scored)) + '><span class="v">' + num(d.scored) + '</span><span class="k">Posts scored</span><span class="n">Since ' + E(sinceText(d.since)) + '.</span></div>' +
         '<div class="mx-tile"' + tip('Spotless', 'Posts that tripped none of the ' + d.rules.length + ' checks. Not the same as good: the checks find bad habits, and a post can have none of those and still be nothing.', num(d.clean) + ' of ' + num(d.scored)) + '><span class="v">' + (quiet ? num(d.clean) : E(share(d.clean, d.scored))) + '</span><span class="k">Spotless</span><span class="n">' + (quiet ? 'Of ' + num(d.scored) + ' posts. ' : '') + 'Zero of the ' + d.rules.length + ' checks. Respect.</span></div>' +
         '<div class="mx-tile"' + tip('Median score', 'Line every post up by score, take the one in the middle. Half score lower than it, half higher. Lower is better.', mid === null ? '' : num(under) + ' of ' + num(d.scored) + ' score under ' + (mid + 1)) + '><span class="v">' + (mid === null ? '0' : mid) + '</span><span class="k">Median score</span><span class="n">' + (mid === null ? 'Nothing scored yet.' : 'The middle post scores ' + mid + '.something. ' + E(share(under, d.scored)) + ' score under ' + (mid + 1) + '.') + '</span></div>' +
-        '<div class="mx-tile"' + tip('Unseen sins', 'Checks that have not fired on a single post yet. Open "Show all" in the sins list to see which.', never + ' of ' + countable.length) + '><span class="v">' + never + '</span><span class="k">Unseen sins</span><span class="n">Of the ' + countable.length + ' checks we can count. Give it time.</span></div>' +
+        '<div class="mx-tile"' + tip('Rarest sin', rareWhy, rareFig) + '><span class="v">' + num(lo) + '</span><span class="k">Rarest sin</span><span class="n">' + E(rareNote) + '</span></div>' +
         '</div>';
 
       html += section('01', 'Where the scores land',
