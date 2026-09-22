@@ -1691,6 +1691,18 @@ console.log('\n=== meaner mode is counted, from now, on its own denominator ==='
   check('  ...and every check has a one-line definition', ENGINE.RULES.every(r => typeof ENGINE.RULE_WHY[r.id] === 'string' && ENGINE.RULE_WHY[r.id].length > 20));
 }
 
+console.log('\n=== combos: checks that fire together ===');
+{
+  const fired = ['hashtags', 'emoji-volume', 'announce'];
+  const k = statKeys('analyze', 200, { mode: 'llm', report: { band: { key: 'lot' }, overall: 6.1, stats: { firedIds: fired } } }, 100, 'paste', null);
+  const pairs = k.filter(x => x.startsWith('post:pair:'));
+  check('three checks make three sorted pairs, and the post is counted for the pairing', pairs.length === 3 && pairs.includes('post:pair:announce+emoji-volume') && pairs.includes('post:pair:emoji-volume+hashtags') && k.includes('post:c:all'), pairs.join(' '));
+  const many = statKeys('analyze', 200, { mode: 'llm', report: { band: { key: 'lot' }, overall: 6.1, stats: { firedIds: ENGINE.RULES.slice(0, 20).map(r => r.id) } } }, 100, 'paste', null);
+  check('  ...a wild post is capped at 100 pairs, so nothing else falls off the batch', many.filter(x => x.startsWith('post:pair:')).length === 100 && many.includes('post:flag:meaner') === false && many.includes('post:m:all') && many.length < 160, many.length);
+  const f = publicFigures({ 'post:pair:announce+gratitude': 4, 'post:pair:emoji-volume+hashtags': 9, 'post:pair:bogus+hashtags': 50, 'post:c:all': 30 }, 'x');
+  check('  ...the public figures carry the top pairs by count, real checks only, on their own denominator', f.pairs.top.length === 2 && f.pairs.top[0].a === 'emoji-volume' && f.pairs.top[0].n === 9 && f.pairs.of === 30, JSON.stringify(f.pairs));
+}
+
 console.log('\n=== every series ever counted, added up ===');
 {
   // The owner, 2026-09-21: bring the old reports back, added in.

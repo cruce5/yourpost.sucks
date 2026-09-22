@@ -429,6 +429,14 @@ export function statKeys(kind, status, p, ms, source, asked) {
     if (r.mediaAttached) keys.push('post:flag:media');
     if (r.meanerSkipped) keys.push('post:flag:meaner_skipped');
     if (r.narrative) keys.push('post:flag:narrative');
+    // Which checks fired TOGETHER, as sorted pairs, from 2026-09-22, with a
+    // count of the posts since then. A post that trips many checks makes
+    // many pairs; capped so one wild post cannot push other keys off the
+    // batch (the counter takes 160).
+    keys.push('post:c:all');
+    const pub = fired.filter(id => RULE_IDS.has(id)).sort();
+    let pairsLeft = 100;
+    for (let a = 0; a < pub.length && pairsLeft > 0; a++) for (let b = a + 1; b < pub.length && pairsLeft > 0; b++, pairsLeft--) keys.push(`post:pair:${pub[a]}+${pub[b]}`);
     // Asked for the meaner edit. Counted from 2026-09-22, alongside a count
     // of the posts since then, so its share divides by the right number.
     keys.push('post:m:all');
@@ -443,7 +451,7 @@ export function statKeys(kind, status, p, ms, source, asked) {
 async function bumpStats(env, keys) {
   const ns = counters(env);
   if (!ns || !keys.length) return;
-  try { await counterCall(ns, 'stats', '/bump', { keys: keys.map(k => 's:' + k.toLowerCase().replace(/[^a-z0-9:_.-]/g, '_')), stamps: [keys.includes('post:all') && 's:post:since', keys.includes('post:m:all') && 's:post:m:since'].filter(Boolean) }); }
+  try { await counterCall(ns, 'stats', '/bump', { keys: keys.map(k => 's:' + k.toLowerCase().replace(/[^a-z0-9:_.-]/g, '_')), stamps: [keys.includes('post:all') && 's:post:since', keys.includes('post:m:all') && 's:post:m:since', keys.includes('post:c:all') && 's:post:c:since'].filter(Boolean) }); }
   catch (e) { console.warn('stats: not counted', e && e.message); }
 }
 /** Every tally, with the prefix stripped, or null. For lab.js and the tests. */
@@ -592,6 +600,10 @@ export function publicFigures(all, at) {
     rules: ENGINE.RULES.map(r => ({ id: r.id, label: r.label, dim: r.dim, n: fired[r.id.toLowerCase()] || 0, ...(r.id === 'not-english' ? { countable: false } : {}) })),
     clean: fired.none || 0,
     flags: { media: flag.media || 0, satire: flag.satire || 0, narrative: flag.narrative || 0 },
+    // Checks that fired on the same post, the ten most common pairs. Newer
+    // than the rest, so its own denominator and its own start date.
+    pairs: { of: s['post:c:all'] || 0, since: s['post:c:since'] ? new Date(s['post:c:since']).toISOString().slice(0, 10) : null,
+      top: Object.entries(under('post:pair:')).map(([k, n]) => { const [a, b] = k.split('+'); return { a, b, n }; }).filter(x => RULE_IDS.has(x.a) && RULE_IDS.has(x.b)).sort((x, y) => y.n - x.n).slice(0, 10) },
     // Newer than the rest: its own denominator and its own start date.
     meaner: { n: s['post:flag:meaner'] || 0, of: s['post:m:all'] || 0, since: s['post:m:since'] ? new Date(s['post:m:since']).toISOString().slice(0, 10) : null },
     reword: { tried, notAttempted: Math.max(0, outcomes - tried.better - tried.couldNotBeat - tried.unusable), gain: under('reword:gain:') },
@@ -911,7 +923,7 @@ export class Counters {
     }
     if (body && typeof body === 'object' && url.pathname === '/dump') {
       const prefix = typeof body.prefix === 'string' ? body.prefix : '';
-      const all = await this.state.storage.list({ prefix, limit: 2000 });
+      const all = await this.state.storage.list({ prefix, limit: 5000 });
       const counts = {};
       for (const [k, r] of all) counts[k] = r && Number(r.n) || 0;
       return json({ ok: true, counts });
