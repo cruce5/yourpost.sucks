@@ -6802,7 +6802,8 @@ ul.cg-list li::before{content:"\2022";position:absolute;left:0;color:var(--ink-4
       html += section('02', 'The sins, ranked',
         quiet ? few : !sin ? 'Not one check has fired in ' + num(d.scored) + ' posts. Either everyone got better or something is broken'
           : (function(L){ return L.length === 1 ? 'The most popular sin is "' + sin.label + '", in ' + share(sin.n, d.scored) + ' of posts'
-              : 'No clear winner: ' + listOf(L.map(function(x){ return '"' + x.label + '" at ' + share(x.n, d.scored); })); })(leaders(fired)),
+              : L.length <= 3 ? 'No clear winner: ' + listOf(L.map(function(x){ return '"' + x.label + '" at ' + share(x.n, d.scored); }))
+              : 'Too early to call: ' + L.length + ' sins are within a post or two of each other, led by "' + sin.label + '" at ' + share(sin.n, d.scored); })(leaders(fired)),
         'How often each check fires. A full bar would be every post. The longest bar is the most common sin, not the worst one. ' + (never ? never + ' of the ' + countable.length + ' countable checks have never fired. ' : '') + '"Not in English" can’t be counted here: a post it catches never gets a score.',
         ruleBars(d));
 
@@ -6845,7 +6846,8 @@ ul.cg-list li::before{content:"\2022";position:absolute;left:0;color:var(--ink-4
         cb.of < MX_MIN ? 'Only ' + num(cb.of) + ' posts since the pairing started, not enough to say anything true'
           : !c1 ? 'No pair of checks has come up three times yet'
           : (function(L){ return L.length === 1 ? 'The most common combo is "' + byId[cb.top[0].a].label + '" with "' + byId[cb.top[0].b].label + '", in ' + share(c1.n, cb.of) + ' of posts'
-              : 'No clear winner: ' + listOf(L.map(function(x){ return x.label + ' at ' + share(x.n, cb.of); })); })(leaders(comboRows)),
+              : L.length <= 3 ? 'No clear winner: ' + listOf(L.map(function(x){ return x.label + ' at ' + share(x.n, cb.of); }))
+              : 'Too early to call: ' + L.length + ' pairs are within a post or two of each other, led by ' + c1.label + ' at ' + share(c1.n, cb.of); })(leaders(comboRows)),
         'Checks that fire on the same post, once a pair has come up three times. One sin is a habit. Two is a style. Counted since ' + E(sinceText(cb.since)) + ', when the pairing started, so the shares are of the ' + num(cb.of) + ' posts since then.',
         comboRows.length ? bars(comboRows, cb.of, Math.max(1, cb.of), 'mx-combos', 'none yet') : '<p class="mx-note">No pair has come up three times yet.</p>');
 

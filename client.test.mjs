@@ -993,6 +993,7 @@ check('Right from the last tab wraps to the first, and only one tab is in the Ta
     ['Reword never asked', d => { d.reword = { tried: { better: 0, couldNotBeat: 0, unusable: 0 }, notAttempted: 0, gain: {} }; }],
     ['Reword tried, never once won', d => { d.reword = { tried: { better: 0, couldNotBeat: 50, unusable: 10 }, notAttempted: 5, gain: {} }; }],
     ['the top two sins within noise of each other', d => { d.rules[0].n = 100; d.rules[1].n = 95; }],
+    ['nine pairs all within noise', d => { d.pairs = { of: 86, since: '2026-09-22', top: [['announce','hashwall',5],['announce','quiet',5],['hashwall','quiet',3],['announce','hashwall',3],['announce','quiet',3],['hashwall','quiet',3],['announce','hashwall',3],['announce','quiet',3],['hashwall','quiet',3]].map(([a, b, n]) => ({ a, b, n })) }; }],
     ['one post short of all', d => { d.flags.media = d.scored - 1; }],
     ['nobody waited on the AI', d => { d.wait = { lt5s: 0, '5to10s': 0, '10to20s': 0, gt20s: 0 }; }],
     ['every post in one score bucket', d => { d.scores = [0, 0, 500, 0, 0, 0, 0, 0, 0, 0]; d.shape = Array(25).fill(0); d.shape[5] = 500; d.bands = { barely: 500 }; }],
@@ -1005,7 +1006,7 @@ check('Right from the last tab wraps to the first, and only one tab is in the Ta
     await api.goto(httpUrl + '#how-it-works'); await api.goto(httpUrl + '#the-numbers'); await api.reload();
     await api.waitForSelector('#panel-metrics .mx-sec', { timeout: 5000 });
     const bad = await api.evaluate(() => { const p = document.getElementById('panel-metrics'); const t = p.textContent; const heads = [...p.querySelectorAll('.mx-h')].map(h => h.textContent);
-      return [/NaN|undefined|null|Infinity/.test(t) && 'a broken number', heads.some(h => !h.trim() || /""|, in 0% of posts|beats the original 0%|^0% of AI|100%|^Every post so far came/.test(h)) && 'a headline that says nothing, or all when it is not all: ' + heads.join(' | '), p.querySelector('.mx-h b, .mx-bars b') && 'markup from a label was rendered', document.documentElement.scrollWidth > innerWidth + 1 && 'sideways scroll'].filter(Boolean); });
+      return [/NaN|undefined|null|Infinity/.test(t) && 'a broken number', heads.some(h => !h.trim() || /""|, in 0% of posts|beats the original 0%|^0% of AI|100%|^Every post so far came/.test(h) || h.length > 140) && 'a headline that says nothing, or all when it is not all: ' + heads.join(' | '), p.querySelector('.mx-h b, .mx-bars b') && 'markup from a label was rendered', document.documentElement.scrollWidth > innerWidth + 1 && 'sideways scroll'].filter(Boolean); });
     if (bad.length) drift.push(name + ': ' + bad.join('; '));
     await api.unroute('**/api/metrics');
   }
