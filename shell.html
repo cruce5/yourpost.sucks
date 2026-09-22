@@ -170,6 +170,14 @@ body::before{
   content:"";position:fixed;inset:0;z-index:-1;pointer-events:none;
   background:var(--plane-bg, var(--plane));
 }
+/* Meaner mode warms the page, not the panels: a faint red wash on a second
+   fixed layer, over the glow and under everything else. */
+body::after{
+  content:"";position:fixed;inset:0;z-index:-1;pointer-events:none;
+  background:rgba(222,52,44,.05);opacity:0;transition:opacity .4s ease;
+}
+body.meaner::after{opacity:1}
+@media (prefers-reduced-motion:reduce){body::after{transition:none}}
 .wrap{max-width:760px;margin:0 auto;padding:40px 20px 96px}
 
 /* ---------- masthead ---------- */
@@ -1210,7 +1218,7 @@ ul.cg-list li::before{content:"\2022";position:absolute;left:0;color:var(--ink-4
 
 @media print{
   body{background:#fff;color:#111}
-  body::before{display:none}
+  body::before,body::after{display:none}
   .panel,.controls,.specimens,.share-actions,.share-more,.tabs,footer,.game-wrap,.toast,.tipask,.read-bar,.read-rule{display:none}
   .hero,.meter,ul.roasts li,.share-box{background:#fff;border-color:#ccc;color:#111}
   .hero .num{color:#111 !important}
@@ -3164,6 +3172,7 @@ ul.cg-list li::before{content:"\2022";position:absolute;left:0;color:var(--ink-4
      change. */
   function paintMeaner(){
     var on = $('#meaner').checked;
+    document.body.classList.toggle('meaner', on);
     [$('#readrule'), $('#readbar')].forEach(function(el){
       if (el.classList.contains('mean') === on && el.classList.contains('on')) return;
       el.classList.add('snap');
