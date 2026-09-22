@@ -1832,9 +1832,22 @@ function newNumbersIntroduced(rewritten, originalPost, withRaw) {
  * the whole response is suspect and none of it should ship. */
 const compromisedLow = low => /https?:\/\/|\bwww\./.test(low) ||
   /\b(?:10\s*\/\s*10|0\s*\/\s*10|out of 10|scores? \d|perfect post|score of|i (?:will|shall) ignore|as (?:you |an )?instructed|as an a\.?i\b\.?)/.test(low);
+/* The two score phrases a person can have in their OWN post: "the final score
+ * of 9 to 1", "a credit score of 720", "scores 3 goals". In text that is meant
+ * to BE the writer's post (a Reword rewrite, a drafted post) and nowhere else,
+ * one of these passes when the writer's own text has the same phrase. Every
+ * other part of the line above stays absolute, and commentary ABOUT a post
+ * (the report, the Reword summary) never gets this. */
+// The phrase and what it is a score of: "score of the last game" in the post
+// does not license "score of 9" in the rewrite.
+const OWN_SCORE_TALK = /\b(?:scores? \d+|score of \S+)/g;
+function compromisedInOwnPost(low, srcLow) {
+  const other = low.replace(OWN_SCORE_TALK, m => (srcLow && srcLow.includes(m) ? ' ' : m));
+  return compromisedLow(other);
+}
 const compromised = raw => typeof raw === 'string' && compromisedLow(normalizeForPolicing(raw).toLowerCase());
 
-function policed(raw, source) {
+export function policed(raw, source, opts) {
   const v = normalizeForPolicing(raw);
   // The em-dash rule, applied to what an em dash IS rather than to one code
   // point: any dash punctuation other than the plain hyphen-minus (the
@@ -1853,7 +1866,7 @@ function policed(raw, source) {
   // A link is never something the report should be handing a reader: the
   // model has nowhere legitimate to have got one from, so any URL is either
   // hallucinated or smuggled in from the post.
-  if (compromisedLow(low)) return false;
+  if (opts && opts.ownPost ? compromisedInOwnPost(low, source ? normalizeForPolicing(source).toLowerCase() : '') : compromisedLow(low)) return false;
   // Reach vocabulary is banned because the model must never PREDICT reach.
   // But a post that is itself ABOUT impressions ("Chasing impressions is not
   // a strategy", "proud of it at 200,000+ impressions") makes that word the
@@ -1921,7 +1934,9 @@ function validateReword(out, originalPost, factsText) {
   const origLen = originalPost.trim().length;
   if (rewritten.length < origLen * 0.2 || rewritten.length > origLen * 3 + 200) return reject('length_ratio', rewritten.length + '/' + origLen);
 
-  if (!clean(rewritten)) return reject('policed_phrase');
+  // The rewrite IS their post, so their own score talk ("the final score of
+  // 9 to 1") may stay in it. The summary is about the edit and stays strict.
+  if (!policed(rewritten, originalPost, { ownPost: true })) return reject('policed_phrase');
 
   // An emoji in the author's name is part of the name. A rewrite that loses
   // it has renamed them.

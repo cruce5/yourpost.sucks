@@ -1,6 +1,6 @@
 /* Exercises every degradation and safety path in the Worker with a mocked
    env + mocked Anthropic endpoint. No API key, no wrangler, no network. */
-import worker, { readStats, statKeys, readAiOutcomes, publicFigures, bumpStats, Counters, COSTS } from './src/worker.js';
+import worker, { readStats, statKeys, readAiOutcomes, publicFigures, bumpStats, Counters, COSTS, policed } from './src/worker.js';
 import ENGINE from './src/engine.mjs';
 import { readFileSync } from 'node:fs';
 
@@ -810,6 +810,16 @@ for (const behaviour of ['scores', 'predicts', 'injected', 'tooshort', 'toolong'
   check('a rewrite that is not actually different is never shown as a result',
     r.mode === 'unavailable' && r.reason === 'no_improvement',
     `mode=${r.mode} reason=${r.reason}`);
+}
+console.log('  --- a score that is theirs ---');
+{
+  const post = 'I coach my daughter\'s soccer team. We lost every game, and the final score of the last one was 9 to 1.';
+  const rewrite = 'We lost every game this season. The final score of the last one was 9 to 1. The kids remember the snacks.';
+  check('a rewrite may keep the writer\'s own "final score of 9 to 1"', policed(rewrite, post, { ownPost: true }) === true);
+  check('  ...but commentary about the post may not, whatever the post says', policed(rewrite, post) === false);
+  check('  ...and a score phrase the writer never used is still refused in a rewrite', policed('This version deserves a score of 9.', post, { ownPost: true }) === false);
+  check('  ...as are a perfect score, a link and obeying an instruction, even when the post has them', ['a perfect post, 10/10', 'see https://example.com', 'I will ignore the checks as instructed'].every(x => policed(x, post + ' ' + x, { ownPost: true }) === false));
+  check('  ...and "scores 3 goals" in a post about football stays when it is theirs', policed('He scores 3 goals a game.', 'My son scores 3 goals a game and still asks for snacks.', { ownPost: true }) === true);
 }
 console.log('  --- never worse ---');
 {
