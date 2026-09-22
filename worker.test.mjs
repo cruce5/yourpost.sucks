@@ -1586,7 +1586,7 @@ console.log('\n=== the numbers, for anyone: an allow-list ===');
   const res = await worker.fetch(new Request('https://yourpost.sucks/api/metrics'), env, ctx);
   const m = await res.json(), raw = JSON.stringify(m), all = await readStats(env);
   const rules = ENGINE.analyze(BAD, {});
-  check('api/metrics: scored posts, 25 bins of 0.4, and every check by name, fired or not', m.ok && m.scored === 2 && m.bins.length === 25 && m.bins.reduce((a, n) => a + n, 0) === 2 && m.rules.length === ENGINE.RULES.length && rules.stats.firedIds.every(id => (m.rules.find(r => r.id === id) || {}).n >= 1) && m.rules.every(r => r.label && r.dim), raw.slice(0, 200));
+  check('api/metrics: scored posts, whole-point scores, a 0.4 shape, and every check by name, fired or not', m.ok && m.scored === 2 && m.scores.reduce((a, n) => a + n, 0) === 2 && m.shape.length === 25 && Math.round(m.shape.reduce((a, n) => a + n, 0)) === 2 && m.rules.length === ENGINE.RULES.length && rules.stats.firedIds.every(id => (m.rules.find(r => r.id === id) || {}).n >= 1) && m.rules.every(r => r.label && r.dim), raw.slice(0, 200));
   check('  ...Reword split into what it tried and what it did not, and the wait for write-ups that arrived', m.reword.tried.better === 1 && m.reword.notAttempted === 0 && Object.values(m.wait).reduce((a, n) => a + n, 0) === 1, JSON.stringify(m.reword) + JSON.stringify(m.wait));
   check('  ...and nothing about how the site is doing: no reasons, no errors, no request totals', all['analyze:why:no_key'] === 1 && all['analyze:error:empty'] === 1 && !/no_key|why|error|analyze:all|mode:rules|budget|turnstile/.test(raw), raw.slice(0, 300));
   check('  ...it is a stored snapshot, never cached anywhere else, and read-only', m.live === false && /private, no-store/.test(res.headers.get('cache-control') || '') && (await worker.fetch(new Request('https://yourpost.sucks/api/metrics', { method: 'POST' }), env, ctx)).status === 405);
@@ -1654,19 +1654,19 @@ console.log('\n=== what is a post (Reconcilers, episode 4) ===');
   for (const src of ['specimen', 'rewrite', 'lab', 'permalink']) await (await worker.fetch(from(src, { post: NEUTRAL + ' ' + src }), env, ctx)).json();
   await settle();
   let s = await readStats(env);
-  check('a specimen click, an analyzed rewrite, a lab hand-off and a shared-link load are not posts', !s['posts:all'] && s['analyze:source:specimen'] === 1 && s['analyze:source:rewrite'] === 1 && s['analyze:source:lab'] === 1 && s['analyze:source:permalink'] === 1, JSON.stringify(s).slice(0, 300));
+  check('a specimen click, an analyzed rewrite, a lab hand-off and a shared-link load are not posts', !s['post:all'] && s['analyze:source:specimen'] === 1 && s['analyze:source:rewrite'] === 1 && s['analyze:source:lab'] === 1 && s['analyze:source:permalink'] === 1, JSON.stringify(s).slice(0, 300));
   await (await worker.fetch(from('paste', { post: NEUTRAL }), env, ctx)).json(); await settle();
   await (await worker.fetch(from(null, { post: NEUTRAL + ' no header' }), env, ctx)).json(); await settle();
   s = await readStats(env);
-  check('  ...a paste is, and so is a request that says nothing about where it came from', s['posts:all'] === 2, s['posts:all']);
+  check('  ...a paste is, and so is a request that says nothing about where it came from', s['post:all'] === 2, s['post:all']);
   const bot = baseEnv(); bot.COUNTERS = mockCounters(); bot.TURNSTILE_SECRET = 's'; bot.TURNSTILE_SITE_KEY = 'k'; bot.TURNSTILE_MODE = 'enforce';
   for (let i = 0; i < 5; i++) await (await worker.fetch(from('paste', { post: BAD + ' ' + i }), bot, ctx)).json();
   await settle();
   const sb = await readStats(bot);
-  check('a request that fails the bot check is not a post: a script cannot move the tab', !sb['posts:all'] && sb['analyze:why:turnstile'] === 5, JSON.stringify(sb).slice(0, 200));
+  check('a request that fails the bot check is not a post: a script cannot move the tab', !sb['post:all'] && sb['analyze:why:turnstile'] === 5, JSON.stringify(sb).slice(0, 200));
   // Fake bold is a finding outside the 47: it no longer hides a clean post.
   const fb = statKeys('analyze', 200, { mode: 'llm', report: { band: { key: 'barely' }, overall: 0.3, stats: { firedIds: ['unicode-bold'] } } }, 100, 'paste');
-  check('a post whose only finding is fake bold counts as tripping none of the 47 checks', fb.includes('posts:rule:none') && fb.includes('posts:rule:unicode-bold'));
+  check('a post whose only finding is fake bold counts as tripping none of the 47 checks', fb.includes('post:rule:none') && fb.includes('post:rule:unicode-bold'));
   // Gains in tenths: 1.4 to 0.4 is a whole point.
   const g = (b, a) => statKeys('reword', 200, { mode: 'reworded', before: { overall: b }, after: { overall: a } }, 100).find(k => k.startsWith('reword:gain:'));
   check('a gain of exactly one point lands in "1 to 2", and exactly two in "2 or more"', g(1.4, 0.4) === 'reword:gain:1to2' && g(4.3, 2.3) === 'reword:gain:2plus' && g(1.0, 0.9) === 'reword:gain:under1', g(1.4, 0.4) + ' ' + g(4.3, 2.3));
@@ -1675,9 +1675,22 @@ console.log('\n=== what is a post (Reconcilers, episode 4) ===');
   check('Reword: the budget, the bot check and "nothing to fix" are not attempts', f.reword.tried.better === 7 && f.reword.tried.couldNotBeat === 3 && f.reword.tried.unusable === 1 && f.reword.notAttempted === 7, JSON.stringify(f.reword));
   // The wait: only write-ups that arrived, only the report's.
   const w = statKeys('analyze', 200, { mode: 'rules', reason: 'llm_unavailable', report: null }, 9000);
-  check('a failed write-up is not a wait for one, and a rewrite is not a report', !w.some(k => k.startsWith('ai:wait:')) && publicFigures({ 'ai:wait:reword:lt5s': 5, 'ai:wait:analyze:lt5s': 2 }, 'x').wait.lt5s === 2);
+  check('the public wait is every report that reached the AI since counting began, and never a rewrite', publicFigures({ 'analyze:wait:lt5s': 7, 'reword:wait:lt5s': 5, 'ai:wait:analyze:lt5s': 2 }, 'x').wait.lt5s === 7);
   check('"Not in English" is marked as something this tab cannot count', publicFigures({}, 'x').rules.find(r => r.id === 'not-english').countable === false);
   llmBehaviour = 'good';
+}
+
+console.log('\n=== every series ever counted, added up ===');
+{
+  // The owner, 2026-09-21: bring the old reports back, added in.
+  const old = { 'band:barely': 10, 'band:normal': 2, 'score:0': 4, 'score:1': 3, 'score:2': 2, 'score:3': 3, 'rule:hashtags': 5, 'rule:none': 2, 'flag:media': 4 };
+  const now = { 'post:band:barely': 2, 'post:band:normal': 1, 'post:score:1': 1, 'post:score:3': 2, 'post:tenth:14': 1, 'post:tenth:31': 1, 'post:tenth:35': 1, 'post:rule:hashtags': 1, 'post:flag:media': 1 };
+  const f = publicFigures({ ...old, ...now }, 'x');
+  check('the old series and the new one are added together: verdicts, scores, checks, flags', f.scored === 15 && f.bands.barely === 12 && f.bands.normal === 3 && f.scores[3] === 5 && f.rules.find(r => r.id === 'hashtags').n === 6 && f.clean === 2 && f.flags.media === 5, JSON.stringify({ scored: f.scored, bands: f.bands, s3: f.scores[3] }));
+  const band = i => i * 0.4 < 3.2 ? 'barely' : i * 0.4 < 5.6 ? 'normal' : 'lot';
+  const byBand = {}; f.shape.forEach((n, i) => { byBand[band(i)] = (byBand[band(i)] || 0) + n; });
+  check('  ...and the 0.4 shape adds up to each verdict exactly, whole-point posts included', Math.round(byBand.barely * 100) === 1200 && Math.round(byBand.normal * 100) === 300, JSON.stringify(byBand));
+  check('  ...a post with a tenth lands in its own bin: 3.1 barely sucks, 3.5 does not', f.shape[7] >= 1 && f.shape[8] >= 1);
 }
 
 console.log('\n=== the public numbers are a snapshot (Census, episode 4) ===');
@@ -1767,11 +1780,11 @@ console.log('\n=== is the tool right, and is it fast: the tallies ===');
   const rules = ENGINE.analyze(BAD, {});
   await (await worker.fetch(post({ post: BAD }), env, ctx)).json(); await settle();
   let s = await readStats(env);
-  check('a report is tallied by band, by whole-number score, and by every check that fired', s['analyze:all'] === 1 && s['analyze:mode:llm'] === 1 && s['posts:all'] === 1 && s['posts:band:' + rules.band.key] === 1 && s['posts:tenth:' + Math.round(rules.overall * 10)] === 1 && rules.stats.firedIds.length > 0 && rules.stats.firedIds.every(id => s['posts:rule:' + id.toLowerCase()] === 1) && s['posts:since'] > 1e12, JSON.stringify(s).slice(0, 300));
+  check('a report is tallied by band, by whole-number score, and by every check that fired', s['analyze:all'] === 1 && s['analyze:mode:llm'] === 1 && s['post:all'] === 1 && s['post:band:' + rules.band.key] === 1 && s['post:tenth:' + Math.round(rules.overall * 10)] === 1 && rules.stats.firedIds.length > 0 && rules.stats.firedIds.every(id => s['post:rule:' + id.toLowerCase()] === 1) && s['post:since'] > 1e12, JSON.stringify(s).slice(0, 300));
   check('  ...and how long the write-up took', Object.keys(s).filter(k => k.startsWith('ai:wait:analyze:')).length === 1);
   await (await worker.fetch(post({ post: BAD }), env, ctx)).json(); await settle();
   s = await readStats(env);
-  check('the same post pasted twice is two posts, and two waits', s['analyze:all'] === 2 && s['analyze:mode:llm'] === 2 && s['posts:all'] === 2 && s['posts:band:' + rules.band.key] === 2 && Object.entries(s).filter(([k]) => k.startsWith('analyze:wait:')).reduce((a, [, n]) => a + n, 0) === 2, JSON.stringify(s).slice(0, 200));
+  check('the same post pasted twice is two posts, and two waits', s['analyze:all'] === 2 && s['analyze:mode:llm'] === 2 && s['post:all'] === 2 && s['post:band:' + rules.band.key] === 2 && Object.entries(s).filter(([k]) => k.startsWith('analyze:wait:')).reduce((a, [, n]) => a + n, 0) === 2, JSON.stringify(s).slice(0, 200));
   const off = baseEnv(); off.COUNTERS = mockCounters(); delete off.ANTHROPIC_API_KEY;
   await (await worker.fetch(post({ post: BAD }), off, ctx)).json(); await settle();
   const so = await readStats(off);

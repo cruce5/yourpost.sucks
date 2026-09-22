@@ -394,7 +394,7 @@ const latBucket = ms => ms < 5000 ? 'lt5s' : ms < 10000 ? '5to10s' : ms < 20000 
  * came from in the x-yps-source header; anything but "paste" (or no header)
  * is not a post. A cache hit is not a new post. A bot-check failure is not a
  * post. Those are still counted as requests, privately, under analyze:*.
- * Posts are counted under posts:* so the series restarts clean, with a stamp
+ * Posts are counted under post:*, with a stamp
  * of when it began. */
 export const POST_SOURCES = ['paste', 'specimen', 'rewrite', 'lab', 'permalink'];
 const NOT_A_POST_REASONS = ['turnstile'];
@@ -420,15 +420,15 @@ export function statKeys(kind, status, p, ms, source) {
     const fired = (r.stats && r.stats.firedIds) || [];
     // The score to a tenth: the tab bins it in steps of 0.4, which is where
     // every verdict line (3.2, 5.6, 8) falls on a bin edge.
-    keys.push('posts:all', `posts:band:${r.band.key}`, `posts:tenth:${Math.max(0, Math.min(99, Math.round(r.overall * 10)))}`);
-    for (const id of fired) keys.push(`posts:rule:${id}`);
+    keys.push('post:all', `post:band:${r.band.key}`, `post:score:${Math.min(9, Math.floor(r.overall))}`, `post:tenth:${Math.max(0, Math.min(99, Math.round(r.overall * 10)))}`);
+    for (const id of fired) keys.push(`post:rule:${id}`);
     // Clean means none of the published checks fired. A finding outside them
     // (fake bold) is counted under its own id and does not hide a clean post.
-    if (!fired.some(id => RULE_IDS.has(id))) keys.push('posts:rule:none');
-    if (r.satireApplied) keys.push('posts:flag:satire');
-    if (r.mediaAttached) keys.push('posts:flag:media');
-    if (r.meanerSkipped) keys.push('posts:flag:meaner_skipped');
-    if (r.narrative) keys.push('posts:flag:narrative');
+    if (!fired.some(id => RULE_IDS.has(id))) keys.push('post:rule:none');
+    if (r.satireApplied) keys.push('post:flag:satire');
+    if (r.mediaAttached) keys.push('post:flag:media');
+    if (r.meanerSkipped) keys.push('post:flag:meaner_skipped');
+    if (r.narrative) keys.push('post:flag:narrative');
   }
   if (kind === 'reword' && p && p.after && p.before && typeof p.after.overall === 'number') {
     keys.push('reword:gain:' + gainBucket(p.before.overall, p.after.overall));
@@ -438,7 +438,7 @@ export function statKeys(kind, status, p, ms, source) {
 async function bumpStats(env, keys) {
   const ns = counters(env);
   if (!ns || !keys.length) return;
-  try { await counterCall(ns, 'stats', '/bump', { keys: keys.map(k => 's:' + k.toLowerCase().replace(/[^a-z0-9:_.-]/g, '_')), stamp: keys.includes('posts:all') ? 's:posts:since' : undefined }); }
+  try { await counterCall(ns, 'stats', '/bump', { keys: keys.map(k => 's:' + k.toLowerCase().replace(/[^a-z0-9:_.-]/g, '_')), stamp: keys.includes('post:all') ? 's:post:since' : undefined }); }
   catch (e) { console.warn('stats: not counted', e && e.message); }
 }
 /** Every tally, with the prefix stripped, or null. For lab.js and the tests. */
@@ -469,6 +469,7 @@ export async function readStats(env) {
  * most once an UTC hour, and only once at least MX_SNAP_MIN more posts have
  * been counted. Someone behind the door (the owner) always reads live.
  * ------------------------------------------------------------------ */
+export const METRICS_SINCE = '2026-09-21';
 const MX_SNAP_KEY = 'mx:snap';
 const MX_SNAP_MIN = 10;
 
@@ -531,31 +532,64 @@ async function handleMetricsUnlock(request, env) {
   return json({ error: 'wrong' }, 401, priv);
 }
 /** The public figures, built by name from the tallies. */
+/* EVERYTHING EVER COUNTED, ADDED UP. Three series sit in the counter, one
+ * after another, and nothing was ever deleted:
+ *   band: score: rule: flag:   from 21 September until the "real pastes"
+ *                              change: every scored report
+ *   post:*                     from that change on: real pastes
+ *   post:tenth:                from 2026-09-22 on, alongside post:score:
+ * The owner, 2026-09-21: bring every one back, added together, no note. The
+ * old series never recorded where a report came from, so it cannot be
+ * filtered after the fact; it is added as it is. The two never overlap: the
+ * old keys stopped being written the moment the new ones started.
+ *
+ * The score chart is in bins of 0.4 so the verdict lines (3.2, 5.6, 8) fall
+ * on bin edges. A post with a tenth goes in its bin exactly. A post from
+ * before tenths only has its whole point, so it is spread evenly over the
+ * tenths of that point, split exactly at 3.2 and 5.6 by the verdict totals,
+ * which are exact. That shapes the bars; every number printed stays exact. */
+const CUT_TENTHS = [32, 56, 80];
+const bandOfTenth = t => t < 32 ? 'barely' : t < 56 ? 'normal' : t < 80 ? 'lot' : 'completely';
 export function publicFigures(all, at) {
   const s = all || {};
   const under = prefix => Object.fromEntries(Object.entries(s).filter(([k]) => k.startsWith(prefix)).map(([k, n]) => [k.slice(prefix.length), n]));
-  const bands = under('posts:band:'), fired = under('posts:rule:'), why = under('reword:why:'), mode = under('reword:mode:');
+  const add = (...maps) => maps.reduce((out, m) => { for (const [k, n] of Object.entries(m)) out[k] = (out[k] || 0) + n; return out; }, {});
+  const bands = add(under('band:'), under('post:band:'));
+  const fired = add(under('rule:'), under('post:rule:'));
+  const flag = add(under('flag:'), under('post:flag:'));
+  const scores = Array.from({ length: 10 }, (_, i) => (s['score:' + i] || 0) + (s['post:score:' + i] || 0));
+  const tenth = Array.from({ length: 100 }, (_, t) => s['post:tenth:' + t] || 0);
+  // What is known only to the whole point: each bucket, less its posts that have a tenth.
+  const whole = scores.map((n, k) => Math.max(0, n - tenth.slice(k * 10, k * 10 + 10).reduce((a, x) => a + x, 0)));
+  const wholeBand = { ...bands };
+  tenth.forEach((n, t) => { wholeBand[bandOfTenth(t)] = (wholeBand[bandOfTenth(t)] || 0) - n; });
+  const spread = tenth.slice();
+  const left = { barely: wholeBand.barely || 0, normal: wholeBand.normal || 0, lot: wholeBand.lot || 0, completely: wholeBand.completely || 0 };
+  whole.forEach((n, k) => {
+    if (!n) return;
+    const lo = k * 10, cut = CUT_TENTHS.find(c => c > lo && c < lo + 10);
+    if (cut === undefined) { for (let t = lo; t < lo + 10; t++) spread[t] += n / 10; left[bandOfTenth(lo)] -= n; return; }
+    const below = Math.min(n, Math.max(0, left[bandOfTenth(lo)])), above = n - below;
+    for (let t = lo; t < cut; t++) spread[t] += below / (cut - lo);
+    for (let t = cut; t < lo + 10; t++) spread[t] += above / (lo + 10 - cut);
+    left[bandOfTenth(lo)] -= below; left[bandOfTenth(cut)] -= above;
+  });
+  const why = under('reword:why:'), mode = under('reword:mode:');
   const tried = { better: mode.reworded || 0, couldNotBeat: why.no_improvement || 0, unusable: why.llm_unavailable || 0 };
   const outcomes = Object.values(mode).reduce((a, n) => a + n, 0);
-  const since = s['posts:since'] ? new Date(s['posts:since']).toISOString().slice(0, 10) : null;
   return {
-    ok: true, since, at,
+    ok: true, since: METRICS_SINCE, at,
     scored: Object.values(bands).reduce((a, n) => a + n, 0),
     bands,
-    // 25 bins of 0.4: 0 to 0.3, 0.4 to 0.7, ... 9.6 to 9.9. The verdict lines
-    // at 3.2, 5.6 and 8 are bin edges, so every bin is one verdict.
-    bins: Array.from({ length: 25 }, (_, i) => [0, 1, 2, 3].reduce((t, k) => t + (s['posts:tenth:' + (i * 4 + k)] || 0), 0)),
-    // Every check, fired or not: one that never fires is a finding too. One
-    // can never be counted here: a post it catches is not scored at all.
+    scores,
+    // Bar heights in 25 bins of 0.4, rounded to a hundredth. Not printed.
+    shape: Array.from({ length: 25 }, (_, i) => Math.round(100 * spread.slice(i * 4, i * 4 + 4).reduce((a, x) => a + x, 0)) / 100),
     rules: ENGINE.RULES.map(r => ({ id: r.id, label: r.label, dim: r.dim, n: fired[r.id.toLowerCase()] || 0, ...(r.id === 'not-english' ? { countable: false } : {}) })),
     clean: fired.none || 0,
-    flags: { media: s['posts:flag:media'] || 0, satire: s['posts:flag:satire'] || 0, narrative: s['posts:flag:narrative'] || 0 },
-    // Tried and not tried, never mixed. "Not attempted" is one number: why
-    // (no key, the bot check, the budget, the hourly limit, nothing to fix,
-    // a declined post) is the operation's business, not the page's.
+    flags: { media: flag.media || 0, satire: flag.satire || 0, narrative: flag.narrative || 0 },
     reword: { tried, notAttempted: Math.max(0, outcomes - tried.better - tried.couldNotBeat - tried.unusable), gain: under('reword:gain:') },
-    // Only write-ups that arrived, and only the report's: Reword is its own.
-    wait: Object.fromEntries(['lt5s', '5to10s', '10to20s', 'gt20s'].map(b => [b, s['ai:wait:analyze:' + b] || 0]))
+    // Every report that reached the AI, since the counting began.
+    wait: Object.fromEntries(['lt5s', '5to10s', '10to20s', 'gt20s'].map(b => [b, s['analyze:wait:' + b] || 0]))
   };
 }
 async function handleMetrics(request, env) {

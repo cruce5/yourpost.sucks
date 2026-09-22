@@ -943,7 +943,8 @@ check('Right from the last tab wraps to the first, and only one tab is in the Ta
 {
   const figures = (scored) => ({ ok: true, live: true, at: '2026-09-21T20:00:00.000Z', since: '2026-09-21', scored, clean: Math.round(scored * 0.1),
     bands: { barely: Math.round(scored * 0.6), normal: Math.round(scored * 0.3), lot: Math.round(scored * 0.08), completely: Math.round(scored * 0.02) },
-    bins: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 9, 8, 7, 6, 5, 4, 3, 2, 1, 1, 1, 1, 1, 1, 1].map(p => Math.max(1, Math.round(scored * p / 106))),
+    scores: [2, 20, 38, 18, 8, 4, 5, 3, 1, 1].map(p => Math.round(scored * p / 100)),
+    shape: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 9, 8, 7, 6, 5, 4, 3, 2, 1, 1, 1, 1, 1, 1, 1].map(p => Math.max(1, Math.round(scored * p / 106))),
     rules: [{ id: 'announce', label: 'Excited to announce', dim: 'auth', n: Math.round(scored * 0.44) }, { id: 'hashwall', label: 'A wall of hashtags', dim: 'bait', n: Math.round(scored * 0.2) }, { id: 'quiet', label: 'A check nobody trips', dim: 'clar', n: 0 }, { id: 'not-english', label: 'Not in English', dim: 'clar', n: 0, countable: false }],
     flags: { media: Math.round(scored * 0.25), satire: 3, narrative: 12 },
     reword: { tried: { better: 50, couldNotBeat: 15, unusable: 5 }, notAttempted: 10, gain: { under1: 10, '1to2': 25, '2plus': 15 } },
@@ -974,7 +975,7 @@ check('Right from the last tab wraps to the first, and only one tab is in the Ta
   await api.fill('#mx-pass', 'open sesame'); await api.click('#mx-go');
   await api.waitForSelector('#panel-metrics .mx-sec', { timeout: 5000 });
   check('the numbers: the right one draws the figures, hides the padlock and moves focus to the first finding', await api.evaluate(() => document.getElementById('mx-lock').hidden && document.activeElement.classList.contains('mx-h') && !/open sesame/.test(document.documentElement.innerHTML)), JSON.stringify(guesses));
-  check('the numbers: the footer says how fresh the figures are, and what a post is', await api.evaluate(() => { const t = document.getElementById('mx-foot').textContent; return /re behind the door, so these are live/.test(t) && /A post means something a person pasted/.test(t) && !/no post text is kept/i.test(document.getElementById('panel-metrics').textContent); }));
+  check('the numbers: the footer says how fresh the figures are, and that two people are two posts', await api.evaluate(() => { const t = document.getElementById('mx-foot').textContent; return /re behind the door, so these are live/.test(t) && /counts twice, because it is two people/.test(t) && !/no post text is kept/i.test(document.getElementById('panel-metrics').textContent); }));
   await api.unroute('**/api/metrics'); await api.unroute('**/api/metrics/unlock');
 
   // Headline drift: every headline is a template over live figures, so the
@@ -989,7 +990,7 @@ check('Right from the last tab wraps to the first, and only one tab is in the Ta
     ['the top two sins within noise of each other', d => { d.rules[0].n = 100; d.rules[1].n = 95; }],
     ['one post short of all', d => { d.flags.media = d.scored - 1; }],
     ['nobody waited on the AI', d => { d.wait = { lt5s: 0, '5to10s': 0, '10to20s': 0, gt20s: 0 }; }],
-    ['every post in one score bucket', d => { d.bins = Array(25).fill(0); d.bins[5] = 500; d.bands = { barely: 500 }; }],
+    ['every post in one score bucket', d => { d.scores = [0, 0, 500, 0, 0, 0, 0, 0, 0, 0]; d.shape = Array(25).fill(0); d.shape[5] = 500; d.bands = { barely: 500 }; }],
     ['a check whose name has a quote and an angle bracket in it', d => { d.rules[0].label = 'Says "synergy" <b>twice</b>'; }]
   ];
   const drift = [];
@@ -1027,7 +1028,7 @@ check('Right from the last tab wraps to the first, and only one tab is in the Ta
   await api.click('#mx-more');
   check('the numbers: "show all" lists the check that never fired, and says never', await api.evaluate(() => /A check nobody trips[\s\S]*never/.test(document.querySelector('#panel-metrics .mx-bars li.zero').textContent) && document.activeElement.id === 'mx-more' && document.activeElement.getAttribute('aria-expanded') === 'true'));
   check('the numbers: no em dash, no sample notice off localhost data, no sideways scroll', !/\u2014/.test(seen.text) && !/Sample figures/.test(seen.text) && seen.scroll);
-  check('the numbers: the chart says what it shows to a screen reader', await api.evaluate(() => (l => /^Posts by score, in steps of 0\.4\. 0\.0 to 0\.3, barely sucks: /.test(l) && /3\.2 to 3\.5, sucks a normal amount: /.test(l) && /9\.6 to 9\.9, sucks completely: /.test(l))(document.querySelector('#panel-metrics svg').getAttribute('aria-label'))));
+  check('the numbers: the chart says what it shows to a screen reader', await api.evaluate(() => (l => /^Posts by score\. 0 to 0\.9: 2%; /.test(l) && /barely sucks: 60%/.test(l) && /sucks completely: 2%\.$/.test(l))(document.querySelector('#panel-metrics svg').getAttribute('aria-label'))));
 
   body = figures(12);
   await api.goto(httpUrl + '#how-it-works'); await api.goto(httpUrl + '#the-numbers'); await api.reload();
@@ -1036,7 +1037,7 @@ check('Right from the last tab wraps to the first, and only one tab is in the Ta
   check('  ...and the tiles and bars print counts, not percentages', await api.evaluate(() => { const tiles = [...document.querySelectorAll('#panel-metrics .mx-tile .v')].map(v => v.textContent); return tiles[1] === '1' && ![...document.querySelectorAll('#panel-metrics .mx-bars .p')].some(p => /%/.test(p.textContent)); }));
 
   // Every bin is one verdict: 2.8 to 3.1 barely sucks, 3.2 to 3.5 does not.
-  { const bins = Array(25).fill(0); bins[7] = 3; bins[8] = 2; body = { ...figures(20), bands: { barely: 3, normal: 2, lot: 0, completely: 0 }, bins }; }
+  { const shape = Array(25).fill(0); shape[7] = 3; shape[8] = 2; body = { ...figures(20), bands: { barely: 3, normal: 2, lot: 0, completely: 0 }, shape }; }
   await api.reload();
   await api.waitForSelector('#panel-metrics svg', { timeout: 5000 });
   check('the numbers: each 0.4 bin is one verdict, so the bars either side of 3.2 are two colors, one each', await api.evaluate(() => { const r = [...document.querySelectorAll('#panel-metrics svg rect[rx="2"]')].map(x => x.getAttribute('fill')); return r.length === 2 && r[0] === 'var(--mx-b1)' && r[1] === 'var(--mx-b2)'; }));
