@@ -775,7 +775,7 @@ check('error is above the kept rewrite, not replacing it', await api.evaluate(()
   await api.waitForTimeout(800);
   bar = await barState();
   check('reading rule: meaner mode wipes it back on in red', bar.ruleOn && bar.ruleRed && !bar.ruleBlue && bar.barRed, JSON.stringify(bar));
-  check('  ...and the page behind the panels takes a faint red wash, the panels do not', await api.evaluate(() => document.body.classList.contains('meaner') && /rgba(222, 52, 44, 0.05)/.test(getComputedStyle(document.body, '::after').backgroundColor) && getComputedStyle(document.querySelector('.panel')).backgroundColor === getComputedStyle(document.querySelector('.panel')).backgroundColor));
+  check('  ...and the page behind the panels takes a faint red wash, the panels do not', await api.evaluate(() => document.body.classList.contains('meaner') && getComputedStyle(document.body, '::after').backgroundColor === 'rgba(222, 52, 44, 0.05)' && getComputedStyle(document.querySelector('.panel')).backgroundColor === getComputedStyle(document.querySelector('.panel')).backgroundColor));
   // With a report on the page there is somewhere to scroll to.
   await api.click('[data-spec="0"]');
   await api.waitForSelector('#report:not([hidden])', { timeout: 20000 });
