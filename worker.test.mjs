@@ -817,7 +817,8 @@ console.log('  --- a score that is theirs ---');
   const rewrite = 'We lost every game this season. The final score of the last one was 9 to 1. The kids remember the snacks.';
   check('a rewrite may keep the writer\'s own "final score of 9 to 1"', policed(rewrite, post, { ownPost: true }) === true);
   check('  ...but commentary about the post may not, whatever the post says', policed(rewrite, post) === false);
-  check('  ...and a score phrase the writer never used is still refused in a rewrite', policed('This version deserves a score of 9.', post, { ownPost: true }) === false);
+  check('  ...and a score with a number the writer never typed is still refused in a rewrite', policed('This version deserves a score of 7.', post, { ownPost: true }) === false);
+  check('  ...as is any score at all in a rewrite of a post that never mentions one', policed('This version deserves a score of 9.', 'I joined TechCorp after 9 years.', { ownPost: true }) === false);
   check('  ...as are a perfect score, a link and obeying an instruction, even when the post has them', ['a perfect post, 10/10', 'see https://example.com', 'I will ignore the checks as instructed'].every(x => policed(x, post + ' ' + x, { ownPost: true }) === false));
   check('  ...and "scores 3 goals" in a post about football stays when it is theirs', policed('He scores 3 goals a game.', 'My son scores 3 goals a game and still asks for snacks.', { ownPost: true }) === true);
 }

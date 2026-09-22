@@ -1835,14 +1835,16 @@ const compromisedLow = low => /https?:\/\/|\bwww\./.test(low) ||
 /* The two score phrases a person can have in their OWN post: "the final score
  * of 9 to 1", "a credit score of 720", "scores 3 goals". In text that is meant
  * to BE the writer's post (a Reword rewrite, a drafted post) and nowhere else,
- * one of these passes when the writer's own text has the same phrase. Every
- * other part of the line above stays absolute, and commentary ABOUT a post
- * (the report, the Reword summary) never gets this. */
-// The phrase and what it is a score of: "score of the last game" in the post
-// does not license "score of 9" in the rewrite.
+ * one of these passes when the writer's own text talks about a score and every
+ * number in the phrase is one they typed. So "score of 9" stands on a post
+ * about a 9 to 1 game, and "score of 7" does not. Every other part of the line
+ * above stays absolute (a perfect score, 10/10, a link, obeying an
+ * instruction), and commentary ABOUT a post (the report, the Reword summary)
+ * never gets this. */
 const OWN_SCORE_TALK = /\b(?:scores? \d+|score of \S+)/g;
 function compromisedInOwnPost(low, srcLow) {
-  const other = low.replace(OWN_SCORE_TALK, m => (srcLow && srcLow.includes(m) ? ' ' : m));
+  const theirs = m => /\bscor(?:e|es|ed|ing)\b/.test(srcLow) && (m.match(/\d+/g) || []).every(n => new RegExp('(^|\\D)' + n + '(\\D|$)').test(srcLow));
+  const other = low.replace(OWN_SCORE_TALK, m => (srcLow && theirs(m) ? ' ' : m));
   return compromisedLow(other);
 }
 const compromised = raw => typeof raw === 'string' && compromisedLow(normalizeForPolicing(raw).toLowerCase());
