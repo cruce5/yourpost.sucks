@@ -971,6 +971,13 @@ ol.changes .crewrite .lbl{
 .lab-msg.ok{color:var(--cool-text)}
 .lab-ico{filter:grayscale(1)}
 #lab-mount[hidden]{display:none}
+/* The bot-check widget. Zero footprint until Cloudflare asks for a real
+   checkbox; then a card at the top of the screen, never display:none (a
+   hidden container would make that challenge unsolvable). */
+.ts-holder{position:fixed;top:12px;left:50%;transform:translateX(-50%);z-index:1000;max-width:calc(100vw - 32px)}
+.ts-holder .ts-say{display:none;margin:0 0 10px;font-size:14px;line-height:1.4;color:var(--ink-2)}
+.ts-holder.on{padding:14px 14px 10px;background:var(--surface);border:1px solid var(--rule-2);border-radius:10px;box-shadow:0 8px 28px rgba(0,0,0,.45)}
+.ts-holder.on .ts-say{display:block}
 @media (max-width:599px){
   /* Three tabs do not fit one line of 14px mono at 375. They share the row. */
   .tabs{gap:14px}
@@ -1616,17 +1623,36 @@ ul.cg-list li::before{content:"\2022";position:absolute;left:0;color:var(--ink-4
     }, 60000);
     return { set: set, bump: function(){ if (shown !== null) set(shown + 1); } };
   })();
-  var tsState = { widgetId: null, ready: false, pendingResolve: null };
+  /* mode says where the bot check stands: 'loading', 'off' (this site has
+     no check, so a request without a token is normal), 'ready', or
+     'blocked' (the check cannot run in this browser). It lets a caller tell
+     "no check here" from "the check never arrived". */
+  var tsState = { widgetId: null, ready: false, pendingResolve: null, holder: null, mode: 'loading' };
+  var tsSettle, tsSettled = new Promise(function(r){ tsSettle = r; });
+  function tsSet(mode){ if (tsState.mode !== 'loading') return; tsState.mode = mode; tsSettle(mode); }
+  // A challenge that needs a person is shown where a person is looking: a
+  // fixed card at the top of the screen (the bottom is under the keyboard on
+  // a phone), with the keyboard put away so the box can be tapped. Before
+  // this the widget sat at the very end of the page, where nobody saw it,
+  // and the wait ran out as a failed bot check.
+  function tsShow(on){
+    var h = tsState.holder; if (!h) return;
+    h.classList.toggle('on', on);
+    if (on){ var a = document.activeElement; if (a && a !== document.body && a.blur) a.blur(); }
+  }
   fetch('api/status').then(function(r){ return r.ok ? r.json() : null; }).then(function(s){
     if (s && s.metricsOpen){ var mt = document.getElementById('tab-metrics'), mw = document.getElementById('wn-metrics'); if (mt) mt.hidden = false; if (mw) mw.hidden = false; }
     if (s && typeof s.ticker === 'number') ticker.set(s.ticker);
     var siteKey = s && s.turnstileSiteKey;
-    if (!siteKey) return;
+    if (!siteKey){ tsSet('off'); return; }
     var script = document.createElement('script');
     script.src = 'https://challenges.cloudflare.com/turnstile/v0/api.js';
     script.async = true; script.defer = true;
+    // Blocked by a content blocker or a filtering DNS: the check cannot run
+    // here, and callers are told so instead of guessing.
+    script.onerror = function(){ tsSet('blocked'); };
     script.onload = function(){
-      if (!window.turnstile) return;
+      if (!window.turnstile){ tsSet('blocked'); return; }
       // Turnstile has no size:"invisible" (that was a wrong assumption,
       // caught by actually running this rather than trusting the plan):
       // the real equivalent is appearance:"execute", which keeps the
@@ -1635,8 +1661,11 @@ ul.cg-list li::before{content:"\2022";position:absolute;left:0;color:var(--ink-4
       // display:none — a hidden container would make that rare real
       // challenge unsolvable instead of merely invisible.
       var holder = document.createElement('div');
+      holder.className = 'ts-holder';
+      holder.innerHTML = '<p class="ts-say">One quick check that you are a person. Tick the box.</p>';
       document.body.appendChild(holder);
-      tsState.widgetId = window.turnstile.render(holder, {
+      tsState.holder = holder;
+      try { tsState.widgetId = window.turnstile.render(holder, {
         sitekey: siteKey,
         size: 'normal',
         appearance: 'execute',
@@ -1647,43 +1676,84 @@ ul.cg-list li::before{content:"\2022";position:absolute;left:0;color:var(--ink-4
         // executing" until the wait timed out. Caught live with a real
         // site key in a real browser; the test keys never showed it.
         execution: 'execute',
-        // Reset happens HERE, right as one cycle finishes, not right before
-        // the next execute() call. Resetting just-in-time on the way into
-        // execute() raced against the widget's own execute() and produced
-        // "already executing" warnings (caught by testing this live against
-        // Cloudflare's real endpoint, not by reasoning about the API).
-        callback: function(token){
-          if (tsState.pendingResolve) { var r = tsState.pendingResolve; tsState.pendingResolve = null; r(token); }
-          try { window.turnstile.reset(tsState.widgetId); } catch (e) {}
+        callback: function(token){ tsFinish(token); },
+        'error-callback': function(){ tsFinish(null); },
+        // The interactive challenge was left alone too long.
+        'timeout-callback': function(){ tsFinish(null); },
+        'unsupported-callback': function(){ tsState.mode = 'blocked'; tsFinish(null); },
+        // Cloudflare wants a person to tick a box. Show it, and give them
+        // time to do it: the short wait is for the invisible pass only.
+        'before-interactive-callback': function(){
+          tsShow(true);
+          if (tsState.extend) tsState.extend();
         },
-        'error-callback': function(){
-          if (tsState.pendingResolve) { var r = tsState.pendingResolve; tsState.pendingResolve = null; r(null); }
-          try { window.turnstile.reset(tsState.widgetId); } catch (e) {}
-        }
-      });
+        'after-interactive-callback': function(){ tsShow(false); }
+      }); } catch (e) { tsSet('blocked'); return; }
       tsState.ready = true;
+      tsSet('ready');
     };
     document.head.appendChild(script);
-  }).catch(function(){ /* status endpoint unreachable: stay off, same as no site key */ });
+  }).catch(function(){ /* status endpoint unreachable: stay off, same as no site key */ tsSet('off'); });
+  // Hands one finished cycle to whoever is waiting, then resets the widget.
+  // Reset happens HERE, right as one cycle finishes, not right before the
+  // next execute() call. Resetting just-in-time on the way into execute()
+  // raced against the widget's own execute() and produced "already
+  // executing" warnings (caught by testing this live against Cloudflare's
+  // real endpoint, not by reasoning about the API).
+  function tsFinish(token){
+    tsShow(false);
+    if (tsState.pendingResolve) { var r = tsState.pendingResolve; tsState.pendingResolve = null; r(token || null); }
+    try { window.turnstile.reset(tsState.widgetId); } catch (e) {}
+  }
 
-  // A fresh token per submission, never blocking on one. 8s leaves room for
-  // a managed-mode challenge that decides to show a real checkbox; an
-  // invisible pass usually resolves in well under a second. Past the limit
-  // the request goes out without a token and gets the rules-only report.
+  // A fresh token per submission. First waits (up to 5s) for the widget to
+  // exist at all, so a quick first submission is not sent tokenless just
+  // because Cloudflare's script was still arriving. Then 8s for the
+  // invisible pass, which usually resolves in well under a second; if
+  // Cloudflare asks for a real checkbox instead, the wait grows to 90s so a
+  // person has time to see it and tick it. Past the limit the answer is
+  // null: the analyzer sends anyway and gets the rules-only report, and the
+  // unlock forms say what went wrong instead (see botCheckToken).
   function getTurnstileToken(){
-    return new Promise(function(resolve){
-      if (!tsState.ready || tsState.widgetId === null || !window.turnstile) { resolve(null); return; }
-      var settled = false;
-      var done = function(token){ if (settled) return; settled = true; resolve(token); };
-      tsState.pendingResolve = done;
-      setTimeout(function(){ done(null); }, 8000);
-      // No reset() here: the widget is already in a fresh, ready-to-execute
-      // state (either its very first run, or reset by the callback right
-      // after the previous cycle finished, above).
-      try {
-        window.turnstile.execute(tsState.widgetId);
-      } catch (e) { done(null); }
+    var waited = Promise.race([tsSettled, new Promise(function(r){ setTimeout(r, 5000); })]);
+    return waited.then(function(){
+      if (!tsState.ready || tsState.widgetId === null || !window.turnstile) return null;
+      return new Promise(function(resolve){
+        var settled = false, timer = null;
+        var done = function(token){
+          if (settled) return; settled = true; clearTimeout(timer); tsState.extend = null;
+          if (tsState.pendingResolve === done) tsState.pendingResolve = null;
+          tsShow(false);
+          resolve(token);
+        };
+        var arm = function(ms){ clearTimeout(timer); timer = setTimeout(function(){ done(null); }, ms); };
+        tsState.pendingResolve = done;
+        tsState.extend = function(){ arm(90000); };
+        arm(8000);
+        // No reset() here: the widget is already in a fresh, ready-to-execute
+        // state (either its very first run, or reset by tsFinish right after
+        // the previous cycle finished).
+        try {
+          window.turnstile.execute(tsState.widgetId);
+        } catch (e) { done(null); }
+      });
     });
+  }
+  // For requests that are refused outright without a token (the two
+  // unlock forms), unlike the analyzer, which degrades. Sending a guess
+  // with no token when the site has a check only earns a 403 and a
+  // misleading "did not pass", so it is not sent: the caller gets
+  // { status: 'no_check' } and says what actually happened.
+  function botCheckToken(){
+    return getTurnstileToken().then(function(token){
+      if (!token && tsState.mode !== 'off') throw { status: 'no_check' };
+      return token;
+    });
+  }
+  function botCheckTrouble(){
+    return tsState.mode === 'ready'
+      ? 'The bot check did not finish. Try again, and tick the box if one appears.'
+      : 'The bot check could not load. A content blocker or private DNS may be stopping challenges.cloudflare.com. Allow it, or try another browser.';
   }
 
   /* Theme: dark is the CSS default (see :root in the stylesheet), so the
@@ -3923,7 +3993,7 @@ ul.cg-list li::before{content:"\2022";position:absolute;left:0;color:var(--ink-4
       if (!given){ input.focus(); return; }
       btn.disabled = true; btn.textContent = 'Checking';
       err.hidden = true; err.textContent = '';
-      getTurnstileToken().then(function(token){
+      botCheckToken().then(function(token){
         return fetch('api/metrics/unlock', { method: 'POST', credentials: 'same-origin', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ password: given, turnstileToken: token }) });
       })
         .then(function(r){
@@ -3936,7 +4006,8 @@ ul.cg-list li::before{content:"\2022";position:absolute;left:0;color:var(--ink-4
           err.textContent = s === 401 ? 'That is not it.'
             : s === 429 ? 'Too many tries from this connection. Come back in an hour.'
             : s === 404 ? 'There is no door here to open.'
-            : s === 403 ? 'The bot check did not pass. Reload the page and try again.'
+            : s === 403 ? 'The bot check did not pass. Try again.'
+            : s === 'no_check' ? botCheckTrouble()
             : 'Could not check that just now. Try again in a minute.';
           err.hidden = false;
           input.focus();
@@ -4027,7 +4098,7 @@ ul.cg-list li::before{content:"\2022";position:absolute;left:0;color:var(--ink-4
     // A guess carries a bot-check token when the site has one to give, the
     // same as every request that spends money. Without it the only brake on
     // guessing is a per-address cap, which slows a person and not a botnet.
-    getTurnstileToken().then(function(token){
+    botCheckToken().then(function(token){
       return fetch('api/lab/unlock', { method: 'POST', credentials: 'same-origin', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ password: given, turnstileToken: token }) });
     })
       .then(function(r){
@@ -4040,7 +4111,8 @@ ul.cg-list li::before{content:"\2022";position:absolute;left:0;color:var(--ink-4
         err.textContent = s === 401 ? 'That is not it.'
           : s === 429 ? 'Too many tries from this connection. Come back in an hour.'
           : s === 404 ? 'There is nothing behind this door yet.'
-          : s === 403 ? 'The bot check did not pass. Reload the page and try again.'
+          : s === 403 ? 'The bot check did not pass. Try again.'
+          : s === 'no_check' ? botCheckTrouble()
           : 'Could not check that just now. Try again in a minute.';
         err.hidden = false;
         input.focus();

@@ -1165,6 +1165,88 @@ check('Right from the last tab wraps to the first, and only one tab is in the Ta
   await api.unroute('**/api/lab/ui'); await api.unroute('**/api/lab/unlock'); await api.unroute('**/api/lab/interest');
 }
 
+// 12b. the bot check at the door. The unlock forms are refused outright
+// without a token (unlike the analyzer, which degrades), so every way a
+// token can fail to arrive has to be a way a person can still get in, or
+// at least be told the truth. Cloudflare's script is replaced by a fake that
+// can pass invisibly, ask for a checkbox, or never arrive at all.
+{
+  const FAKE_TS = `window.turnstile = {
+    render: function(el, o){ window.__tsOpts = o; window.__tsEl = el; return 'w1'; },
+    execute: function(){
+      var o = window.__tsOpts, n = window.__tsExec = (window.__tsExec || 0) + 1;
+      if ((window.__tsMode || 'pass') === 'pass') setTimeout(function(){ o.callback('tok-pass-' + n); }, 50);
+      else setTimeout(function(){ var f = document.createElement('div'); f.id = 'ts-fake'; f.style.cssText = 'width:300px;height:65px'; window.__tsEl.appendChild(f); o['before-interactive-callback'](); }, 50);
+    },
+    reset: function(){}
+  };`;
+  const open = async (scriptRoute) => {
+    const page = await b.newPage({ viewport: { width: 390, height: 700 }, isMobile: true, hasTouch: true });
+    page.on('pageerror', e => errs.push(e.message));
+    const bodies = [];
+    await page.route('**/api/status', route => route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ ok: true, ticker: 1, turnstileSiteKey: 'test-site-key' }) }));
+    await page.route('https://challenges.cloudflare.com/**', scriptRoute);
+    await page.route('**/api/lab/ui', route => route.fulfill({ status: 401, contentType: 'application/json', body: '{"error":"locked"}' }));
+    await page.route('**/api/lab/unlock', route => { bodies.push(route.request().postDataJSON()); return route.fulfill({ status: 401, contentType: 'application/json', body: '{}' }); });
+    await page.goto(httpUrl);
+    await page.evaluate(v => { try { localStorage.setItem('yps_whatsnew_seen', v); } catch (e) {} }, WHATSNEW_VERSION);
+    return { page, bodies };
+  };
+  const until = async (page, fn, ms) => { for (let t = 0; t < ms && !fn(); t += 100) await page.waitForTimeout(100); };
+  const errShown = page => page.waitForFunction(() => !document.getElementById('lab-err').hidden, null, { timeout: 12000 }).then(() => true, () => false);
+
+  // Blocked: a content blocker or a filtering DNS stops Cloudflare's script.
+  {
+    const { page, bodies } = await open(route => route.abort());
+    await page.goto(httpUrl + '#soon'); await page.waitForTimeout(400);
+    await page.fill('#lab-pass', 'guess'); await page.click('#lab-go');
+    const shown = await errShown(page);
+    check('bot check: when Cloudflare\'s script is blocked, the guess is not sent to earn a 403', shown && bodies.length === 0, bodies.length + ' sent');
+    check('  ...and the visitor is told the check could not load, not that they failed it', /could not load/.test(await page.textContent('#lab-err')) && !/did not pass/.test(await page.textContent('#lab-err')), await page.textContent('#lab-err'));
+    check('  ...and keeps what they typed, to try again', (await page.inputValue('#lab-pass')) === 'guess');
+    await page.close();
+  }
+
+  // Slow: the script arrives after the visitor has already pressed Unlock.
+  {
+    const { page, bodies } = await open(route => new Promise(r => setTimeout(r, 1500)).then(() => route.fulfill({ status: 200, contentType: 'text/javascript', body: FAKE_TS })));
+    // A real reload (a new hash alone keeps the document, widget and all),
+    // and not waiting for the load event: the page's own script tag for
+    // Cloudflare holds it back, so that would wait for the very thing under
+    // test.
+    await page.goto('about:blank');
+    await page.goto(httpUrl + '#soon', { waitUntil: 'domcontentloaded' });
+    await page.waitForSelector('#lab-pass', { state: 'visible' });
+    const early = await page.evaluate(() => !window.turnstile);
+    await page.fill('#lab-pass', 'guess'); await page.click('#lab-go');
+    await until(page, () => bodies.length, 8000);
+    check('bot check: (the test pressed Unlock while Cloudflare\'s script was still on its way)', early);
+    check('bot check: pressing Unlock before the widget has loaded waits for it and sends a real token', bodies.length === 1 && /^tok-pass-/.test(bodies[0].turnstileToken || ''), JSON.stringify(bodies));
+    check('  ...and the widget holder takes no room while nothing is asked', await page.evaluate(() => { const h = document.querySelector('.ts-holder'); const r = h.getBoundingClientRect(); return !h.classList.contains('on') && r.width * r.height === 0; }));
+
+    // Interactive: Cloudflare wants a person to tick a box.
+    await page.evaluate(() => { window.__tsMode = 'interactive'; });
+    await page.fill('#lab-pass', 'guess two'); await page.focus('#lab-pass'); await page.click('#lab-go');
+    await page.waitForTimeout(400);
+    const seen = await page.evaluate(() => { const h = document.querySelector('.ts-holder'), r = h.getBoundingClientRect(), say = h.querySelector('.ts-say');
+      return { on: h.classList.contains('on'), inView: r.top >= 0 && r.bottom <= innerHeight && r.left >= 0 && r.right <= innerWidth, said: getComputedStyle(say).display !== 'none' && /Tick the box/.test(say.textContent), blurred: document.activeElement !== document.getElementById('lab-pass') }; });
+    check('bot check: a checkbox challenge is shown on screen, with a word about it, and the keyboard put away', seen.on && seen.inView && seen.said && seen.blurred, JSON.stringify(seen));
+    await page.waitForTimeout(9000);
+    check('  ...and the wait outlasts the 8s meant for the invisible pass, so a person has time to tick it', bodies.length === 1 && await page.evaluate(() => document.getElementById('lab-err').hidden && document.querySelector('.ts-holder').classList.contains('on')), bodies.length + ' sent');
+    await page.evaluate(() => { window.__tsOpts['after-interactive-callback'](); window.__tsOpts.callback('tok-human'); });
+    await until(page, () => bodies.length > 1, 4000);
+    check('  ...and the ticked box\'s token is the one sent, and the card goes away', bodies.length === 2 && bodies[1].turnstileToken === 'tok-human' && await page.evaluate(() => !document.querySelector('.ts-holder').classList.contains('on')), JSON.stringify(bodies[1]));
+
+    // Abandoned: the challenge times out with the box never ticked.
+    await page.fill('#lab-pass', 'guess three'); await page.click('#lab-go');
+    await page.waitForTimeout(400);
+    await page.evaluate(() => window.__tsOpts['timeout-callback']());
+    const shown = await errShown(page);
+    check('bot check: a challenge left unticked says so, sends nothing, and keeps the password', shown && bodies.length === 2 && /did not finish/.test(await page.textContent('#lab-err')) && (await page.inputValue('#lab-pass')) === 'guess three', await page.textContent('#lab-err'));
+    await page.close();
+  }
+}
+
 // 12. reduced motion: no idle loop, no bob
 const rm = await b.newPage({ viewport: { width: 900, height: 1200 }, reducedMotion: 'reduce' });
 rm.on('pageerror', e => errs.push(e.message));
