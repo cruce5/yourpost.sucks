@@ -1878,6 +1878,16 @@
           'Says the thing, then stops. Textbook',
           'Every sentence earns its position'
         ]]
+      ],
+      /* A high clarity score means the vagueness checks found little, not
+       * that the post says something. When one of them DID fire, the two top
+       * bands above would praise content the same report just said is
+       * missing ("carrying actual cargo" beside "No specifics", reported
+       * 2026-09-25). These lines say what is true of both at once. */
+      readableButEmpty: [
+        'Easy to read. Hard to say what it says',
+        'Clean sentences with not much in them',
+        'Readable all the way through, and nothing in particular happens'
       ]
     },
     cringe: {
@@ -1972,8 +1982,14 @@
     }
   };
 
-  function verdictFor(key, score, seed) {
+  // The checks that mean "there is not much here". Any of them firing rules
+  // out the clarity lines that praise what the sentences carry.
+  var EMPTY_IDS = { 'no-specifics': 1, 'vague-nouns': 1, 'too-short-empty': 1, corporate: 1 };
+  function verdictFor(key, score, seed, firedIds) {
     var v = VERDICTS[key];
+    if (v.readableButEmpty && score >= 6.5 && (firedIds || []).some(function (id) { return EMPTY_IDS[id]; })) {
+      return pick(v.readableButEmpty, seed, key + 'empty');
+    }
     for (var i = 0; i < v.bands.length; i++) {
       if (score >= v.bands[i][0] && score < v.bands[i][1]) {
         return pick(v.bands[i][2], seed, key + i);
@@ -2818,7 +2834,7 @@
       { key: 'brag', label: 'Humble Brag Intensity', score: scores.brag, polarity: 'higher-worse', suck: scores.brag }
     ];
     for (var ci = 0; ci < cats.length; ci++) {
-      cats[ci].verdict = verdictFor(cats[ci].key, cats[ci].score, seed);
+      cats[ci].verdict = verdictFor(cats[ci].key, cats[ci].score, seed, findings.map(function (f) { return f.id; }));
       cats[ci].weightPct = WEIGHTS[cats[ci].key];
       cats[ci].contribution = Math.round(suckParts[ci] * 10) / 10;
       cats[ci].score = Math.round(cats[ci].score * 10) / 10;

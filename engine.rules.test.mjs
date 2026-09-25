@@ -528,6 +528,25 @@ section('12. promises the engine makes about its own output');
   check('no clean-post line invents a rate', clean.every(r => !rate.test(r.oneLiner + ' ' + (r.advice || []).join(' ') + ' ' + r.brutal)));
 }
 
+// Reported 2026-09-25: a deliberately empty agreement comment tripped "No
+// specifics" and the same report's clarity line said the sentences were
+// "carrying actual cargo". A clean read and an empty one can both be true;
+// praise for what the post carries cannot sit beside a check saying it
+// carries nothing.
+{
+  const PRAISE = /cargo|earns its position|Says the thing|what happened by the end|stated early|Nothing is hiding/;
+  const empty = [
+    'Culture really does depend on people rather than on where they sit. Teams that trust each other do good work together whether they share an office or not, and the best managers I have seen understand that the room was never the point. This is a helpful reminder, and I agree with every word of it.',
+    'This is so true. Culture is about people, not location. When teams trust each other and share a purpose, they can do great work from anywhere. Thanks for putting this so clearly, it is a reminder a lot of leaders still need to hear right now.'
+  ];
+  const rows = empty.map(p => { const r = E.analyze(p, {}); return { fired: r.stats.firedIds, c: r.categories.find(x => x.key === 'clarity') }; });
+  check('an empty but readable post scores high on clarity and trips a vagueness check (the case under test)', rows.every(x => x.c.score >= 6.5 && x.fired.includes('no-specifics')), JSON.stringify(rows.map(x => [x.c.score, x.fired])));
+  check('  ...and its clarity line never praises what the sentences carry', rows.every(x => !PRAISE.test(x.c.verdict)), rows.map(x => x.c.verdict).join(' | '));
+  const full = E.analyze('We cut the Monday standup from 45 minutes to 15 in March. Priya ran the first short one. Two people asked for the long one back. Nobody has asked since.', {});
+  const fc = full.categories.find(x => x.key === 'clarity');
+  check('  ...while a post with nothing vague in it can still be told it is carrying something', !full.stats.firedIds.some(id => ['no-specifics', 'vague-nouns', 'too-short-empty', 'corporate'].includes(id)) && fc.score >= 6.5 && !/Hard to say what it says|not much in them|nothing in particular happens/.test(fc.verdict), fc.score + ' ' + fc.verdict + ' ' + JSON.stringify(full.stats.firedIds));
+}
+
 const failed = results.filter(r => !r.pass);
 console.log(`\n${results.length - failed.length}/${results.length} passed`);
 if (failed.length) { console.log('FAILED:', failed.map(f => f.name).join(', ')); process.exit(1); }
