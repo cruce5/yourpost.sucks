@@ -1285,6 +1285,39 @@ for (const withDO of [false, true]) {
   }
 }
 
+console.log('\n=== an emoji AFTER a tagged name is part of the name (reported 2026-09-26) ===');
+{
+  const TAGGED = 'I joined one of Deb Haas \u{1F41D} and Emily Worden \u{1F469} amazing live events last week. Little did I know I would ask a question about my job search and walk away with a recommendation for a tool I had never heard of. I had quite the experience, and I am still using what I learned.';
+  const rep0 = ENGINE.analyze(TAGGED, {});
+  check('the engine reads both emoji as parts of the names, and counts no emoji', rep0.stats.emoji === 0 && rep0.nameEmoji.length === 2, 'emoji=' + rep0.stats.emoji + ' names=' + JSON.stringify(rep0.nameEmoji));
+  check('  ...while a line-opening "Big News" with a rocket is still decoration', ENGINE.analyze('\u{1F680} Big News for the team today. We shipped the new dashboard and it works.', {}).stats.emoji === 1);
+  check('  ...and a reaction after a tagged name is still the author\'s applause', ENGINE.analyze('So proud of Deb Haas \u{1F389} and the whole team for this launch.', {}).stats.emoji === 1);
+  check('  ...and so is "Big News" with the rocket after it at the start of a line', ENGINE.analyze('Big News \u{1F680}\nWe shipped the new dashboard and it works.', {}).stats.emoji === 1);
+  const out = {
+    one_liner: 'A live event, a question, and a recommendation.', brutal: 'The setup performs a surprise that never arrives.',
+    roasts: [{ label: 'Setup', text: 'Little did I know is doing a lot of lifting.' }],
+    advice: ['Open on the question you asked.', 'Remove the emoji next to the names; they do not clarify anything.'],
+    changes: [
+      { type: 'Replace an abstraction with a specific', problem: 'What made the event worth joining?', suggestion: 'Name one concrete thing that drew you.', rewrite: '<UNKNOWN: what was the event topic or format>' },
+      { type: 'Open on the fact', problem: 'The opening is setup.', suggestion: 'Lead with the question.', rewrite: 'At a live event run by Deb Haas \u{1F41D} I asked about <UNKNOWN: your job search question> and got a recommendation.' }
+    ]
+  };
+  const env = baseEnv(); llmBehaviour = 'custom'; customPayload = out;
+  const r = await (await worker.fetch(post({ post: TAGGED }), env, ctx)).json();
+  const rep = r.report;
+  check('advice to remove the emoji next to the names is dropped, the rest survives', r.mode === 'llm' && rep.advice.length === 1 && !/emoji/i.test(rep.advice[0]), JSON.stringify(rep.advice));
+  const empty = rep.changes.find(c => c.type === 'Replace an abstraction with a specific');
+  check('a "Try this" that is nothing but a placeholder is dropped, and the change keeps its question', !!empty && empty.rewrite === null && /Name one concrete thing/.test(empty.suggestion), JSON.stringify(empty));
+  const filled = rep.changes.find(c => c.type === 'Open on the fact');
+  check('a placeholder inside a real rewrite becomes the bracket the page explains', !!filled && filled.rewrite === 'At a live event run by Deb Haas \u{1F41D} I asked about [your job search question] and got a recommendation.', JSON.stringify(filled && filled.rewrite));
+  check('no angle-bracket placeholder reaches the reader anywhere', !/<\s*unknown/i.test(JSON.stringify(rep)));
+  // With decoration elsewhere too, the model may talk about THAT emoji, never the names'.
+  customPayload = { ...out, advice: ['Cut the rocket at the end.', 'Drop the emoji after the tagged names.'] };
+  const r2 = await (await worker.fetch(post({ post: TAGGED + ' \u{1F680}' }), baseEnv(), ctx)).json();
+  check('with a decorative emoji as well, advice about it stays and advice about the names goes', r2.report.advice.length === 1 && /rocket/.test(r2.report.advice[0]), JSON.stringify(r2.report.advice));
+  llmBehaviour = 'good';
+}
+
 console.log('\n=== an emoji in a name is part of the name ===');
 {
   const SIGNED = NEUTRAL + "\n\n--\nI'm \u{1F3F4}\u200D\u2620\uFE0F Bill and the pirate flag on the site is clickable";

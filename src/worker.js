@@ -1247,6 +1247,27 @@ const sounds = v => !MACHINE_TELLS.some(re => re.test(String(v)));
  * in production inventing a "second emoji"). Those pieces are dropped, singly,
  * the same way an em dash drops one roast and not the response. */
 const EMOJI_TALK = /\bemojis?\b/i;
+// Talk about emoji that points at names ("remove the emoji next to the
+// names"). Refused whenever the post has an emoji that is part of a name, even
+// when it also has decoration the model may rightly talk about.
+const NAME_EMOJI_TALK = /\bemojis?\b[^.!?]{0,60}\b(?:names?|tagged|mentions?|people)\b|\b(?:names?|tagged|mentions?)\b[^.!?]{0,60}\bemojis?\b/i;
+/* A ready-to-paste rewrite asks for a [bracketed slot] where the writer must
+ * supply a fact. Models also write "<UNKNOWN: the event name>", "{event}" or
+ * "[TBD: x]", and one of those reached a reader on 2026-09-26 as the whole of
+ * a "Try this". Each becomes the bracket the page already explains, and a
+ * rewrite that is nothing but brackets is dropped: it is a question, not a
+ * rewrite, and the suggestion above it already asks it. */
+const PLACEHOLDER_RES = [
+  /<\s*(?:unknown|tbd|todo|insert|placeholder|fill in|missing)?\s*[:\-]?\s*([^<>\n]{1,80}?)\s*>/gi,
+  /\{\s*(?:unknown|tbd|todo|insert|placeholder)?\s*[:\-]?\s*([^{}\n]{1,80}?)\s*\}/gi,
+  /\[\s*(?:unknown|tbd|todo|insert|placeholder|fill in|missing)\s*[:\-]\s*([^\[\]\n]{1,80}?)\s*\]/gi
+];
+function slotPlaceholders(v) {
+  let s = String(v);
+  for (const re of PLACEHOLDER_RES) s = s.replace(re, (m, inner) => '[' + inner.trim() + ']');
+  return s;
+}
+const onlySlots = v => (String(v).replace(/\[[^\]]*\]/g, ' ').match(/[A-Za-z]{2,}/g) || []).length < 3;
 
 /* A dash is the commonest reason a whole paid report used to be thrown
  * away: the model reaches for one constantly, one in either load-bearing
@@ -1285,7 +1306,7 @@ function validateLLM(out, post, factsText, maxCredits, report, note) {
   // Only when the post's one kind of emoji is a name: then every emoji the
   // model can be talking about is part of somebody's name.
   const emojiOff = !!(report && report.stats && report.stats.emoji === 0 && nameEmoji.length > 0);
-  const emojiOK = v => !emojiOff || !EMOJI_TALK.test(String(v));
+  const emojiOK = v => (!emojiOff || !EMOJI_TALK.test(String(v))) && !(nameEmoji.length && NAME_EMOJI_TALK.test(String(v)));
   // A rewrite that mentions the name must keep the emoji that is part of it.
   const nameWords = e => {
     const i = post.indexOf(e); if (i < 0) return [];
@@ -1385,9 +1406,8 @@ function validateLLM(out, post, factsText, maxCredits, report, note) {
       // post alone, not the stats-laden full prompt). A dirty rewrite drops
       // just the rewrite, not the whole change: problem/suggestion are
       // still useful on their own.
-      rewrite: (typeof c.rewrite === 'string' && c.rewrite.trim() && c.rewrite.length < 900 &&
-        clean(c.rewrite.trim()) && noFabricatedNumbers(c.rewrite.trim(), post) && keepsName(c.rewrite))
-        ? c.rewrite.trim() : null
+      rewrite: (r => (r && r.length < 900 && !onlySlots(r) &&
+        clean(r) && noFabricatedNumbers(r, post) && keepsName(r)) ? r : null)(typeof c.rewrite === 'string' ? slotPlaceholders(c.rewrite.trim()) : '')
     }));
 
   // Five optional flavor fields, each independently optional, each dropped
@@ -1929,7 +1949,7 @@ function validateReword(out, originalPost, factsText) {
   // See policed(): the post's own vocabulary is not a prediction about it.
   const clean = v => policed(v, originalPost);
   if (!out || typeof out !== 'object') return reject('no_object');
-  const rewritten = typeof out.rewritten === 'string' ? out.rewritten.trim() : '';
+  const rewritten = typeof out.rewritten === 'string' ? slotPlaceholders(out.rewritten.trim()) : '';
   const summary = typeof out.summary === 'string' ? out.summary.trim() : '';
   if (!rewritten || rewritten.length > MAX_CHARS) return reject('rewritten_length', rewritten.length);
 

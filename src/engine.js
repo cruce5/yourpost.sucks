@@ -29,14 +29,27 @@
   //   sign-off  a line opening with -- or a dash or ~, then emoji, then Name
   //   trailing  a sign-off line that is just a name, then the emoji
   // A line-opening decoration ("[rocket] Big News") still matches none of them.
+  //   after     somebody's First Last mid-sentence, then the emoji: LinkedIn
+  //             mentions carry the display name whole, and plenty of display
+  //             names END in an emoji ("one of Deb Haas [bee] and Emily Worden
+  //             [woman] amazing live events", reported 2026-09-26, where the
+  //             report told the author to remove them). Needs something before
+  //             the name on the same line, so "Big News [rocket]" opening a line
+  //             is still the author's decoration. And a REACTION after a name
+  //             ("Congrats to Bill Yost [raised hands] on the new role") is the
+  //             author's own applause, not a name: display names carry identity
+  //             emoji (animals, people, objects, flags), posts carry reactions.
   var EMO_SRC = '\\p{Extended_Pictographic}\\uFE0F?(?:\\u200D\\p{Extended_Pictographic}\\uFE0F?)*';
   var SIGN_SRC = '^[ \\t]*(?:--|\\u2014|\\u2013|-|~)[ \\t]*';
+  // Reactions and applause: after a name these are the author's, never the name's.
+  var REACTION_SRC = '(?:\\u{1F64C}|\\u{1F44F}|\\u{1F389}|\\u{1F38A}|\\u{1F973}|\\u{1F680}|\\u{1F525}|\\u{1F4AA}|\\u2728|\\u{1F4AF}|\\u{1F64F}|\\u{1F44D}|\\u{1F91D}|\\u2764|\\u2665|\\u{1F499}|\\u{1F49C}|\\u{1F49A}|\\u{1F9E1}|\\u{1F49B}|\\u{1F5A4}|\\u{1F90D}|\\u{1F60A}|\\u{1F600}|\\u{1F603}|\\u{1F604}|\\u{1F601}|\\u{1F60D}|\\u{1F970}|\\u{1F602}|\\u{1F923}|\\u{1F609}|\\u{1F447}|\\u{1F449}|\\u2B50|\\u{1F31F}|\\u{1F3C6}|\\u{1F947}|\\u{1F440}|\\u{1F4A5}|\\u2705|\\u{1F4E3}|\\u{1F4E2}|\\u{1F3AF})';
   var NAME_EMOJI_RES = [
     NAME_EMOJI_RE,
     new RegExp("(?<=(?:\\b[Ii]['\\u2019]m|\\b[Ii] am|\\b[Tt]his is|\\b[Nn]ame is|\\b[Cc]all me)[ \\t])" + EMO_SRC + '[ \\t]?(?=[A-Z][a-z]+)', 'gu'),
     new RegExp('(?<=\\b[A-Z][a-z]+[ \\t])' + EMO_SRC + '[ \\t]?(?=[A-Z][a-z]+\\b)', 'gu'),
     new RegExp('(?<=' + SIGN_SRC + ')' + EMO_SRC + '[ \\t]?(?=[A-Z][a-z]+)', 'gmu'),
-    new RegExp('(?<=' + SIGN_SRC + '[A-Z][a-z]+(?:[ \\t][A-Z][a-z]+)?[ \\t]?)' + EMO_SRC + '(?=[ \\t]*$)', 'gmu')
+    new RegExp('(?<=' + SIGN_SRC + '[A-Z][a-z]+(?:[ \\t][A-Z][a-z]+)?[ \\t]?)' + EMO_SRC + '(?=[ \\t]*$)', 'gmu'),
+    new RegExp('(?<=\\S[ \\t][A-Z][a-z]+[ \\t][A-Z][a-z]+[ \\t]?)(?!' + REACTION_SRC + ')' + EMO_SRC, 'gu')
   ];
 
   function hashCode(s) {
