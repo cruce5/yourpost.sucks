@@ -100,6 +100,16 @@ let rewordQueue = null;       // optional: per-call behaviours, shifted one per 
 let modelUsage = null;        // optional: a usage block attached to every successful model response
 let llmCalls = 0;
 let addsCalls = 0, addsQueue = [];
+let stopCalls = 0, stopQueue = [];
+const stopRequests = [];
+// Canned stops for STOP_POST (below): a 60-word post with a lesson and a thank-you at the end.
+const STOP_REPLIES = {
+  good: { quote: 'That moment changed the trajectory of my career.', where: 'late', why: 'The story became a lesson about the story.' },
+  misquote: { quote: 'Thanks to my wonderful team for everything.', where: 'late', why: 'The thanks began.' },
+  badWhy: { quote: 'That moment changed the trajectory of my career.', where: 'late', why: 'This line would score 8 out of 10 for preachiness.' },
+  never: { quote: 'Thanks to everyone who supported me along the way.', where: 'never', why: 'It held, because every line before the thanks was a moment.' },
+  garbage: { nonsense: true }
+};
 const addsRequests = [];
 // Canned reads for the post the adds tests send (ADDS_POST, below).
 const ADDS_REPLIES = {
@@ -206,6 +216,13 @@ globalThis.fetch = async (url, opts) => {
       }), { status: 200, headers: { 'content-type': 'application/json' } });
     }
 
+    if (toolName === 'reader_stops') {
+      stopCalls++;
+      stopRequests.push(reqBody);
+      const beh = stopQueue.length ? stopQueue.shift() : 'good';
+      if (beh === 'error') return new Response('nope', { status: 500 });
+      return new Response(JSON.stringify({ content: [{ type: 'tool_use', name: toolName, input: STOP_REPLIES[beh] }], usage: modelUsage || undefined }), { status: 200, headers: { 'content-type': 'application/json' } });
+    }
     if (toolName === 'judge_payload') {
       addsCalls++;
       addsRequests.push(reqBody);
@@ -421,7 +438,7 @@ const NEUTRAL = 'We shipped the invoicing redesign this week. Support tickets ab
 const CLEAN = 'Boss: "You seem happier"\n\nMe: thanks I put our entire slack history into ChatGPT and it said I was right\n\n-- I\'m Bill and this is satire. I don\'t need the AI to tell me I was right, I just know I am';
 // "What it adds" is off here so every test written before it measures exactly
 // what it always did (calls, charges, counts). Its own section turns it on.
-const baseEnv = () => ({ KV: mockKV(), ANTHROPIC_API_KEY: 'sk-test', DAILY_BUDGET_USD: '5', RATE_LIMIT_PER_HOUR: '12', ADDS_OFF: '1' });
+const baseEnv = () => ({ KV: mockKV(), ANTHROPIC_API_KEY: 'sk-test', DAILY_BUDGET_USD: '5', RATE_LIMIT_PER_HOUR: '12', ADDS_OFF: '1', STOP_OFF: '1' });
 
 console.log('\n=== degradation paths ===');
 {
@@ -1176,7 +1193,7 @@ check('the concurrency fixture is not tone-eligible (one model call per analysis
   // (2 x 13000 micros). Read-then-write against a 5ms KV would let all forty
   // read "0 spent" and all forty call the model. Through the Durable Object
   // the check and the charge are one step: exactly two get through.
-  const env = { KV: mockKV({ latencyMs: 5 }), COUNTERS: mockCounters(), ANTHROPIC_API_KEY: 'sk-test', DAILY_BUDGET_USD: String(2 * COSTS.report.precharge / 1e6), RATE_LIMIT_PER_HOUR: '1000', ADDS_OFF: '1' };
+  const env = { KV: mockKV({ latencyMs: 5 }), COUNTERS: mockCounters(), ANTHROPIC_API_KEY: 'sk-test', DAILY_BUDGET_USD: String(2 * COSTS.report.precharge / 1e6), RATE_LIMIT_PER_HOUR: '1000', ADDS_OFF: '1', STOP_OFF: '1' };
   llmBehaviour = 'good'; toneBehaviour = 'no'; llmCalls = 0; toneCalls = 0;
   const responses = await Promise.all(Array.from({ length: 40 }, (_, i) => worker.fetch(post({ post: PITCHY + ' v' + i }), env, ctx).then(r => r.json())));
   const served = responses.filter(r => r.mode === 'llm').length;
@@ -1188,7 +1205,7 @@ check('the concurrency fixture is not tone-eligible (one model call per analysis
 {
   // Same shape for the rate limit: one IP, thirty simultaneous requests,
   // twelve allowed. Every refused request also hands its budget charge back.
-  const env = { KV: mockKV({ latencyMs: 5 }), COUNTERS: mockCounters(), ANTHROPIC_API_KEY: 'sk-test', DAILY_BUDGET_USD: '5', RATE_LIMIT_PER_HOUR: '12', ADDS_OFF: '1' };
+  const env = { KV: mockKV({ latencyMs: 5 }), COUNTERS: mockCounters(), ANTHROPIC_API_KEY: 'sk-test', DAILY_BUDGET_USD: '5', RATE_LIMIT_PER_HOUR: '12', ADDS_OFF: '1', STOP_OFF: '1' };
   llmBehaviour = 'good'; toneBehaviour = 'no'; llmCalls = 0;
   const responses = await Promise.all(Array.from({ length: 30 }, (_, i) => worker.fetch(post({ post: PITCHY + ' r' + i }), env, ctx).then(r => r.json())));
   const served = responses.filter(r => r.mode === 'llm').length;
@@ -2037,6 +2054,65 @@ console.log('\n=== what it adds: the AI read beside the score ===');
   env = on(); reset();
   r = await go(env, { post: '<'.repeat(900) + ' and some words after it.' });
   check('a post whose escaped form is past the ceiling gets no read, not an overrun', r.adds === undefined && addsCalls === 0);
+}
+
+console.log('\n=== where the reader stops ===');
+{
+  const STOP_POST = 'I quit my first job because I wore jeans to an empty office.\n\nNot ripped jeans. Just jeans.\n\nThe managing director called me in and told me it was unacceptable.\n\nThat moment changed the trajectory of my career. Because once I saw how petty the rules were, I knew I had to get out.\n\nThanks to everyone who supported me along the way.';
+  const on = () => { const e = baseEnv(); delete e.STOP_OFF; e.COUNTERS = mockCounters(); return e; };
+  const reset = () => { stopCalls = 0; stopRequests.length = 0; stopQueue = []; llmCalls = 0; };
+  const go = async (env, body) => (await worker.fetch(post({ post: STOP_POST, ...body }), env, ctx)).json();
+
+  let env = on(); reset(); llmBehaviour = 'good';
+  let r = await go(env, {});
+  check('a report comes with the stop: where, the quoted line and the sentence, beside the report and not in it', r.mode === 'llm' && r.stop && r.stop.where === 'late' && r.stop.quote === STOP_REPLIES.good.quote && r.stop.why === STOP_REPLIES.good.why && r.report.stop === undefined, JSON.stringify(r.stop));
+  check('  ...from one call beside the report, at temperature 0, forced to its one tool', stopCalls === 1 && llmCalls === 1 && stopRequests[0].temperature === 0 && stopRequests[0].tool_choice.name === 'reader_stops');
+  check('  ...and the score is exactly what it is without it', r.report.overall === ENGINE.analyze(STOP_POST, {}).overall);
+
+  env = on(); reset(); modelUsage = { input_tokens: 800, output_tokens: 60 };
+  await go(env, {});
+  modelUsage = null;
+  check('the stop is charged what it used, alongside the report', await spentMicros(env) === 2 * (800 + 60 * 5), await spentMicros(env) + ' micros');
+
+  env = on(); reset(); stopQueue = ['misquote', 'good'];
+  r = await go(env, {});
+  check('a quote that is not in the post gets one more call, told which quote failed, and a good second answer is the stop', r.stop && r.stop.quote === STOP_REPLIES.good.quote && stopCalls === 2 && /second and final attempt/.test(stopRequests[1].messages[0].content) && stopRequests[1].messages[0].content.includes('Thanks to my wonderful team'), stopCalls + ' calls');
+  env = on(); reset(); stopQueue = ['misquote', 'misquote'];
+  r = await go(env, {});
+  check('  ...and twice is no card, with the report untouched', r.mode === 'llm' && r.stop === undefined && stopCalls === 2);
+  env = on(); reset(); stopQueue = ['badWhy'];
+  r = await go(env, {});
+  check('a sentence that talks about a score is dropped, and the quote and where still stand', r.stop && r.stop.quote === STOP_REPLIES.badWhy.quote && r.stop.where === 'late' && r.stop.why === undefined, JSON.stringify(r.stop));
+  env = on(); reset(); stopQueue = ['never'];
+  r = await go(env, {});
+  check('a post that holds says never, quoting its last line', r.stop && r.stop.where === 'never' && /supported me/.test(r.stop.quote));
+  env = on(); reset(); stopQueue = ['garbage'];
+  r = await go(env, {});
+  check('an unusable reply is no card, never a guess, and earns no retry', r.stop === undefined && r.mode === 'llm' && stopCalls === 1, stopCalls + ' calls');
+  env = on(); reset(); stopQueue = ['error'];
+  r = await go(env, {});
+  check('a failed call is no card, refunded, and the report still ships', r.stop === undefined && r.mode === 'llm');
+  env = on(); reset(); llmBehaviour = 'error';
+  r = await go(env, {});
+  llmBehaviour = 'good';
+  check('when the report falls back to the checklist, the stop still comes with it', r.mode === 'rules' && r.stop && r.stop.where === 'late');
+  env = on(); reset();
+  r = await go(env, { post: 'Wait, what? Twelve words is not a post with a place to stop in it, at all.' });
+  check('a post under 40 words gets no stop and no call: it is its first line already', r.stop === undefined && stopCalls === 0);
+  env = on(); env.STOP_OFF = '1'; reset();
+  r = await go(env, {});
+  check('STOP_OFF switches it off completely', r.stop === undefined && stopCalls === 0);
+
+  const k = statKeys('analyze', 200, { mode: 'llm', report: { band: { key: 'barely' }, overall: 1.6, stats: { firedIds: [] } }, stop: { quote: 'x', where: 'late', why: 'y' } }, 100, 'paste', null);
+  check('a stop is counted under its own keys, beside every existing one', k.includes('post:s:all') && k.includes('post:stop:late') && k.includes('post:all') && k.includes('analyze:stop:read'), JSON.stringify(k.filter(x => /stop|post:s:|post:all/.test(x))));
+  const k2 = statKeys('analyze', 200, { mode: 'llm', report: { band: { key: 'barely' }, overall: 1.6, stats: { firedIds: [] } } }, 100, 'paste', null);
+  check('  ...and a report without one adds nothing to them', !k2.some(x => /post:s:|post:stop:/.test(x)) && k2.includes('analyze:stop:none'));
+
+  const c = COSTS.stop;
+  const tok = chars => Math.ceil(chars / 4);
+  const atCeiling = 'x'.repeat(c.blockMax - 2);
+  const need = c.maxTokens * 5 + Math.ceil((tok(c.systemChars) + tok(c.toolChars) + tok((c.build(atCeiling) + c.retryNote('<'.repeat(c.retryQuoteMax))).length)) * 1.6);
+  check('the stop\'s reserve covers the largest post it will look at plus the retry, at 1.6 times the estimate', c.precharge >= need, c.precharge + ' against ' + need);
 }
 
 const failed = results.filter(r => !r.pass);
