@@ -1016,6 +1016,18 @@ ol.changes .crewrite .lbl{
    the engine detected (a priced offer) or the reader declared (attached
    media). Never hides that the underlying finding still exists elsewhere
    in the report - this is a footnote on the weighting, not a redaction. */
+/* What it adds: a card under the score, deliberately quieter than it. The
+   level word and the left rule carry the verdict: warm for nothing, grey for
+   a little, cool for plenty. */
+.adds{margin:12px 0 0;padding:14px 18px;background:var(--surface);border:1px solid var(--hair);border-left:3px solid var(--rule-2);border-radius:6px}
+.adds-none{border-left-color:var(--warm)}
+.adds-plenty{border-left-color:var(--cool)}
+.adds-head{display:flex;align-items:baseline;gap:10px;flex-wrap:wrap}
+.adds-k{margin:0;font-family:var(--mono);font-size:13px;font-weight:400;letter-spacing:.1em;text-transform:uppercase;color:var(--ink-3)}
+.adds-v{font-family:var(--mono);font-size:15px;font-weight:600;color:var(--ink)}
+.adds-line{margin:8px 0 0;font-size:16px;line-height:1.5;color:var(--ink)}
+.adds-quote{margin:10px 0 0;padding:0 0 0 12px;border-left:2px solid var(--rule-2);font-size:14px;line-height:1.5;color:var(--ink-3);overflow-wrap:anywhere}
+.adds-note{margin:10px 0 0;font-size:13px;color:var(--ink-4)}
 .context-note{
   margin:10px 0 0;padding:9px 0 9px 12px;border-left:2px solid var(--cool);
   font-size:15px;color:var(--ink-2);line-height:1.55;
@@ -1249,7 +1261,7 @@ ul.cg-list li::before{content:"\2022";position:absolute;left:0;color:var(--ink-4
   body{background:#fff;color:#111}
   body::before,body::after{display:none}
   .panel,.controls,.specimens,.share-actions,.share-more,.tabs,footer,.game-wrap,.toast,.tipask,.read-bar,.read-rule{display:none}
-  .hero,.meter,ul.roasts li,.share-box{background:#fff;border-color:#ccc;color:#111}
+  .hero,.meter,ul.roasts li,.share-box,.adds{background:#fff;border-color:#ccc;color:#111}
   .hero .num{color:#111 !important}
   .meter-name,.meter-val,.brutal{color:#111}
   .receipts:not([open]) > *:not(summary),.roasts-more:not([open]) > *:not(summary){display:block}
@@ -1439,6 +1451,7 @@ ul.cg-list li::before{content:"\2022";position:absolute;left:0;color:var(--ink-4
       <li>say "as an AI"</li>
       <li>use an em dash</li>
     </ul>
+    <p>It also writes the card under the score that says what your post gives a reader. That card has to quote your post back to you word for word, or it is not shown, and it is never part of the score.</p>
     <p>It can still get a name or a detail wrong, so read a rewrite before you post it. Anything that fails is swapped for the checklist's version. The badge by the score says who wrote the commentary. It is not a verdict on whether your post is AI-written.</p>
   </section>
 
@@ -1504,6 +1517,10 @@ ul.cg-list li::before{content:"\2022";position:absolute;left:0;color:var(--ink-4
   </div>
   <p class="wn-intro">All of it came from things people said in the comments.</p>
   <ul class="wn-list">
+    <li id="wn-adds">
+      <b>The report says what your post actually gives a reader.</b>
+      A new card under the score quotes the line that carries the most, or says plainly that there is nothing there. It is an AI read, and it is not part of the score.
+    </li>
     <li>
       <b>You can ask for a meaner write-up.</b>
       Tick <i>Be meaner about it</i> under the box. Same score, blunter write-up. A red bar means it is on. At your own risk.
@@ -2210,6 +2227,16 @@ ul.cg-list li::before{content:"\2022";position:absolute;left:0;color:var(--ink-4
 
   var RECEIPTS_KEY = 'yps_receipts_open';
 
+  var ADDS_WORDS = { none: 'Nothing', some: 'A little', plenty: 'Plenty' };
+  function addsHTML(a){
+    if (!a || !ADDS_WORDS[a.level] || typeof a.line !== 'string' || !a.line) return '';
+    return '<div class="adds adds-' + a.level + '" role="group" aria-labelledby="adds-k">' +
+      '<div class="adds-head"><h2 class="adds-k" id="adds-k">What it adds</h2><span class="adds-v">' + YPS.esc(ADDS_WORDS[a.level]) + '</span></div>' +
+      '<p class="adds-line">' + YPS.esc(a.line) + '</p>' +
+      (a.evidence ? '<blockquote class="adds-quote">' + YPS.esc(a.evidence) + '</blockquote>' : '') +
+      '<p class="adds-note">An AI read of what a reader walks away with, quoted from your post. It is not part of the score.</p>' +
+    '</div>';
+  }
   function render(r, mode, reason, text){
     var rep = $('#report');
     var band = bandOf(r);
@@ -2249,6 +2276,9 @@ ul.cg-list li::before{content:"\2022";position:absolute;left:0;color:var(--ink-4
         '</div>') +
         '<div class="brutal" style="border-left-color:' + col + '">' + YPS.esc(r.brutal) + '</div>' +
       '</div>' +
+      // What it adds: the AI read of what a reader walks away with, directly
+      // under the score card and outside it (src/adds.js). No read, no card.
+      addsHTML(r.adds) +
     '</section>';
 
     /* roasts: the hook, straight after the score. Get to the fun fast.
@@ -2978,7 +3008,9 @@ ul.cg-list li::before{content:"\2022";position:absolute;left:0;color:var(--ink-4
         // The server counts every scored report it sends, so the footer can.
         if (payload.mode !== 'declined' && !payload.report.unscored) ticker.bump();
         fell_back = true;
-        done(payload.report, payload.mode || 'rules', payload.reason);
+        // The read is beside the report in the reply, not in it; it rides
+        // along to the renderer here, and nothing else ever reads it.
+        done(payload.adds ? Object.assign({}, payload.report, { adds: payload.adds }) : payload.report, payload.mode || 'rules', payload.reason);
       }).catch(function(err){
         if (fell_back) return; // the killer or Cancel already spoke
         // A TypeError from fetch is the network itself failing (offline,
@@ -3257,7 +3289,7 @@ ul.cg-list li::before{content:"\2022";position:absolute;left:0;color:var(--ink-4
      register), so it works for people who visited long before this
      existed. The seen marker is the version: bump WHATSNEW_VERSION when
      the list above changes and it shows once more, to everyone. */
-  var WHATSNEW_VERSION = '2026-09-20';
+  var WHATSNEW_VERSION = '2026-09-27';
   var WHATSNEW_KEY = 'yps_whatsnew_seen';
   var VISITED_KEYS = ['yps_theme', 'yps_receipts_open', 'yps_tipask_v1', 'yps_meaner_v1', 'yps_outrun_best_v1'];
   var wn = $('#whatsnew');

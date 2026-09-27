@@ -11,6 +11,7 @@
 
 import ENGINE from './engine.mjs';
 import CRAFT_RULES from './craft-prompt.mjs';
+import { IG_SYSTEM_PROMPT, IG_TOOL, IG_BLOCK_MAX, IG_IMAGE_MIN_WORDS, IG_RETRY_QUOTE_MAX, postBlock, buildIgMessage, igRetryNote, validateIg } from './adds.js';
 
 const MAX_CHARS = 4000;
 const LLM_TIMEOUT_MS = 30000;
@@ -98,6 +99,20 @@ const REWORD_COST_MICROS_PER_CALL = 16800; // $0.0168: 2000-token output cap, se
  * not accept an image (it produces new caption text, not a critique of a
  * graphic, so there is nothing for it to look at). */
 const IMAGE_COST_MICROS_PER_CALL = 4000; // $0.004
+
+/* "What it adds" (src/adds.js): one short Haiku call beside the report's, at
+ * temperature 0, 300 tokens out, the whole post in. Estimated the same way,
+ * worst case, and held by worker.test.mjs at 1.6 times the estimate for the
+ * largest post the analyzer takes and for the one retry, which carries the
+ * quote that failed:
+ *   output   300 tokens x 5                              =  1,500
+ *   system   ~6,300 chars / 4 = ~1,575 tokens x 1         =  1,575  (not cached: it is under the cache minimum)
+ *   tools    ~1,100 chars / 4 = ~275 tokens x 1           =    275
+ *   user     ~5,200 chars / 4 = ~1,300 tokens x 1         =  1,300  (a post escaping to the ceiling, plus the retry note)
+ * about 4,650, and 5,974 at 1.6 times; set to 6,400. A typical read costs a
+ * little over a quarter of a cent. */
+const MAX_TOKENS_ADDS = 300;
+const ADDS_COST_MICROS = 6400;
 const IMAGE_MAX_BASE64_CHARS = 2000000; // ~1.5MB decoded
 const IMAGE_ALLOWED_TYPES = new Set(['image/jpeg', 'image/png', 'image/webp', 'image/gif']);
 
@@ -441,7 +456,11 @@ export function statKeys(kind, status, p, ms, source, asked) {
     // of the posts since then, so its share divides by the right number.
     keys.push('post:m:all');
     if (asked && asked.meaner) keys.push('post:flag:meaner');
+    // What it adds, counted from 2026-09-27 over the posts that got a read,
+    // so its shares divide by the right number.
+    if (p.adds && ['none', 'some', 'plenty'].includes(p.adds.level)) keys.push('post:a:all', 'post:adds:' + p.adds.level);
   }
+  if (kind === 'analyze' && (mode === 'llm' || mode === 'rules')) keys.push('analyze:adds:' + (p && p.adds ? (p.adds.lineFallback ? 'read_fixed_line' : 'read') : 'none'));
   if (kind === 'analyze' && asked && asked.meaner) keys.push('analyze:meaner');
   if (kind === 'reword' && p && p.after && p.before && typeof p.after.overall === 'number') {
     keys.push('reword:gain:' + gainBucket(p.before.overall, p.after.overall));
@@ -456,7 +475,7 @@ export async function bumpStats(env, keys) {
   // many checks makes over a hundred pair keys, so the batch is sent in
   // chunks well under the limit; the stamps ride with the first.
   const clean = keys.map(k => 's:' + k.toLowerCase().replace(/[^a-z0-9:_.-]/g, '_'));
-  const stamps = [keys.includes('post:all') && 's:post:since', keys.includes('post:m:all') && 's:post:m:since', keys.includes('post:c:all') && 's:post:c:since'].filter(Boolean);
+  const stamps = [keys.includes('post:all') && 's:post:since', keys.includes('post:m:all') && 's:post:m:since', keys.includes('post:c:all') && 's:post:c:since', keys.includes('post:a:all') && 's:post:a:since'].filter(Boolean);
   try {
     for (let i = 0; i < clean.length; i += BUMP_CHUNK) await counterCall(ns, 'stats', '/bump', { keys: clean.slice(i, i + BUMP_CHUNK), stamps: i === 0 ? stamps : [] });
   } catch (e) { console.warn('stats: not counted', e && e.message); }
@@ -794,8 +813,8 @@ async function rateLimited(env, ip) {
 
 /** The actual money stop. One counter per UTC day, in micro-dollars.
  *  When it is spent, the site keeps working. It just stops calling the model. */
-function callCostMicros(needsTone, hasImage) {
-  return COST_MICROS_PER_CALL + (needsTone ? TONE_COST_MICROS_PER_CALL : 0) + (hasImage ? IMAGE_COST_MICROS_PER_CALL : 0);
+function callCostMicros(needsTone, hasImage, adds) {
+  return COST_MICROS_PER_CALL + (needsTone ? TONE_COST_MICROS_PER_CALL : 0) + (hasImage ? IMAGE_COST_MICROS_PER_CALL : 0) + (adds ? ADDS_COST_MICROS : 0);
 }
 
 const budgetCapMicros = env => Math.round(Number(env.DAILY_BUDGET_USD || 5) * 1e6);
@@ -2199,7 +2218,11 @@ async function handleAnalyze(request, env, ctx) {
   // the rate limit: a request the budget already refused should not also
   // burn one of the visitor's hourly slots, so the order matters. If the
   // rate limit says no AFTER the budget said yes, the charge is handed back.
-  const precharged = callCostMicros(needsTone, hasImage);
+  // "What it adds" runs beside the report when it can say something honest:
+  // not when switched off, not on a short post that came with a picture it
+  // cannot see, and not on a post whose escaped form is past its reserve.
+  const addsOn = addsEligible(env, post, safeFlags);
+  const precharged = callCostMicros(needsTone, hasImage, addsOn);
   if (!(await tryChargeBudget(env, precharged))) return degrade('budget');
   if (await rateLimited(env, ip)) {
     await settleCharge(env, precharged, []);
@@ -2212,6 +2235,10 @@ async function handleAnalyze(request, env, ctx) {
   // Each call carries a meter so the worst-case pre-charge above can be
   // trued up to what the calls actually cost once they have returned.
   const toneMeter = meter(TONE_COST_MICROS_PER_CALL);
+  const addsMeter = meter(ADDS_COST_MICROS);
+  // Started now, awaited after the report: the two run side by side, so the
+  // read costs the visitor no extra wait. It can never throw.
+  const addsP = addsOn ? readAdds(env, post, !!safeFlags.hasMedia, addsMeter) : Promise.resolve(null);
   const reportMeter = meter(COST_MICROS_PER_CALL + (hasImage ? IMAGE_COST_MICROS_PER_CALL : 0));
   let satire = false;
   if (needsTone) {
@@ -2220,7 +2247,8 @@ async function handleAnalyze(request, env, ctx) {
   }
 
   const llm = await callClaude(env, post, report, image, reportMeter, meaner);
-  await settleCharge(env, precharged, needsTone ? [toneMeter, reportMeter] : [reportMeter]);
+  const adds = await addsP;
+  await settleCharge(env, precharged, [...(needsTone ? [toneMeter] : []), reportMeter, ...(addsOn ? [addsMeter] : [])]);
   {
     const keys = [];
     if (hasImage) keys.push('calls:image');
@@ -2234,7 +2262,9 @@ async function handleAnalyze(request, env, ctx) {
     if (llm && llm.partial && llm.partial.some(x => x !== 'roasts')) keys.push('mend:line_replaced');
     ctx.waitUntil(countAiOutcome(env, keys));
   }
-  if (!llm) return degrade('llm_unavailable');
+  // The read stands on its own: a report that fell back to the checklist's
+  // prose still gets it, since it was paid for and says nothing about the score.
+  if (!llm) return json({ mode: 'rules', reason: 'llm_unavailable', report, ...(adds ? { adds } : {}) });
 
   const merged = {
     ...report,
@@ -2256,7 +2286,66 @@ async function handleAnalyze(request, env, ctx) {
     annotatedNote: llm.annotatedNote || null
   };
 
-  return json({ mode: 'llm', report: meanerSkipped ? { ...merged, meanerSkipped: true } : merged });
+  return json({ mode: 'llm', report: meanerSkipped ? { ...merged, meanerSkipped: true } : merged, ...(adds ? { adds } : {}) });
+}
+
+/* ------------------------------------------------------------------ *
+ * What it adds (see src/adds.js for the prompt and the rules)
+ * ------------------------------------------------------------------ */
+function addsEligible(env, post, flags) {
+  if (env.ADDS_OFF === '1') return false;
+  if (postBlock(post).length > IG_BLOCK_MAX) return false;
+  const words = (post.match(/\S+/g) || []).length;
+  return !(flags && flags.hasMedia && words < IG_IMAGE_MIN_WORDS);
+}
+async function addsCall(env, message, m) {
+  const ctrl = new AbortController();
+  const timer = setTimeout(() => ctrl.abort(), LLM_TIMEOUT_MS);
+  try {
+    const res = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST', signal: ctrl.signal,
+      headers: { 'content-type': 'application/json', 'x-api-key': env.ANTHROPIC_API_KEY, 'anthropic-version': '2023-06-01' },
+      body: JSON.stringify({
+        model: env.MODEL || 'claude-haiku-4-5', max_tokens: MAX_TOKENS_ADDS, temperature: 0,
+        system: IG_SYSTEM_PROMPT, tools: [IG_TOOL], tool_choice: { type: 'tool', name: IG_TOOL.name },
+        messages: [{ role: 'user', content: message }]
+      })
+    });
+    if (!res.ok) { m.failed = true; m.why = 'http'; return null; }
+    const data = await res.json();
+    m.usage = data.usage || null;
+    const block = (data.content || []).find(c => c.type === 'tool_use');
+    if (!block) { m.failed = true; m.why = 'no_tool_block'; return null; }
+    return block.input;
+  } catch (e) {
+    m.failed = true; m.why = 'call_failed';
+    return null;
+  } finally {
+    clearTimeout(timer);
+  }
+}
+/** The read, or null. Never throws: whatever goes wrong, the report ships
+ *  without the card. A quote that is not in the post gets one more call,
+ *  charged on its own, and only if the budget has room for it. */
+async function readAdds(env, post, media, m) {
+  try {
+    const gate = { policed, sounds, newNumbersIntroduced };
+    const message = buildIgMessage(post, media);
+    let input = await addsCall(env, message, m);
+    if (!input) return null;
+    let v = validateIg(input, post, gate);
+    if (!v.ok && v.reason === 'evidence_not_in_post' && await tryChargeBudget(env, ADDS_COST_MICROS)) {
+      const m2 = meter(ADDS_COST_MICROS);
+      const again = await addsCall(env, message + igRetryNote(input.evidence), m2);
+      await settleCharge(env, ADDS_COST_MICROS, [m2]);
+      if (again) v = validateIg(again, post, gate);
+    }
+    if (!v.ok) { m.why = v.reason; console.warn('adds: no read,', v.reason); return null; }
+    return { level: v.level, kind: v.kind, evidence: v.evidence, line: v.line, ...(v.lineFallback ? { lineFallback: true } : {}) };
+  } catch (e) {
+    console.warn('adds: failed', e && e.name);
+    return null;
+  }
 }
 
 async function handleReword(request, env, ctx) {
@@ -2415,6 +2504,7 @@ export const COSTS = Object.freeze({
   tone: { maxTokens: MAX_TOKENS_TONE, precharge: TONE_COST_MICROS_PER_CALL, systemChars: TONE_SYSTEM_PROMPT.length, toolChars: JSON.stringify(TONE_TOOL).length },
   reword: { maxTokens: MAX_TOKENS_REWORD, precharge: REWORD_COST_MICROS_PER_CALL, systemChars: REWORD_SYSTEM_PROMPT.length, toolChars: JSON.stringify(REWORD_TOOL).length },
   image: { precharge: IMAGE_COST_MICROS_PER_CALL },
+  adds: { maxTokens: MAX_TOKENS_ADDS, precharge: ADDS_COST_MICROS, systemChars: IG_SYSTEM_PROMPT.length, toolChars: JSON.stringify(IG_TOOL).length, build: buildIgMessage, retryNote: igRetryNote, retryQuoteMax: IG_RETRY_QUOTE_MAX, blockMax: IG_BLOCK_MAX },
   // The real message builders, so the test measures the worst-case user
   // message over a maximal post rather than trusting a number typed once.
   build: { report: buildUserMessage, reword: buildRewordUserMessage, rewordFeedback: rewordFeedback, maxAdvice: Array.from({ length: REWORD_ADVICE_MAX }, (_, i) => String(i) + 'x'.repeat(REWORD_ADVICE_CHARS - 1)) },

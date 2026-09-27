@@ -99,6 +99,18 @@ let rewordBehaviour = 'good'; // controls the "reword" call
 let rewordQueue = null;       // optional: per-call behaviours, shifted one per reword call
 let modelUsage = null;        // optional: a usage block attached to every successful model response
 let llmCalls = 0;
+let addsCalls = 0, addsQueue = [];
+const addsRequests = [];
+// Canned reads for the post the adds tests send (ADDS_POST, below).
+const ADDS_REPLIES = {
+  good: { level: 'none', kind: 'none', attachment: false, evidence: 'This is a helpful reminder, and I agree with every word of it.', line: 'Agreement, nicely put. Nothing under it.' },
+  invented: { level: 'some', kind: 'fact', attachment: false, evidence: 'Remote teams are 40 percent more productive.', line: 'One real fact in it.' },
+  scoreTalk: { level: 'none', kind: 'none', attachment: false, evidence: 'This is a helpful reminder', line: 'This would score 9 out of 10 for saying nothing.' },
+  punchline: { level: 'some', kind: 'joke', attachment: false, evidence: 'Teams that trust each other do good work together', line: 'Seventy people blocked the writer, all 72 of them.' },
+  banned: { level: 'some', kind: 'observation', attachment: false, evidence: 'Teams that trust each other do good work together', line: 'A specific point about trust.' },
+  names: { level: 'some', kind: 'joke', attachment: false, evidence: 'Teams that trust each other do good work together', line: 'The point is that Priya thinks trust is the whole job.' },
+  garbage: { nonsense: true }
+};
 let toneCalls = 0;
 let rewordCalls = 0;
 let lastReportMessageContent = null;
@@ -192,6 +204,14 @@ globalThis.fetch = async (url, opts) => {
         content: [{ type: 'tool_use', name: 'reword', input }],
         usage: modelUsage || undefined
       }), { status: 200, headers: { 'content-type': 'application/json' } });
+    }
+
+    if (toolName === 'judge_payload') {
+      addsCalls++;
+      addsRequests.push(reqBody);
+      const beh = addsQueue.length ? addsQueue.shift() : 'good';
+      if (beh === 'error') return new Response('nope', { status: 500 });
+      return new Response(JSON.stringify({ content: [{ type: 'tool_use', name: toolName, input: ADDS_REPLIES[beh] }], usage: modelUsage || undefined }), { status: 200, headers: { 'content-type': 'application/json' } });
     }
 
     if (toolName === 'tone') {
@@ -399,7 +419,9 @@ const NEUTRAL = 'We shipped the invoicing redesign this week. Support tickets ab
 // — used for the reword "nothing to fix" path, distinct from NEUTRAL above,
 // which still trips one structural rule.
 const CLEAN = 'Boss: "You seem happier"\n\nMe: thanks I put our entire slack history into ChatGPT and it said I was right\n\n-- I\'m Bill and this is satire. I don\'t need the AI to tell me I was right, I just know I am';
-const baseEnv = () => ({ KV: mockKV(), ANTHROPIC_API_KEY: 'sk-test', DAILY_BUDGET_USD: '5', RATE_LIMIT_PER_HOUR: '12' });
+// "What it adds" is off here so every test written before it measures exactly
+// what it always did (calls, charges, counts). Its own section turns it on.
+const baseEnv = () => ({ KV: mockKV(), ANTHROPIC_API_KEY: 'sk-test', DAILY_BUDGET_USD: '5', RATE_LIMIT_PER_HOUR: '12', ADDS_OFF: '1' });
 
 console.log('\n=== degradation paths ===');
 {
@@ -1154,7 +1176,7 @@ check('the concurrency fixture is not tone-eligible (one model call per analysis
   // (2 x 13000 micros). Read-then-write against a 5ms KV would let all forty
   // read "0 spent" and all forty call the model. Through the Durable Object
   // the check and the charge are one step: exactly two get through.
-  const env = { KV: mockKV({ latencyMs: 5 }), COUNTERS: mockCounters(), ANTHROPIC_API_KEY: 'sk-test', DAILY_BUDGET_USD: String(2 * COSTS.report.precharge / 1e6), RATE_LIMIT_PER_HOUR: '1000' };
+  const env = { KV: mockKV({ latencyMs: 5 }), COUNTERS: mockCounters(), ANTHROPIC_API_KEY: 'sk-test', DAILY_BUDGET_USD: String(2 * COSTS.report.precharge / 1e6), RATE_LIMIT_PER_HOUR: '1000', ADDS_OFF: '1' };
   llmBehaviour = 'good'; toneBehaviour = 'no'; llmCalls = 0; toneCalls = 0;
   const responses = await Promise.all(Array.from({ length: 40 }, (_, i) => worker.fetch(post({ post: PITCHY + ' v' + i }), env, ctx).then(r => r.json())));
   const served = responses.filter(r => r.mode === 'llm').length;
@@ -1166,7 +1188,7 @@ check('the concurrency fixture is not tone-eligible (one model call per analysis
 {
   // Same shape for the rate limit: one IP, thirty simultaneous requests,
   // twelve allowed. Every refused request also hands its budget charge back.
-  const env = { KV: mockKV({ latencyMs: 5 }), COUNTERS: mockCounters(), ANTHROPIC_API_KEY: 'sk-test', DAILY_BUDGET_USD: '5', RATE_LIMIT_PER_HOUR: '12' };
+  const env = { KV: mockKV({ latencyMs: 5 }), COUNTERS: mockCounters(), ANTHROPIC_API_KEY: 'sk-test', DAILY_BUDGET_USD: '5', RATE_LIMIT_PER_HOUR: '12', ADDS_OFF: '1' };
   llmBehaviour = 'good'; toneBehaviour = 'no'; llmCalls = 0;
   const responses = await Promise.all(Array.from({ length: 30 }, (_, i) => worker.fetch(post({ post: PITCHY + ' r' + i }), env, ctx).then(r => r.json())));
   const served = responses.filter(r => r.mode === 'llm').length;
@@ -1935,6 +1957,86 @@ console.log('\n=== one bad line no longer sinks a paid report ===');
   const okRun = await run(good);
   check('a clean report is counted as ok, and nothing about the post is stored with it', JSON.stringify(await aiStatus(okRun.env)) === '{"ok":1}', JSON.stringify(await aiStatus(okRun.env)));
   llmBehaviour = 'good'; customPayload = null;
+}
+
+console.log('\n=== what it adds: the AI read beside the score ===');
+{
+  const ADDS_POST = 'Culture really does depend on people rather than on where they sit. Teams that trust each other do good work together whether they share an office or not.\n\nThis is a helpful reminder, and I agree with every word of it.';
+  const on = () => { const e = baseEnv(); delete e.ADDS_OFF; e.COUNTERS = mockCounters(); return e; };
+  const reset = () => { addsCalls = 0; addsRequests.length = 0; addsQueue = []; llmCalls = 0; };
+  const go = async (env, body) => (await worker.fetch(post({ post: ADDS_POST, ...body }), env, ctx)).json();
+
+  let env = on(); reset(); llmBehaviour = 'good';
+  let r = await go(env, {});
+  check('a report comes with the read: level, kind, quoted line and sentence, beside the report and not in it', r.mode === 'llm' && r.adds && r.adds.level === 'none' && r.adds.evidence === ADDS_REPLIES.good.evidence && r.adds.line === ADDS_REPLIES.good.line && r.report.adds === undefined, JSON.stringify(r.adds));
+  check('  ...from one call beside the report, at temperature 0, forced to its one tool', addsCalls === 1 && llmCalls === 1 && addsRequests[0].temperature === 0 && addsRequests[0].tool_choice.name === 'judge_payload' && addsRequests[0].tools.length === 1);
+  check('  ...and the score is exactly what it is without it', r.report.overall === ENGINE.analyze(ADDS_POST, {}).overall);
+  check('  ...and the reply never says whether the text leaned on an attachment (that is for the read, not the page)', r.adds.attachment === undefined);
+
+  env = on(); reset(); modelUsage = { input_tokens: 1000, output_tokens: 100 };
+  await go(env, {});
+  modelUsage = null;
+  check('the read is charged what it used, alongside the report', await spentMicros(env) === 2 * (1000 + 100 * 5), await spentMicros(env) + ' micros');
+
+  env = on(); reset(); addsQueue = ['invented', 'good'];
+  r = await go(env, {});
+  check('a quote that is not in the post gets one more call, and a good second answer is the read', r.adds && r.adds.level === 'none' && addsCalls === 2 && /second and final attempt/.test(addsRequests[1].messages[0].content), addsCalls + ' calls, ' + JSON.stringify(r.adds));
+  env = on(); reset(); addsQueue = ['invented', 'invented'];
+  r = await go(env, {});
+  check('  ...and twice is no card, with the report untouched', r.mode === 'llm' && r.adds === undefined && addsCalls === 2);
+
+  for (const [beh, why] of [['scoreTalk', 'talks about a score'], ['punchline', 'repeats a number that only the sign-off has'], ['banned', 'says "specific"'], ['names', 'names someone the post never named, mid-sentence']]) {
+    env = on(); reset(); addsQueue = [beh];
+    const body = beh === 'punchline' ? { post: ADDS_POST + '\n\n-- I\'m Bill and 72 people have blocked me for this' } : {};
+    r = await go(env, body);
+    check('a sentence that ' + why + ' is replaced with a fixed line, and the read stands', r.adds && r.adds.lineFallback === true && !r.adds.line.includes('72') && !/specific|score|Priya/.test(r.adds.line), JSON.stringify(r.adds));
+  }
+  const ADDS = await import('./src/adds.js');
+  check('KNOWN LIMIT: a name as the very first word is not caught, since every sentence starts with a capital (none of 98 corpus sentences did this)', ADDS.inventsName('Maria says trust is the whole job.', ADDS_POST) === false && ADDS.inventsName('So Maria says trust is the whole job.', ADDS_POST) === true);
+  env = on(); reset(); addsQueue = ['garbage'];
+  r = await go(env, {});
+  check('an unusable reply is no card, never a guess', r.adds === undefined && r.mode === 'llm');
+  env = on(); reset(); addsQueue = ['error'];
+  r = await go(env, {});
+  check('a failed read is no card and is refunded, and the report still ships', r.adds === undefined && r.mode === 'llm');
+
+  env = on(); reset(); llmBehaviour = 'error';
+  r = await go(env, {});
+  llmBehaviour = 'good';
+  check('when the report falls back to the checklist, the read still comes with it', r.mode === 'rules' && r.reason === 'llm_unavailable' && r.adds && r.adds.level === 'none', JSON.stringify(r).slice(0, 160));
+
+  env = on(); reset();
+  r = await go(env, { post: 'Is this map viz accurate? Asking for a friend who made it.', flags: { hasMedia: true } });
+  check('a short post with a picture gets no read and no call: the read cannot see pictures', r.adds === undefined && addsCalls === 0);
+  env = on(); env.ADDS_OFF = '1'; reset();
+  r = await go(env, {});
+  check('ADDS_OFF switches it off completely: no call, no charge for it', r.adds === undefined && addsCalls === 0);
+  env = on(); env.ANTHROPIC_API_KEY = ''; reset();
+  r = await go(env, {});
+  check('with the AI off there is no read and no call', r.adds === undefined && addsCalls === 0);
+  env = on(); reset();
+  r = await go(env, { post: 'My father passed away on Tuesday. He never understood what I did for work, but he told everyone about it anyway.' });
+  check('a post the checks decline gets no read either', r.mode === 'declined' && addsCalls === 0);
+
+  // Counted alongside, never instead: its own denominator and start date.
+  const k = statKeys('analyze', 200, { mode: 'llm', report: { band: { key: 'barely' }, overall: 1.6, stats: { firedIds: ['no-specifics'] } }, adds: { level: 'none' } }, 100, 'paste', null);
+  check('a read is counted under its own keys, beside every existing one', k.includes('post:a:all') && k.includes('post:adds:none') && k.includes('post:all') && k.includes('post:band:barely') && k.includes('analyze:adds:read'), JSON.stringify(k.filter(x => /adds|post:a:|post:all/.test(x))));
+  const k2 = statKeys('analyze', 200, { mode: 'llm', report: { band: { key: 'barely' }, overall: 1.6, stats: { firedIds: [] } } }, 100, 'paste', null);
+  check('  ...and a report without one adds nothing to them', !k2.some(x => /post:a:|post:adds:/.test(x)) && k2.includes('analyze:adds:none'));
+  const k3 = statKeys('analyze', 200, { mode: 'llm', report: { band: { key: 'barely' }, overall: 1.6, stats: { firedIds: [] } }, adds: { level: 'none' } }, 100, 'specimen', null);
+  check('  ...and only real pastes count as posts, as with every other post count', !k3.some(x => /post:a:|post:adds:/.test(x)));
+
+  // The reserve: the largest post the analyzer takes that the read will look at, and the retry.
+  const c = COSTS.adds;
+  const tok = chars => Math.ceil(chars / 4);
+  const atCeiling = 'x'.repeat(c.blockMax - 2);
+  const needFirst = c.maxTokens * 5 + Math.ceil((tok(c.systemChars) + tok(c.toolChars) + tok(c.build(atCeiling, true).length)) * 1.6);
+  const needRetry = c.maxTokens * 5 + Math.ceil((tok(c.systemChars) + tok(c.toolChars) + tok((c.build(atCeiling, true) + c.retryNote('<'.repeat(c.retryQuoteMax))).length)) * 1.6);
+  check('the read\'s reserve covers the largest post it will look at, at 1.6 times the estimate', c.precharge >= needFirst, c.precharge + ' against ' + needFirst);
+  check('  ...and the retry, carrying the longest failed quote', c.precharge >= needRetry, c.precharge + ' against ' + needRetry);
+  env = on(); reset();
+  r = await go(env, { post: '<'.repeat(900) + ' and some words after it.' });
+  check('a post whose escaped form is past the ceiling gets no read, not an overrun', r.adds === undefined && addsCalls === 0);
 }
 
 const failed = results.filter(r => !r.pass);

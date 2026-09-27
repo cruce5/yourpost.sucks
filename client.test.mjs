@@ -538,6 +538,53 @@ check('server 500 produces the server note', /server had a problem/.test(await a
 check('server 500 does not claim offline', !/No internet connection/.test(await api.textContent('.mode-why')));
 await api.unroute('**/api/analyze');
 
+// 4b. What it adds: the AI read, as a card under the score and outside it
+{
+  let reply = null;
+  await api.route('**/api/analyze', async route => {
+    const p = route.request().postDataJSON().post;
+    const report = await api.evaluate(x => window.YourPostSucks.analyze(x), p);
+    await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ mode: 'rules', reason: 'no_key', report, ...(reply ? { adds: reply } : {}) }) });
+  });
+  reply = { level: 'none', kind: 'none', evidence: 'Grateful for this <b>opportunity</b>', line: 'Gratitude, nicely formatted. Nothing under it.' };
+  await api.goto(httpUrl);
+  await api.click('[data-spec="0"]');
+  await api.waitForSelector('#report:not([hidden])', { timeout: 20000 });
+  const card = await api.evaluate(() => {
+    const c = document.querySelector('#report .adds');
+    if (!c) return null;
+    const hero = document.querySelector('#report .hero');
+    const roasts = [...document.querySelectorAll('#report h2.sec')].find(h => /roasts/i.test(h.textContent));
+    return {
+      k: c.querySelector('.adds-k').textContent, v: c.querySelector('.adds-v').textContent,
+      line: c.querySelector('.adds-line').textContent, quote: c.querySelector('.adds-quote').textContent,
+      note: c.querySelector('.adds-note').textContent, cls: c.className,
+      afterScore: !!(hero && (hero.compareDocumentPosition(c) & Node.DOCUMENT_POSITION_FOLLOWING)),
+      beforeRoasts: !roasts || !!(c.compareDocumentPosition(roasts) & Node.DOCUMENT_POSITION_FOLLOWING),
+      notInHero: !hero.contains(c), injected: !!c.querySelector('.adds-quote b')
+    };
+  });
+  check('what it adds: a card under the score and before the roasts, outside the score block', card && card.afterScore && card.beforeRoasts && card.notInHero, JSON.stringify(card));
+  check('  ...naming the level in words, the sentence, and the line it judged by', card && card.k === 'What it adds' && card.v === 'Nothing' && card.line === reply.line && card.quote === reply.evidence && /adds-none/.test(card.cls));
+  check('  ...saying it is an AI read and not part of the score', card && /AI read/.test(card.note) && /not part of the score/.test(card.note));
+  check('  ...and anything in the quote is text, never markup', card && !card.injected);
+  await api.setViewportSize({ width: 375, height: 800 });
+  check('  ...and fits a phone', await api.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1));
+  await api.setViewportSize({ width: 900, height: 1200 });
+  reply = null;
+  await api.goto(httpUrl);
+  await api.click('[data-spec="0"]');
+  await api.waitForSelector('#report:not([hidden])', { timeout: 20000 });
+  check('what it adds: no read in the reply, no card at all', await api.evaluate(() => !document.querySelector('#report .adds')));
+  reply = { level: 'amazing', line: 'x', evidence: 'y' };
+  await api.goto(httpUrl);
+  await api.click('[data-spec="0"]');
+  await api.waitForSelector('#report:not([hidden])', { timeout: 20000 });
+  check('  ...and a level the page does not know is no card either', await api.evaluate(() => !document.querySelector('#report .adds')));
+  check('what it adds: the what\'s-new line says so, first in the list', await api.evaluate(() => { const li = document.getElementById('wn-adds'); return !!li && li === li.parentElement.firstElementChild && /not part of the score/.test(li.textContent); }));
+  await api.unroute('**/api/analyze');
+}
+
 // 5. malformed JSON is also 'server'
 await api.route('**/api/analyze', route => route.fulfill({ status: 200, contentType: 'application/json', body: '{not json' }));
 await api.goto(httpUrl);
