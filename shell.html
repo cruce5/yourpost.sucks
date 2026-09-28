@@ -2450,7 +2450,7 @@ ul.cg-list li::before{content:"\2022";position:absolute;left:0;color:var(--ink-4
     // visitor, so the reword button would be a wasted click. Say so.
     else if (reason === 'rate_limited' || reason === 'budget') rewordBody = '<div class="reword-note">' + YPS.esc(REWORD_UNAVAILABLE_NOTES[reason]) + '</div>';
     else {
-      rewordSub = '<b>AI writes it, the checklist re-scores it</b>';
+      rewordSub = '<b>one click; AI writes it, the checklist re-scores it</b>';
       rewordBody = '<div class="reword-actions">' +
           '<button class="btn-primary" id="rewordbtn">Reword this post</button>' +
           '<span class="reword-note">Same voice, better structure. The same checks re-score it, so the before and after is measured.</span>' +
