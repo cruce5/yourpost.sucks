@@ -78,6 +78,14 @@ check('an error toast has its own alert region, since a live region never change
 check('Analyze sits under the box, above the options fold', await p.evaluate(() => document.getElementById('run').getBoundingClientRect().top < document.getElementById('options').getBoundingClientRect().top));
 check('the options fold is open where there is room for it', await p.evaluate(() => document.getElementById('options').open));
 check('report container is focusable (tabindex=-1)', await p.getAttribute('#report', 'tabindex') === '-1');
+check('the theme picker is two swatches in a named group, one of them pressed, and a click swaps the ring and the theme', await p.evaluate(() => {
+  const g = document.getElementById('themetoggle'), b = [...g.querySelectorAll('[data-theme-choice]')];
+  if (g.getAttribute('role') !== 'group' || b.length !== 2 || b.filter(x => x.getAttribute('aria-pressed') === 'true').length !== 1) return false;
+  const light = b.find(x => x.getAttribute('data-theme-choice') === 'light'); light.click();
+  const ok = document.documentElement.getAttribute('data-theme') === 'light' && light.getAttribute('aria-pressed') === 'true' && b.every(x => x.getBoundingClientRect().width >= 44 && x.getBoundingClientRect().height >= 44);
+  b.find(x => x.getAttribute('data-theme-choice') === 'dark').click();
+  return ok && document.documentElement.getAttribute('data-theme') === 'dark';
+}));
 check('progress bar is an indeterminate progressbar, not aria-hidden', await p.evaluate(() => {
   const el = document.getElementById('progress');
   return el.getAttribute('role') === 'progressbar' && !el.hasAttribute('aria-hidden') && !el.hasAttribute('aria-valuenow');
@@ -119,7 +127,7 @@ check('no outline:none anywhere in the CSS', !/\boutline:\s*none/.test(css));
 check('media preview hidden rule exists', /\.media-preview\[hidden\]\{display:none\}/.test(css));
 check('toast sits above the iOS safe area', /bottom:calc\(28px \+ env\(safe-area-inset-bottom, 0px\)\)/.test(css));
 check('background-attachment:fixed replaced by a body::before layer', !/background-attachment:\s*fixed/.test(css) && /body::before\{[^}]*position:fixed;inset:0;z-index:-1/.test(css));
-check('hit targets: 44px minimum on ghost, primary, remove, toggle, attach', ['.btn-ghost{', '.btn-primary{', '.media-remove{', '.theme-toggle{', '.media-upload-btn{'].every(sel => {
+check('hit targets: 44px minimum on ghost, primary, remove, theme swatches, attach', ['.btn-ghost{', '.btn-primary{', '.media-remove{', '.themes button{', '.media-upload-btn{'].every(sel => {
   const i = css.indexOf(sel); const block = css.slice(i, css.indexOf('}', i));
   return i >= 0 && /min-height:44px/.test(block);
 }));

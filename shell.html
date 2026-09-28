@@ -217,14 +217,16 @@ body.meaner .brand-flag .flag-red{opacity:1}
 @media (prefers-reduced-motion: no-preference){
   .brand-flag.waving{animation:flagwave .7s ease-in-out}
 }
-.theme-toggle{
-  font-family:var(--mono);font-size:14px;letter-spacing:.06em;text-transform:uppercase;
-  background:transparent;color:var(--ink-3);border:1px solid var(--rule);
-  border-radius:4px;padding:7px 12px;cursor:pointer;min-height:44px;
-  transition:background .12s,border-color .12s,color .12s;
-  flex-shrink:0;
-}
-.theme-toggle:hover{color:var(--ink-2);border-color:var(--rule-2)}
+/* The theme picker: one swatch per theme, the way billyost.com does it. Each
+   button is a 44px target around a 22px swatch; the current theme wears a
+   ring in the page's own ink. */
+.themes{display:flex;flex-shrink:0;margin-right:-11px}
+.themes button{width:44px;height:44px;min-height:44px;display:grid;place-items:center;padding:0;border:0;border-radius:50%;background:none;cursor:pointer}
+.swatch{display:block;width:22px;height:22px;border-radius:50%;border:1px solid var(--ink-3)}
+.sw-dark{background:#0d0d0d}
+.sw-light{background:#f8f5ee}
+.themes button:hover .swatch{border-color:var(--ink)}
+.themes button[aria-pressed="true"] .swatch{box-shadow:0 0 0 2px var(--plane),0 0 0 4px var(--ink)}
 .head-actions{display:flex;align-items:center;gap:8px;flex-shrink:0}
 /* Both header buttons are chrome, not the job. They were competing with
    the masthead at full button size, so they sit at 13px with a quiet
@@ -1256,14 +1258,13 @@ ul.cg-list li::before{content:"\2022";position:absolute;left:0;color:var(--ink-4
      at 320 the first header button sat on the logo. */
   @media (max-width:359px){
     .brand{font-size:17px}
-    .theme-toggle,.head-link{font-size:11px;padding:5px 6px;letter-spacing:0}
+    .head-link{font-size:11px;padding:5px 6px;letter-spacing:0}
     .head-actions{gap:4px}
     /* Even at 11px the two buttons and the logo need about 305px and there
        are 288. One row is the rule down to 360; below that the buttons take
        their own row, which costs one line and hides nothing. */
     .masthead-row{flex-wrap:wrap;row-gap:8px}
   }
-  .theme-toggle{font-size:12px;padding:5px 9px;letter-spacing:.04em}
   .head-link{font-size:12px;padding:5px 9px;letter-spacing:.04em}
   .head-actions{gap:8px}
   /* The masthead stays one row at phone width (see above), and two full
@@ -1327,7 +1328,10 @@ ul.cg-list li::before{content:"\2022";position:absolute;left:0;color:var(--ink-4
     </div>
     <div class="head-actions">
       <button class="head-link" id="whatsnewbtn" type="button" aria-label="What's new"><span class="hl-long">What's new</span><span class="hl-short" aria-hidden="true">New</span></button>
-      <button class="theme-toggle" id="themetoggle" type="button">Light mode</button>
+      <div class="themes" id="themetoggle" role="group" aria-label="Theme">
+        <button type="button" data-theme-choice="dark" aria-label="Dark mode" aria-pressed="false" title="Dark"><span class="swatch sw-dark"></span></button>
+        <button type="button" data-theme-choice="light" aria-label="Light mode" aria-pressed="false" title="Light"><span class="swatch sw-light"></span></button>
+      </div>
     </div>
   </div>
   <!-- The reading bar. Blue ordinarily, red in meaner mode, so the register
@@ -1725,19 +1729,14 @@ ul.cg-list li::before{content:"\2022";position:absolute;left:0;color:var(--ink-4
     try { return localStorage.getItem('theme'); } catch (e) { return null; }
   }
   function syncThemeUI(){
-    var btn = $('#themetoggle');
-    if (!btn) return;
     var cur = currentTheme();
     var meta = document.querySelector('meta[name="theme-color"]');
-    if (cur === 'dark') {
-      btn.textContent = 'Light mode';
-      btn.setAttribute('aria-label', 'Switch to light mode');
-      if (meta) meta.setAttribute('content', '#0d0d0d');
-    } else {
-      btn.textContent = 'Dark mode';
-      btn.setAttribute('aria-label', 'Switch to dark mode');
-      if (meta) meta.setAttribute('content', '#eeece7');
-    }
+    if (meta) meta.setAttribute('content', cur === 'dark' ? '#0d0d0d' : '#eeece7');
+    // The swatch of the theme in force wears the ring, whether it came from
+    // the toggle or from the system.
+    Array.prototype.forEach.call(document.querySelectorAll('[data-theme-choice]'), function(b){
+      b.setAttribute('aria-pressed', b.getAttribute('data-theme-choice') === cur ? 'true' : 'false');
+    });
   }
   function setTheme(theme){
     document.documentElement.setAttribute('data-theme', theme);
@@ -3270,8 +3269,8 @@ ul.cg-list li::before{content:"\2022";position:absolute;left:0;color:var(--ink-4
     });
   }
 
-  $('#themetoggle').addEventListener('click', function(){
-    setTheme(currentTheme() === 'dark' ? 'light' : 'dark');
+  Array.prototype.forEach.call(document.querySelectorAll('[data-theme-choice]'), function(b){
+    b.addEventListener('click', function(){ setTheme(b.getAttribute('data-theme-choice')); });
   });
   syncThemeUI();
   // Only relevant when nothing is explicitly saved: if the system theme
