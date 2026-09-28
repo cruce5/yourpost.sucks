@@ -607,7 +607,7 @@ await api.unroute('**/api/analyze');
   await api.click('[data-spec="0"]');
   await api.waitForSelector('#report:not([hidden])', { timeout: 20000 });
   check('  ...and a level the page does not know is no card either', await api.evaluate(() => !document.querySelector('#report .adds')));
-  check('what it adds: the what\'s-new line says so, near the top of the list', await api.evaluate(() => { const li = document.getElementById('wn-adds'); return !!li && [...li.parentElement.children].indexOf(li) <= 2 && /never part of the score/.test(li.textContent); }));
+  check('what it adds: the what\'s-new line says so, near the top of the list', await api.evaluate(() => { const li = document.getElementById('wn-adds'); return !!li && [...li.parentElement.children].indexOf(li) <= 2 && /never part of the score/i.test(li.textContent); }));
   await api.unroute('**/api/analyze');
 }
 
