@@ -620,6 +620,9 @@ ul.roasts.roasts-lead{margin-top:12px}
 .jump a:hover{color:var(--ink);border-bottom-color:var(--ink-3)}
 
 .ai-strap{margin:14px 0 0;font-family:var(--mono);font-size:13px;line-height:1.5;color:var(--ink-4)}
+
+.pat{background:var(--surface);border:1px solid var(--hair);border-left:3px solid #f4b8d1;border-radius:6px;padding:16px 18px}
+.pat-line{margin:0;font-size:17px;line-height:1.5;color:var(--ink)}
 .hero .kicker-row.kicker-solo{justify-content:flex-end}
 ul.roasts li{
   background:var(--surface);border:1px solid var(--hair);border-radius:5px;
@@ -4310,6 +4313,15 @@ ul.cg-list li::before{content:"\2022";position:absolute;left:0;color:var(--ink-4
   var RECEIPTS_KEY = 'yps_receipts_open';
 
   var ADDS_WORDS = { none: 'Nothing', some: 'A little', plenty: 'Plenty' };
+  var PAT_LINES = [
+    'Hey you. You are doing a great job, and your hair looks great today.',
+    'You pasted a post into a website called yourpost.sucks. That took nerve, and nerve looks good on you.',
+    'Whoever taught you to write did a wonderful job. So did you, just now.',
+    'Your posture is excellent. Nobody told you to sit up and you did anyway.',
+    'Somebody is going to read this post and feel understood. Probably you, but it counts.',
+    'You have notes. Everyone has notes. Yours are the good kind.',
+    'The checklist has never met you, and it already likes you.'
+  ];
   function addsHTML(a){
     if (!a || !ADDS_WORDS[a.level] || typeof a.line !== 'string' || !a.line) return '';
     return '<div class="adds adds-' + a.level + '" role="group" aria-labelledby="adds-k adds-v">' +
@@ -4524,6 +4536,13 @@ ul.cg-list li::before{content:"\2022";position:absolute;left:0;color:var(--ink-4
 
     rep.innerHTML = html;
     rep.hidden = false;
+    if (r.niceOn){
+      var pat = document.createElement('section');
+      pat.className = 'pat-sec'; pat.setAttribute('aria-labelledby', 'h-pat');
+      pat.innerHTML = '<div class="pat"><h2 class="sec" id="h-pat">From the management</h2><p class="pat-line">' + YPS.esc(PAT_LINES[Math.floor(Math.random() * PAT_LINES.length)]) + '</p></div>';
+      var slot = 1 + Math.floor(Math.random() * Math.max(1, rep.children.length - 1));
+      rep.insertBefore(pat, rep.children[slot] || null);
+    }
     var specs = $('#specimens'); if (specs) specs.hidden = true;
 
     Array.prototype.forEach.call(rep.children, function(sec, i){ sec.style.setProperty('--i', i); });
@@ -4940,7 +4959,10 @@ ul.cg-list li::before{content:"\2022";position:absolute;left:0;color:var(--ink-4
       settle();
       if ($('#post').value !== text) return;
       if (report && report.sensitive) renderDeclined();
-      else { render(report, mode, reason, text); if (mode === 'llm' || mode === 'cache') tipAsk.count(); }
+      else {
+        if (nice) report.niceOn = true;
+        render(report, mode, reason, text); if (mode === 'llm' || mode === 'cache') tipAsk.count();
+      }
     };
 
     var fallback = function(reason){

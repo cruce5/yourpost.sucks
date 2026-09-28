@@ -18,7 +18,7 @@
   Referrer-Policy: strict-origin-when-cross-origin
   Permissions-Policy: camera=(), microphone=(), geolocation=()
   Strict-Transport-Security: max-age=31536000; includeSubDomains
-  Content-Security-Policy: default-src 'self'; script-src 'self' 'sha256-gdF+ZnYhCrUyiWRxiDJOAqdAnaZwI37RQxvtIAQA/5s=' 'sha256-K701j951ZyEDroeoDF8H/qSJ6khk4Dr0pH3bxvQiBjk=' 'sha256-SLZJLrBcQlnSXF3b4ohjjGHgUZoAAPxVQrotY6Buu+I=' 'sha256-Ll4Iv/MXHg9cQlkq4PcgrXvfusug3B7k7muJb9NKyEo=' https://challenges.cloudflare.com https://static.cloudflareinsights.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; img-src 'self' data: blob:; connect-src 'self' https://cloudflareinsights.com; frame-src https://challenges.cloudflare.com; frame-ancestors 'none'; base-uri 'self'; form-action 'self'
+  Content-Security-Policy: default-src 'self'; script-src 'self' 'sha256-gdF+ZnYhCrUyiWRxiDJOAqdAnaZwI37RQxvtIAQA/5s=' 'sha256-K701j951ZyEDroeoDF8H/qSJ6khk4Dr0pH3bxvQiBjk=' 'sha256-rxwskfu9K5c6+vadDBk9U8IEKTNCFcA6B9y63BUcETw=' 'sha256-Ll4Iv/MXHg9cQlkq4PcgrXvfusug3B7k7muJb9NKyEo=' https://challenges.cloudflare.com https://static.cloudflareinsights.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; img-src 'self' data: blob:; connect-src 'self' https://cloudflareinsights.com; frame-src https://challenges.cloudflare.com; frame-ancestors 'none'; base-uri 'self'; form-action 'self'
 # The page inlines the whole engine, so a deploy that changes a rule must
 # reach visitors on their next load, not after a CDN TTL.
 /

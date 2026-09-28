@@ -757,10 +757,16 @@ check('error is above the kept rewrite, not replacing it', await api.evaluate(()
   await api.click('#run');
   await api.waitForTimeout(900);
   check('ticking "tell me I\'m doing a great job" unticks meaner, sends nice, and paints the rule pastel', analyzeCalls === 3 && lastBody.nice === true && lastBody.meaner === false && await api.evaluate(() => !document.getElementById('meaner').checked && document.body.classList.contains('nice') && !document.body.classList.contains('meaner') && document.getElementById('readrule').classList.contains('nice') && /great job/.test(document.getElementById('opt-state').textContent)), JSON.stringify({ nice: lastBody.nice, meaner: lastBody.meaner }));
+  await api.waitForSelector('#report:not([hidden])', { timeout: 20000 });
+  check('  ...and a card from the management turns up below the score, and only then', await api.evaluate(() => { const p = document.querySelector('#report .pat-sec'); return !!p && p !== document.getElementById('report').firstElementChild && /From the management/.test(p.textContent) && p.querySelector('.pat-line').textContent.length > 20; }));
   await api.goto(httpUrl);
   check('  ...and it is remembered, with meaner left off', await api.evaluate(() => document.getElementById('nice').checked && !document.getElementById('meaner').checked));
   await api.click('#meaner');
   check('  ...and ticking meaner back unticks it', await api.evaluate(() => !document.getElementById('nice').checked && document.getElementById('meaner').checked));
+  await api.fill('#post', SPEC0);
+  await api.click('#run');
+  await api.waitForSelector('#report:not([hidden])', { timeout: 20000 });
+  check('  ...and with it off, the management stays quiet', await api.evaluate(() => !document.querySelector('#report .pat-sec')));
   await api.goto(httpUrl);
   check('  ...and it is remembered on the next visit', await api.evaluate(() => document.getElementById('meaner').checked));
   await api.click('#meaner');

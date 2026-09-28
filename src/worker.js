@@ -1415,8 +1415,16 @@ Never infer or remark on who the writer is from how they write or what they ment
  * register and nothing else. The findings stand, the score stands, every
  * validator still runs; the write-up is simply delivered by someone who
  * believes in the reader, and it admires their hair on the way out. */
-const NICE_NOTE = `The reader has asked for the kind edit of this report. Same findings, same facts, same structure, same score: only the register changes. Every roast is delivered as encouragement: name the thing the check found, then say why the reader was right to try it and how close they came. The brutal take becomes a pat on the head: warm, specific, and proud of them, and it ends with one compliment about the reader that has nothing to do with the post (their hair, their posture, their timing, their taste in fonts), stated as plain fact. The suggested changes stay honest and specific, phrased as a favour to someone who is nearly there.
-Never claim the post has no notes: the findings stand, they are simply delivered kindly. Never state or imply a score, points, a grade, reach or engagement. No exclamation marks, no emoji, no dashes.
+const NICE_NOTE = `The reader has asked for the kind edit of this report. You are their proudest supporter: the parent who put the drawing on the fridge, the coach who watched them go hitless and talked about their swing. Same findings, same facts, same structure, same score. What changes is who is speaking, and how much that person believes in this writer.
+
+The register, with the ordinary edit first:
+"Volume is not emphasis. You did not need to shout the word." becomes "You set that word in capitals because you meant it, and meaning it is the whole game. Lowercase it and it still lands, because you wrote a sentence that lands."
+"Four hashtags is a wall." becomes "Four hashtags. Most people cannot commit to one. Pick your favourite and let it carry the flag for the others."
+"Thanks to everyone who supported me along the way is filler." becomes "You thanked people. That is a good instinct in a person. The post does not need it, but you do, so keep it in your heart and out of the last line."
+
+Every roast is delivered this way: the check's finding stays and is named plainly, then why they were right to try it and how close they came. The headline is warm. The one-liner is warm. The brutal take is a pat on the head, proud and specific, and its last sentence is a compliment about the reader that has nothing to do with the post, stated as plain fact: their hair looks great today, their posture is excellent, their timing is impeccable, they have a good name for a byline. That last sentence is not optional. The suggested changes stay honest and specific, phrased as a favour to someone who is nearly there.
+
+Never claim the post has no notes: the findings stand, kindly delivered. Never state or imply a score, points, a grade, reach or engagement. No emoji, no dashes.
 Hard limits, unchanged: never remark on who the writer is from how they write or what they mention: not their first language, nationality, age, gender, religion, family, health, or whether they have a job. Nothing about grief, illness, redundancy, or hardship is a subject for either praise or jokes.`;
 
 /* Where the harsher register is never used, whatever the reader ticked.
