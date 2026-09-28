@@ -352,7 +352,7 @@ async function countTipClick(env, ip, where) {
 export const AI_OUTCOMES = Object.freeze(['ok', 'repaired', 'partial',
   'fail:lines_unusable', 'fail:lines_compromised', 'fail:all_roasts_policed', 'fail:roasts_count', 'fail:no_object', 'fail:rejected',
   'fail:cut_off', 'fail:no_tool_block', 'fail:timeout', 'fail:http_429', 'fail:http_5xx', 'fail:http_other', 'fail:call_failed',
-  'calls:image', 'calls:meaner', 'fail:with_image', 'fail:with_meaner',
+  'calls:image', 'calls:meaner', 'calls:nice', 'fail:with_image', 'fail:with_meaner', 'fail:with_nice',
   // What had to be mended on a report that shipped (a report can have several).
   'fail:no_roasts', 'fail:nothing_usable', 'mend:list_parsed', 'mend:roasts_trimmed', 'mend:roasts_none_sent', 'mend:roasts_policed', 'mend:line_replaced']);
 const AI_TTL = 315360000;
@@ -454,6 +454,10 @@ export function statKeys(kind, status, p, ms, source, asked) {
     // of the posts since then, so its share divides by the right number.
     keys.push('post:m:all');
     if (asked && asked.meaner) keys.push('post:flag:meaner');
+    // Asked to be told it is doing a great job. Counted from 2026-09-28,
+    // alongside a count of the posts since then, like the meaner flag.
+    keys.push('post:n:all');
+    if (asked && asked.nice) keys.push('post:flag:nice');
     // What it adds, counted from 2026-09-27 over the posts that got a read,
     // so its shares divide by the right number.
     if (p.adds && ['none', 'some', 'plenty'].includes(p.adds.level)) keys.push('post:a:all', 'post:adds:' + p.adds.level);
@@ -462,6 +466,7 @@ export function statKeys(kind, status, p, ms, source, asked) {
     keys.push('analyze:adds:' + (p && p.adds ? (p.adds.lineFallback ? 'read_fixed_line' : 'read') : 'none'));
   }
   if (kind === 'analyze' && asked && asked.meaner) keys.push('analyze:meaner');
+  if (kind === 'analyze' && asked && asked.nice) keys.push('analyze:nice');
   if (kind === 'reword' && p && p.after && p.before && typeof p.after.overall === 'number') {
     keys.push('reword:gain:' + gainBucket(p.before.overall, p.after.overall));
   }
@@ -475,7 +480,7 @@ export async function bumpStats(env, keys) {
   // many checks makes over a hundred pair keys, so the batch is sent in
   // chunks well under the limit; the stamps ride with the first.
   const clean = keys.map(k => 's:' + k.toLowerCase().replace(/[^a-z0-9:_.-]/g, '_'));
-  const stamps = [keys.includes('post:all') && 's:post:since', keys.includes('post:m:all') && 's:post:m:since', keys.includes('post:c:all') && 's:post:c:since', keys.includes('post:a:all') && 's:post:a:since'].filter(Boolean);
+  const stamps = [keys.includes('post:all') && 's:post:since', keys.includes('post:m:all') && 's:post:m:since', keys.includes('post:n:all') && 's:post:n:since', keys.includes('post:c:all') && 's:post:c:since', keys.includes('post:a:all') && 's:post:a:since'].filter(Boolean);
   try {
     for (let i = 0; i < clean.length; i += BUMP_CHUNK) await counterCall(ns, 'stats', '/bump', { keys: clean.slice(i, i + BUMP_CHUNK), stamps: i === 0 ? stamps : [] });
   } catch (e) { console.warn('stats: not counted', e && e.message); }
@@ -588,6 +593,7 @@ export function publicFigures(all, at) {
       top: Object.entries(under('post:pair:')).map(([k, n]) => { const [a, b] = k.split(/[+_]/); return { a, b, n }; }).filter(x => RULE_IDS.has(x.a) && RULE_IDS.has(x.b) && x.n >= PAIR_MIN).sort((x, y) => y.n - x.n).slice(0, 10) },
     // Newer than the rest: its own denominator and its own start date.
     meaner: { n: s['post:flag:meaner'] || 0, of: s['post:m:all'] || 0, since: s['post:m:since'] ? new Date(s['post:m:since']).toISOString() : null },
+    nice: { n: s['post:flag:nice'] || 0, of: s['post:n:all'] || 0, since: s['post:n:since'] ? new Date(s['post:n:since']).toISOString() : null },
     reword: { tried, notAttempted: Math.max(0, outcomes - tried.better - tried.couldNotBeat - tried.unusable), gain: under('reword:gain:') },
     // Every report that reached the AI, since the counting began.
     wait: Object.fromEntries(['lt5s', '5to10s', '10to20s', 'gt20s'].map(b => [b, s['analyze:wait:' + b] || 0]))
@@ -621,7 +627,7 @@ async function counted(kind, handler, request, env, ctx) {
   // What was asked for, read from a copy of the body before the handler
   // consumes it. Only fixed flags are ever read out of it.
   let asked = null;
-  try { const b = await request.clone().json(); asked = { meaner: b && b.meaner === true }; } catch (e) { asked = null; }
+  try { const b = await request.clone().json(); asked = { meaner: b && b.meaner === true && b.nice !== true, nice: b && b.nice === true }; } catch (e) { asked = null; }
   const res = await handler(request, env, ctx);
   try {
     const p = await res.clone().json();
@@ -1402,6 +1408,17 @@ const MEANER_NOTE = `The reader has asked for the harsher edit of this report. S
 Hard limits, unchanged and not negotiable: never mock the person, their job, their employer, their appearance, their name, or anything they disclose about their life. Nothing about grief, illness, redundancy, or hardship is ever a target. You are ruthless about the writing and only the writing. If the post is genuinely good, say so plainly: the harsher register is not permission to invent faults.
 Never infer or remark on who the writer is from how they write or what they mention: not their first language, nationality, age, gender, religion, family, health, or whether they have a job. An error is an error in the sentence, never evidence about the person. Never mock an ask for help.`;
 
+/* The reader asked to be told they are doing a great job. Asked for in the
+ * comments the day the site went round ("can you make one that just tells
+ * us we're doing a really, really good job?"), and built the same way as
+ * the harsher edit: a second, uncached system block that changes the
+ * register and nothing else. The findings stand, the score stands, every
+ * validator still runs; the write-up is simply delivered by someone who
+ * believes in the reader, and it admires their hair on the way out. */
+const NICE_NOTE = `The reader has asked for the kind edit of this report. Same findings, same facts, same structure, same score: only the register changes. Every roast is delivered as encouragement: name the thing the check found, then say why the reader was right to try it and how close they came. The brutal take becomes a pat on the head: warm, specific, and proud of them, and it ends with one compliment about the reader that has nothing to do with the post (their hair, their posture, their timing, their taste in fonts), stated as plain fact. The suggested changes stay honest and specific, phrased as a favour to someone who is nearly there.
+Never claim the post has no notes: the findings stand, they are simply delivered kindly. Never state or imply a score, points, a grade, reach or engagement. No exclamation marks, no emoji, no dashes.
+Hard limits, unchanged: never remark on who the writer is from how they write or what they mention: not their first language, nationality, age, gender, religion, family, health, or whether they have a job. Nothing about grief, illness, redundancy, or hardship is a subject for either praise or jokes.`;
+
 /* Where the harsher register is never used, whatever the reader ticked.
  * Decided here, by pattern, before any model is involved, because an
  * instruction is a request and this has to be a guarantee: a sweep of the
@@ -1436,7 +1453,7 @@ function meanerAllowed(post) {
   return !MEANER_OFF.test(normalizeForPolicing(post));
 }
 
-async function callClaude(env, post, report, image, m, meaner) {
+async function callClaude(env, post, report, image, m, meaner, nice) {
   const ctrl = new AbortController();
   const timer = setTimeout(() => ctrl.abort(), LLM_TIMEOUT_MS);
   try {
@@ -1462,9 +1479,8 @@ async function callClaude(env, post, report, image, m, meaner) {
       body: JSON.stringify({
         model: env.MODEL || 'claude-haiku-4-5',
         max_tokens: MAX_TOKENS_REPORT,
-        system: meaner
-          ? [{ type: 'text', text: SYSTEM_PROMPT, cache_control: { type: 'ephemeral' } }, { type: 'text', text: MEANER_NOTE }]
-          : [{ type: 'text', text: SYSTEM_PROMPT, cache_control: { type: 'ephemeral' } }],
+        // One register note at most, uncached, behind the cached prompt.
+        system: [{ type: 'text', text: SYSTEM_PROMPT, cache_control: { type: 'ephemeral' } }, ...(nice ? [{ type: 'text', text: NICE_NOTE }] : meaner ? [{ type: 'text', text: MEANER_NOTE }] : [])],
         tools: [TOOL],
         tool_choice: { type: 'tool', name: 'report' },
         messages: [{ role: 'user', content }]
@@ -2108,7 +2124,10 @@ async function handleAnalyze(request, env, ctx) {
   // Asked for in the comments ("Don Rickles level"), and deliberately not a
   // flag on the engine: it is read here, reaches the model, and nothing
   // else. A meaner report is the same report in a harder register.
-  const meanerAsked = body.meaner === true;
+  // The kind edit ("tell me I'm doing a great job") wins over the harsher
+  // one when both arrive; the page never sends both.
+  const nice = body.nice === true;
+  const meanerAsked = body.meaner === true && !nice;
   const meaner = meanerAsked && meanerAllowed(post);
   // Told to the page so it can say why the report is not the one ticked for.
   const meanerSkipped = meanerAsked && !meaner;
@@ -2191,7 +2210,7 @@ async function handleAnalyze(request, env, ctx) {
     if (satire) report = ENGINE.analyze(post, { ...safeFlags, satire: true });
   }
 
-  const llm = await callClaude(env, post, report, image, reportMeter, meaner);
+  const llm = await callClaude(env, post, report, image, reportMeter, meaner, nice);
   const adds = await addsP;
   await settleCharge(env, precharged, [...(needsTone ? [toneMeter] : []), reportMeter, ...(addsOn ? [addsMeter] : [])]);
   // What became of the read, beside the router's analyze:adds:read keys,
@@ -2210,7 +2229,8 @@ async function handleAnalyze(request, env, ctx) {
     const keys = [];
     if (hasImage) keys.push('calls:image');
     if (meaner) keys.push('calls:meaner');
-    if (!llm) { keys.push('fail:' + (reportMeter.why || 'rejected')); if (hasImage) keys.push('fail:with_image'); if (meaner) keys.push('fail:with_meaner'); }
+    if (nice) keys.push('calls:nice');
+    if (!llm) { keys.push('fail:' + (reportMeter.why || 'rejected')); if (hasImage) keys.push('fail:with_image'); if (meaner) keys.push('fail:with_meaner'); if (nice) keys.push('fail:with_nice'); }
     else keys.push(llm.partial ? 'partial' : reportMeter.repaired ? 'repaired' : 'ok');
     const mended = reportMeter.note || {};
     if (mended.listParsed) keys.push('mend:list_parsed');
@@ -2454,9 +2474,9 @@ async function handleStatus(env) {
 export const COSTS = Object.freeze({
   charsPerToken: CHARS_PER_TOKEN,
   prices: PRICE_MICROS_PER_TOKEN,
-  // The meaner note rides along uncached, so the worst case for a report
-  // call is both system blocks.
-  report: { maxTokens: MAX_TOKENS_REPORT, precharge: COST_MICROS_PER_CALL, systemChars: SYSTEM_PROMPT.length + MEANER_NOTE.length, toolChars: JSON.stringify(TOOL).length },
+  // A register note rides along uncached, so the worst case for a report
+  // call is the cached prompt plus the longer of the two notes.
+  report: { maxTokens: MAX_TOKENS_REPORT, precharge: COST_MICROS_PER_CALL, systemChars: SYSTEM_PROMPT.length + Math.max(MEANER_NOTE.length, NICE_NOTE.length), toolChars: JSON.stringify(TOOL).length, notes: { meaner: MEANER_NOTE, nice: NICE_NOTE } },
   tone: { maxTokens: MAX_TOKENS_TONE, precharge: TONE_COST_MICROS_PER_CALL, systemChars: TONE_SYSTEM_PROMPT.length, toolChars: JSON.stringify(TONE_TOOL).length },
   reword: { maxTokens: MAX_TOKENS_REWORD, precharge: REWORD_COST_MICROS_PER_CALL, systemChars: REWORD_SYSTEM_PROMPT.length, toolChars: JSON.stringify(REWORD_TOOL).length },
   image: { precharge: IMAGE_COST_MICROS_PER_CALL },

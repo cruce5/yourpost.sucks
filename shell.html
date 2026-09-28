@@ -302,6 +302,8 @@ body.meaner .brand-flag .flag-red{opacity:1}
   transition:transform .45s cubic-bezier(.2,.7,.2,1), opacity .2s;
 }
 [data-theme="rainbow"] .read-rule,[data-theme="rainbow"] .read-bar{--grad:linear-gradient(90deg,#ff2d95,#ff8a00,#ffe600,#35e06f,#19d3ff,#4a6bff,#b14aff)}
+/* The kind edit: the rule goes pastel. */
+.read-rule.nice,.read-bar.nice{--grad:linear-gradient(90deg,#f4b8d1 0%,#f9d3a5 28%,#fbf0a6 52%,#c6efd6 76%,#c9dcff 100%)}
 .read-rule.mean,.read-bar.mean{--grad:linear-gradient(90deg,#4a0d12 0%,#8e1d24 22%,#c62f2a 48%,#f2543c 74%,#ff8a5c 100%)}
 .read-rule{height:6px;border-radius:999px;margin:14px 0 2px;background:var(--grad)}
 .read-bar{
@@ -488,8 +490,8 @@ textarea::placeholder{color:var(--ink-4)}
 .media-toggle input{flex:none;cursor:pointer;width:18px;height:18px}
 /* Meaner changes only the AI's write-up, so under No AI it is greyed out
    and off, with the note saying why. */
-.meaner-row.off .media-toggle{opacity:.45;cursor:not-allowed}
-.meaner-row.off .media-toggle input{cursor:not-allowed}
+.meaner-row.off .media-toggle,.nice-row.off .media-toggle{opacity:.45;cursor:not-allowed}
+.meaner-row.off .media-toggle input,.nice-row.off .media-toggle input{cursor:not-allowed}
 /* The options fold (episode 6): Analyze sits under the box; the attachment
    and the register are one tap away on a phone and open on a wider screen. */
 .options{margin-top:12px}
@@ -1459,6 +1461,15 @@ ul.cg-list li::before{content:"\2022";position:absolute;left:0;color:var(--ink-4
     </label>
     <p class="media-note">Same score, no mercy. At your own risk.</p>
   </div>
+  <!-- The other register, by request from the comments: the write-up pats
+       your head. The findings and the score are exactly the same. -->
+  <div class="media-row nice-row">
+    <label class="media-toggle" for="nice">
+      <input type="checkbox" id="nice">
+      Tell me I'm doing a great job.
+    </label>
+    <p class="media-note">Same score. The write-up pats your head and admires your hair. Requested by the comments.</p>
+  </div>
   <!-- Conscientious objector mode: the checklist alone, here in the browser,
        and nothing sent anywhere. The score is the same one the server would
        give, because the server runs this same engine. -->
@@ -1629,6 +1640,10 @@ ul.cg-list li::before{content:"\2022";position:absolute;left:0;color:var(--ink-4
     <li id="wn-noai">
       <b>Conscientious objector mode.</b>
       Tick <i>No AI</i> under Options and the checklist scores your post alone. No AI write-up, no read, no rewrite.
+    </li>
+    <li id="wn-nice">
+      <b>Tell me I'm doing a great job.</b>
+      A switch under Options, by request from the comments. Same score, but the write-up pats your head and admires your hair.
     </li>
     <li id="wn-memory">
       <b>A reload keeps your report.</b>
@@ -3122,7 +3137,7 @@ ul.cg-list li::before{content:"\2022";position:absolute;left:0;color:var(--ink-4
     var flags = Object.assign({}, pasteFlags, { hasMedia: $('#hasmedia').checked });
     // Read once, here, so a mid-flight tick cannot make the request and the
     // report disagree about which register was asked for.
-    var meaner = $('#meaner').checked;
+    var meaner = $('#meaner').checked, nice = $('#nice').checked;
     if (textSource !== 'permalink') dropPermalink();
 
     // Conscientious objector mode: the server scores it with the checklist
@@ -3180,7 +3195,7 @@ ul.cg-list li::before{content:"\2022";position:absolute;left:0;color:var(--ink-4
       fetch('api/analyze', {
         method: 'POST',
         headers: { 'content-type': 'application/json', 'x-yps-source': textSource },
-        body: JSON.stringify({ post: text, flags: flags, meaner: meaner, image: objector ? undefined : (attachedImage || undefined), noAI: objector || undefined, turnstileToken: turnstileToken }),
+        body: JSON.stringify({ post: text, flags: flags, meaner: meaner, nice: nice || undefined, image: objector ? undefined : (attachedImage || undefined), noAI: objector || undefined, turnstileToken: turnstileToken }),
         signal: ctrl ? ctrl.signal : undefined
       }).then(function(res){
         if (res.ok) return res.json();
@@ -3280,6 +3295,7 @@ ul.cg-list li::before{content:"\2022";position:absolute;left:0;color:var(--ink-4
     [/\bone coffee\b/gi, 'one grog'],
     [/\bwhat's new\b/gi, 'What be new'],
     [/\bbe meaner about it\b/gi, 'Make it walk the plank'],
+    [/\btell me i'm doing a great job\b/gi, 'Tell me I be a fine sailor'],
     [/\bno mercy\b/gi, 'no quarter'],
     [/\bat your own risk\b/gi, 'at yer own peril'],
     [/\bgot it\b/gi, 'Aye aye'],
@@ -3417,6 +3433,7 @@ ul.cg-list li::before{content:"\2022";position:absolute;left:0;color:var(--ink-4
      remembered across visits in this browser. Storage can be unavailable or
      blocked; then it simply starts off, which is the right default. */
   var MEANER_KEY = 'yps_meaner_v1';
+  var NICE_KEY = 'yps_nice_v1';
   var NOAI_KEY = 'yps_noai_v1';
   /* While the AI works: one true thing about this site at a time, from the
      record of building it. Shuffled, no repeats until the pool is spent,
@@ -3458,13 +3475,15 @@ ul.cg-list li::before{content:"\2022";position:absolute;left:0;color:var(--ink-4
      back on, because that is the only way a gradient can be seen to
      change. */
   function paintMeaner(){
-    var on = $('#meaner').checked;
-    document.body.classList.toggle('meaner', on);
+    var mean = $('#meaner').checked, nice = $('#nice').checked;
+    document.body.classList.toggle('meaner', mean);
+    document.body.classList.toggle('nice', nice);
     [$('#readrule'), $('#readbar')].forEach(function(el){
-      if (el.classList.contains('mean') === on && el.classList.contains('on')) return;
+      if (el.classList.contains('mean') === mean && el.classList.contains('nice') === nice && el.classList.contains('on')) return;
       el.classList.add('snap');
       el.classList.remove('on');
-      el.classList.toggle('mean', on);
+      el.classList.toggle('mean', mean);
+      el.classList.toggle('nice', nice);
       void el.offsetWidth; // the collapse has to land before the wipe starts
       el.classList.remove('snap');
       requestAnimationFrame(function(){ el.classList.add('on'); });
@@ -3492,19 +3511,27 @@ ul.cg-list li::before{content:"\2022";position:absolute;left:0;color:var(--ink-4
   if (window.ResizeObserver) new ResizeObserver(queueRead).observe(document.body);
 
   try { if (localStorage.getItem(MEANER_KEY) === '1') $('#meaner').checked = true; } catch (e) {}
+  try { if (localStorage.getItem(NICE_KEY) === '1') $('#nice').checked = true; } catch (e) {}
+  // One register at a time. Kind wins if both were somehow saved.
+  if ($('#nice').checked) $('#meaner').checked = false;
   try { if (localStorage.getItem(NOAI_KEY) === '1') $('#noai').checked = true; } catch (e) {}
   /* No AI means no write-up, so there is nothing for meaner to be meaner
      in: the box is greyed out and unticked while No AI is on, and the saved
      choice comes back when it goes off. The saved choice itself is never
      touched by this. */
   var MEANER_NOTE = 'Same score, no mercy. At your own risk.';
+  var NICE_NOTE = 'Same score. The write-up pats your head and admires your hair. Requested by the comments.';
   function applyObjector(){
-    var on = $('#noai').checked, m = $('#meaner'), row = document.querySelector('.meaner-row');
-    m.disabled = on;
-    if (on) m.checked = false;
-    else { try { m.checked = localStorage.getItem(MEANER_KEY) === '1'; } catch (e) { m.checked = false; } }
-    row.classList.toggle('off', on);
-    row.querySelector('.media-note').textContent = on ? 'Off while No AI is on: there is no write-up to be meaner in.' : MEANER_NOTE;
+    var on = $('#noai').checked;
+    [['#meaner', '.meaner-row', MEANER_KEY, MEANER_NOTE, 'there is no write-up to be meaner in.'], ['#nice', '.nice-row', NICE_KEY, NICE_NOTE, 'there is no write-up to be kind in.']].forEach(function(r){
+      var box = $(r[0]), row = document.querySelector(r[1]);
+      box.disabled = on;
+      if (on) box.checked = false;
+      else { try { box.checked = localStorage.getItem(r[2]) === '1'; } catch (e) { box.checked = false; } }
+      row.classList.toggle('off', on);
+      row.querySelector('.media-note').textContent = on ? 'Off while No AI is on: ' + r[4] : r[3];
+    });
+    if ($('#nice').checked) $('#meaner').checked = false;
     paintMeaner(); queueRead(); optionsState();
   }
   $('#noai').addEventListener('change', function(){
@@ -3523,11 +3550,12 @@ ul.cg-list li::before{content:"\2022";position:absolute;left:0;color:var(--ink-4
       var bits = [];
       if ($('#hasmedia').checked) bits.push(attachedImage ? 'image attached' : 'attachment');
       if ($('#meaner').checked) bits.push('meaner');
+      if ($('#nice').checked) bits.push('great job');
       if ($('#noai').checked) bits.push('no AI');
       $('#opt-state').textContent = bits.length ? ' · ' + bits.join(' · ') : '';
       if (bits.length) d.open = true;
     };
-    ['#hasmedia', '#meaner', '#noai'].forEach(function(sel){ $(sel).addEventListener('change', optionsState); });
+    ['#hasmedia', '#meaner', '#nice', '#noai'].forEach(function(sel){ $(sel).addEventListener('change', optionsState); });
     d.open = window.innerWidth >= 600;
     optionsState();
   })();
@@ -3544,8 +3572,17 @@ ul.cg-list li::before{content:"\2022";position:absolute;left:0;color:var(--ink-4
       try { gw.focus({ preventScroll: true }); } catch (err) { gw.focus(); }
     });
   })();
+  // The two registers are one switch each and never both: ticking one
+  // unticks and forgets the other.
   $('#meaner').addEventListener('change', function(){
+    if (this.checked){ $('#nice').checked = false; try { localStorage.setItem(NICE_KEY, '0'); } catch (e) {} }
     try { localStorage.setItem(MEANER_KEY, this.checked ? '1' : '0'); } catch (e) {}
+    paintMeaner();
+    queueRead();
+  });
+  $('#nice').addEventListener('change', function(){
+    if (this.checked){ $('#meaner').checked = false; try { localStorage.setItem(MEANER_KEY, '0'); } catch (e) {} }
+    try { localStorage.setItem(NICE_KEY, this.checked ? '1' : '0'); } catch (e) {}
     paintMeaner();
     queueRead();
   });
@@ -3559,7 +3596,7 @@ ul.cg-list li::before{content:"\2022";position:absolute;left:0;color:var(--ink-4
      register), so it works for people who visited long before this
      existed. The seen marker is the version: bump WHATSNEW_VERSION when
      the list above changes and it shows once more, to everyone. */
-  var WHATSNEW_VERSION = '2026-09-29.2';
+  var WHATSNEW_VERSION = '2026-09-29.3';
   var WHATSNEW_KEY = 'yps_whatsnew_seen';
   var VISITED_KEYS = ['yps_theme', 'yps_receipts_open', 'yps_tipask_v1', 'yps_meaner_v1', 'yps_outrun_best_v1'];
   var wn = $('#whatsnew');
@@ -4175,10 +4212,13 @@ ul.cg-list li::before{content:"\2022";position:absolute;left:0;color:var(--ink-4
       var ftop = flagRows[0];
       var mn = d.meaner || { n: 0, of: 0 };
       var meanerRow = { label: 'Asked for it meaner', n: mn.n, why: 'Ticked "Be meaner about it". Same score, harsher write-up. Counted since ' + sinceText(mn.since) + ', so this share is of the ' + num(mn.of) + ' posts since then, not of all ' + num(d.scored) + '.' };
+      var nc = d.nice || { n: 0, of: 0 };
+      var niceRow = { label: 'Asked to be told it is doing a great job', n: nc.n, why: 'Ticked "Tell me I\'m doing a great job". Same score, a write-up that pats your head. Counted since ' + sinceText(nc.since) + ', so this share is of the ' + num(nc.of) + ' posts since then.' };
       html += section('05', 'What came with the post',
         quiet ? few : say(ftop.n, d.scored, 'None of these has come up yet', 'Every post so far ' + ftop.verb, share(ftop.n, d.scored) + ' of posts ' + ftop.verb),
         'Three things about the post, and one thing the person pasting it asked for. A post can be all of them, or none. A full bar would be every post.',
-        bars(flagRows, d.scored, Math.max(1, d.scored), null, 'none yet') + '<p class="mx-cardlabel mx-gap">And one more, counted since ' + E(sinceText(mn.since)) + '</p>' + bars([meanerRow], mn.of, Math.max(1, mn.of), null, 'none yet'));
+        bars(flagRows, d.scored, Math.max(1, d.scored), null, 'none yet') + '<p class="mx-cardlabel mx-gap">And one more, counted since ' + E(sinceText(mn.since)) + '</p>' + bars([meanerRow], mn.of, Math.max(1, mn.of), null, 'none yet') +
+        (nc.of ? '<p class="mx-cardlabel mx-gap">And its opposite, counted since ' + E(sinceText(nc.since)) + '</p>' + bars([niceRow], nc.of, Math.max(1, nc.of), null, 'none yet') : ''));
 
       var cb = d.pairs || { of: 0, since: null, top: [] }, byId = {};
       d.rules.forEach(function(r){ byId[r.id] = r; });

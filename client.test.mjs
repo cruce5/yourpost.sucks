@@ -743,6 +743,14 @@ check('error is above the kept rewrite, not replacing it', await api.evaluate(()
   await api.click('#run');
   await api.waitForTimeout(900);
   check('ticking it sends meaner with the request', analyzeCalls === 2 && lastBody.meaner === true, JSON.stringify({ calls: analyzeCalls, meaner: lastBody.meaner }));
+  await api.click('#nice');
+  await api.click('#run');
+  await api.waitForTimeout(900);
+  check('ticking "tell me I\'m doing a great job" unticks meaner, sends nice, and paints the rule pastel', analyzeCalls === 3 && lastBody.nice === true && lastBody.meaner === false && await api.evaluate(() => !document.getElementById('meaner').checked && document.body.classList.contains('nice') && !document.body.classList.contains('meaner') && document.getElementById('readrule').classList.contains('nice') && /great job/.test(document.getElementById('opt-state').textContent)), JSON.stringify({ nice: lastBody.nice, meaner: lastBody.meaner }));
+  await api.goto(httpUrl);
+  check('  ...and it is remembered, with meaner left off', await api.evaluate(() => document.getElementById('nice').checked && !document.getElementById('meaner').checked));
+  await api.click('#meaner');
+  check('  ...and ticking meaner back unticks it', await api.evaluate(() => !document.getElementById('nice').checked && document.getElementById('meaner').checked));
   await api.goto(httpUrl);
   check('  ...and it is remembered on the next visit', await api.evaluate(() => document.getElementById('meaner').checked));
   await api.click('#meaner');
@@ -888,7 +896,7 @@ check('error is above the kept rewrite, not replacing it', await api.evaluate(()
   check("what's new: the header link opens it as a modal", await api.evaluate(() => document.getElementById('whatsnew').open));
   check('  ...and it says what changed in plain words', await api.evaluate(() => {
     const t = document.getElementById('whatsnew').textContent;
-    return /rainbow/i.test(t) && /objector/i.test(t) && /numbers tab is open/i.test(t) && /report is shorter/i.test(t) && /What it adds/.test(t) && /reload keeps your report/i.test(t) && /Fixes\./.test(t) && t.length < 1800;
+    return /great job/i.test(t) && /rainbow/i.test(t) && /objector/i.test(t) && /numbers tab is open/i.test(t) && /report is shorter/i.test(t) && /What it adds/.test(t) && /reload keeps your report/i.test(t) && /Fixes\./.test(t) && t.length < 2000;
   }));
   check('  ...and it asks for a coffee, labelled as its own place', await api.evaluate(() => {
     const a = document.querySelector('#whatsnew a[data-tip="whatsnew"]');

@@ -70,6 +70,7 @@ function mockCounters() {
 
 const todayKey = () => `b:${new Date().toISOString().slice(0, 10)}`;
 /* Today's budget counter, wherever this env keeps it. */
+const SYSTEM_LEN_FOR_TEST = COSTS.prompts.report.length;
 const spentMicros = async env => env.COUNTERS
   ? env.COUNTERS._count('budget', todayKey())
   : Number((await env.KV.get(todayKey())) || 0);
@@ -1718,6 +1719,22 @@ console.log('\n=== what is a post (Reconcilers, episode 4) ===');
   check('the public wait is every report that reached the AI since counting began, and never a rewrite', publicFigures({ 'analyze:wait:lt5s': 7, 'reword:wait:lt5s': 5, 'ai:wait:analyze:lt5s': 2 }, 'x').wait.lt5s === 7);
   check('"Not in English" is marked as something this tab cannot count', publicFigures({}, 'x').rules.find(r => r.id === 'not-english').countable === false);
   llmBehaviour = 'good';
+}
+
+console.log('\n=== the kind edit: same score, the write-up pats your head ===');
+{
+  const env = baseEnv(); env.COUNTERS = mockCounters(); llmBehaviour = 'good'; llmCalls = 0;
+  const r = await (await worker.fetch(post({ post: BAD, nice: true }), env, ctx)).json();
+  await new Promise(z => setTimeout(z, 60));
+  const s = await readStats(env), ai = await readAiOutcomes(env);
+  check('asked to be told it is doing a great job, the report is the model\'s, the score is the engine\'s, and the call is counted in its register', r.mode === 'llm' && r.report.overall === ENGINE.analyze(BAD, {}).overall && !r.report.meanerSkipped && llmCalls === 1 && ai['calls:nice'] === 1 && s['post:flag:nice'] === 1 && s['post:n:all'] === 1 && s['analyze:nice'] === 1 && s['post:n:since'] > 1e12, JSON.stringify([r.mode, ai['calls:nice'], s['post:flag:nice'], s['post:n:all']]));
+  const both = await (await worker.fetch(post({ post: BAD, nice: true, meaner: true }), env, ctx)).json();
+  await new Promise(z => setTimeout(z, 60));
+  const s2 = await readStats(env), ai2 = await readAiOutcomes(env);
+  check('  ...and when both registers arrive, the kind one wins and the harsher one is neither used nor counted', both.mode === 'llm' && !both.report.meanerSkipped && ai2['calls:nice'] === 2 && !ai2['calls:meaner'] && !s2['post:flag:meaner'] && s2['post:flag:nice'] === 2);
+  const n = COSTS.report.notes.nice;
+  check('  ...the kind note keeps the findings, forbids score talk, and carries the same hard limits as the harsher one', /findings stand/.test(n) && /Never state or imply a score/.test(n) && /first language, nationality, age, gender/.test(n) && !/\u2014/.test(n) && COSTS.report.systemChars >= SYSTEM_LEN_FOR_TEST + n.length);
+  check('  ...and its figure is on the numbers tab, on its own denominator', (f => f.nice.n === 2 && f.nice.of === 2 && /^\d{4}-\d{2}-\d{2}T/.test(f.nice.since))(publicFigures(s2, 'x')));
 }
 
 console.log('\n=== meaner mode is counted, from now, on its own denominator ===');
