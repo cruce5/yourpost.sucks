@@ -227,7 +227,7 @@ body.meaner .brand-flag .flag-red{opacity:1}
 .head-link{
   font-family:var(--mono);font-size:13px;letter-spacing:.06em;text-transform:uppercase;
   background:transparent;color:var(--ink-3);border:1px solid var(--rule);
-  border-radius:4px;padding:6px 10px;min-height:44px;cursor:pointer;flex-shrink:0;
+  border-radius:4px;padding:6px 10px;min-height:44px;min-width:44px;cursor:pointer;flex-shrink:0;
   transition:background .12s,border-color .12s,color .12s;
 }
 .head-link:hover{color:var(--ink-2);border-color:var(--rule-2)}
@@ -313,7 +313,9 @@ body.meaner .brand-flag .flag-red{opacity:1}
    dek that says what the marks are) and the stat tiles and thin CSS bars of
    the media kit. Text only ever wears an ink token; colour is for marks. */
 /* Colour means one thing per chart. Verdict colours live in 01 only; the
-   ordered stacks are one hue in steps; counts are one neutral grey. */
+   ordered stacks are one hue in steps; counts are one neutral grey. The rose
+   in 07 wears the report's five category colours, the same five the
+   receipts' legend uses, and its legend says so. */
 #panel-metrics{--mx-b1:var(--cool);--mx-b2:var(--caution);--mx-b3:#b85420;--mx-b4:var(--warm);--mx-mid:var(--rule-2);
   --mx-s4:var(--cool);--mx-s3:color-mix(in srgb, var(--cool) 78%, var(--surface));--mx-s2:color-mix(in srgb, var(--cool) 56%, var(--surface));--mx-s1:color-mix(in srgb, var(--cool) 38%, var(--surface));--mx-bar:var(--ink-3)}
 .mx-intro{margin:22px 0 0;color:var(--ink-2);font-size:16px;line-height:1.55;max-width:44rem}
@@ -385,9 +387,10 @@ body.meaner .brand-flag .flag-red{opacity:1}
 .mx-note{margin:16px 0 0;font-size:13.5px;line-height:1.5;color:var(--ink-3)}
 .mx-foot{margin:44px 0 0;padding:20px 0 0;border-top:1px dashed var(--rule-2);color:var(--ink-3);font-size:14.5px;line-height:1.55;max-width:44rem}
 .mx-foot a{color:var(--ink-2)}
-/* A footer link is a small target on a phone; the padding widens what a
-   thumb can hit without moving a line. */
-footer a{padding-block:8px;margin-block:-8px}
+/* A footer link is a small target on a phone. Padding widens what a thumb
+   can hit; the line grows with it, so two links on neighbouring lines never
+   overlap (they did by 10px, episode 6). */
+footer a,.tipline a{display:inline-block;padding:6px 0}
 .mx-wait{color:var(--ink-3);font-size:15px;margin:26px 0 0}
 
 /* ---------- input ---------- */
@@ -431,10 +434,25 @@ textarea::placeholder{color:var(--ink-4)}
 .meta.over{color:var(--caution)}
 .media-row{display:flex;flex-direction:column;gap:8px;margin-top:10px}
 .media-toggle{
-  display:flex;align-items:flex-start;gap:8px;
+  display:flex;align-items:center;gap:8px;min-height:44px;
   font-size:15px;color:var(--ink-3);line-height:1.45;cursor:pointer;
 }
-.media-toggle input{margin-top:3px;flex:none;cursor:pointer;width:18px;height:18px}
+.media-toggle input{flex:none;cursor:pointer;width:18px;height:18px}
+/* The options fold (episode 6): Analyze sits under the box; the attachment
+   and the register are one tap away on a phone and open on a wider screen. */
+.options{margin-top:12px}
+.options > summary{
+  list-style:none;cursor:pointer;min-height:44px;display:flex;align-items:center;gap:8px;
+  font-family:var(--mono);font-size:14px;letter-spacing:.06em;text-transform:uppercase;color:var(--ink-3);
+}
+.options > summary::-webkit-details-marker{display:none}
+.options > summary:hover{color:var(--ink)}
+.options > summary:focus-visible{outline:2px solid var(--cool);outline-offset:2px;border-radius:2px}
+.options .opt-glyph::before{content:"+"}
+.options[open] .opt-glyph::before{content:"\2212"}
+.options .opt-state{color:var(--ink-4);text-transform:none;letter-spacing:0}
+.options .opt-state:empty{display:none}
+.specimens[hidden]{display:none}
 .media-note{margin:-2px 0 0 26px;font-size:14px;color:var(--ink-4);line-height:1.45}
 .media-upload{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
 .media-upload-btn{
@@ -498,7 +516,7 @@ button{
 /* Four buttons do not fit one row on a phone, so they make an even two by
    two instead of breaking three and one. */
 @media (max-width:640px){
-  .specimens{display:grid;grid-template-columns:1fr 1fr}
+  .specimens:not([hidden]){display:grid;grid-template-columns:1fr 1fr}
   .specimens .cap{grid-column:1 / -1}
 }
 
@@ -597,8 +615,11 @@ section{margin-bottom:30px}
 .bench-fill{
   position:absolute;left:0;top:0;bottom:0;
   border-radius:3px 4px 4px 3px;
-  border-top:8px solid currentColor;box-sizing:border-box;
+  border-top:6px solid currentColor;box-sizing:border-box;
 }
+/* The three verdict edges, drawn on the strip so it says where the bands
+   change and not only where the score sits (episode 6). */
+.bench-tick{position:absolute;top:-4px;width:1px;height:14px;background:var(--rule-2)}
 .bench-scale{
   display:flex;justify-content:space-between;
   font-family:var(--mono);font-size:14px;color:var(--ink-4);margin-top:7px;
@@ -616,8 +637,14 @@ section{margin-bottom:30px}
 }
 .meter-val{
   font-size:17px;font-weight:600;color:var(--ink);
-  font-variant-numeric:tabular-nums;margin-left:auto;letter-spacing:-0.01em;
+  font-variant-numeric:tabular-nums;margin-left:12px;letter-spacing:-0.01em;
 }
+/* What the category put toward the number, beside its own 0 to 10 (episode
+   6: the meters and the breakdown were two charts of the same five rows). */
+.meter-pts{margin-left:auto;font-family:var(--mono);font-size:14px;color:var(--ink-3);font-variant-numeric:tabular-nums}
+.meter-pts.zero{color:var(--ink-4)}
+.meter-adj .meter-head{margin-bottom:0}
+.meter-adj .meter-name{color:var(--ink-2);font-weight:400;text-transform:none;letter-spacing:0;font-family:var(--sans);font-size:14.5px}
 .meter-val .of{font-size:14px;color:var(--ink-3);font-weight:400}
 .track{
   position:relative;height:6px;background:var(--surface-2);
@@ -633,6 +660,20 @@ section{margin-bottom:30px}
 /* roasts */
 .findings-note{margin:0 0 10px;font-family:var(--mono);font-size:15px;color:var(--ink-4)}
 ul.roasts{list-style:none;margin:0;padding:0}
+/* The first two roasts ride under the score card (episode 6: the roasts
+   began on screen two or three). */
+ul.roasts.roasts-lead{margin-top:12px}
+/* One line after the score: every section is a tap away. */
+.jump{display:flex;flex-wrap:wrap;gap:0 16px;margin:6px 0 0;padding:0}
+.jump a{
+  display:inline-flex;align-items:center;min-height:44px;padding:0 2px;
+  font-family:var(--mono);font-size:13px;letter-spacing:.07em;text-transform:uppercase;
+  color:var(--ink-3);text-decoration:none;border-bottom:1px solid transparent;
+}
+.jump a:hover{color:var(--ink);border-bottom-color:var(--ink-3)}
+/* The one place the report says the AI never touches the number. */
+.ai-strap{margin:14px 0 0;font-family:var(--mono);font-size:13px;line-height:1.5;color:var(--ink-4)}
+.hero .kicker-row.kicker-solo{justify-content:flex-end}
 ul.roasts li{
   background:var(--surface);border:1px solid var(--hair);border-radius:5px;
   padding:13px 15px;margin-bottom:8px;font-size:15px;color:var(--ink-2);
@@ -676,24 +717,7 @@ ul.credits li{
 ul.credits li:last-child{border-bottom:0}
 ul.credits li::before{content:"+";position:absolute;left:0;color:var(--cool-text);font-family:var(--mono)}
 
-/* what's driving the score */
-.breakdown{display:flex;flex-direction:column;gap:8px}
-.bd-row{display:grid;grid-template-columns:120px 1fr 46px;gap:10px;align-items:center}
-/* Narrow screens: the label sits above the bar instead of squeezing a
-   120px column against a bar that ends up 30px wide. */
-@media (max-width:479px){
-  .bd-row{grid-template-columns:1fr 46px;gap:4px 10px}
-  .bd-label{grid-column:1 / -1}
-}
-.bd-label{font-family:var(--mono);font-size:14px;letter-spacing:.04em;color:var(--ink-2)}
-.bd-track{position:relative;height:8px;background:var(--surface-2);border:1px solid var(--rule);border-radius:4px;overflow:hidden}
-.bd-fill{position:absolute;left:0;top:0;bottom:0;border-radius:3px;border-top:8px solid currentColor;box-sizing:border-box}
-/* A row that subtracts is drawn from the right edge instead of the left, so
-   length and direction both carry the sign. Drawn left-anchored like every
-   other row, a -0.1 was indistinguishable from a +0.1 except in the value
-   column, and it sorted last while drawing longer than the rows above it. */
-.bd-row.bd-neg .bd-fill{left:auto;right:0;opacity:.6}
-.bd-val{font-family:var(--mono);font-size:14.5px;color:var(--ink-3);text-align:right;font-variant-numeric:tabular-nums}
+/* the arithmetic under the category table */
 .bd-note{margin:10px 0 0;font-size:14px;color:var(--ink-4);font-family:var(--mono)}
 
 /* a model-written aside on an otherwise rules-only section. The numbers
@@ -767,6 +791,7 @@ ul.credits li::before{content:"+";position:absolute;left:0;color:var(--cool-text
   padding:16px 18px;font-size:15px;line-height:1.7;color:var(--ink-2);
   white-space:pre-wrap;word-wrap:break-word;
 }
+.annotated-skip{display:block;margin:8px 0;font-family:var(--mono);font-size:12px;letter-spacing:.06em;text-transform:uppercase;color:var(--ink-4)}
 .annotated mark{
   border-radius:2px;padding:0 1px;background:transparent;color:inherit;
   box-decoration-break:clone;-webkit-box-decoration-break:clone;
@@ -827,24 +852,20 @@ table.diag tr:last-child td,table.diag tr:last-child th{border-bottom:0}
    buttons alongside; click the card (or the button) for full size. The
    canvas itself stays full size (1080x1350 now, LinkedIn's portrait), so
    download and copy are unaffected. */
-.share-row{display:flex;gap:16px;margin-top:14px;flex-wrap:wrap;align-items:flex-start}
-/* A real button, so the size toggle works from the keyboard and reports
-   its state (aria-pressed) instead of being a click-only div. */
-#cardwrap{
-  flex:0 1 250px;max-width:250px; /* a 4:5 portrait thumbnail, about 312px tall */cursor:zoom-in;min-width:0;
-  display:block;padding:0;margin:0;border:0;background:transparent;border-radius:6px;
-  text-align:left;font:inherit;letter-spacing:0;text-transform:none;
-}
-#cardwrap.full{flex-basis:100%;max-width:100%;cursor:zoom-out}
-.share-actions{display:flex;gap:10px;flex-wrap:wrap;flex:1 1 220px;align-content:flex-start}
-/* The three main actions never split two-and-one. Beside the card they are a
-   column of equal-width buttons; once the row wraps under the card they are
-   three equal columns. */
-.share-row > .share-actions{flex:0 0 auto;flex-direction:column;flex-wrap:nowrap;align-items:stretch}
+/* The card used to sit on the page as a 250px thumbnail with a zoom that
+   had no close (episode 6). Now: one row of the three actions, the card
+   behind "Preview the card", the rest behind "More ways to share". The
+   canvas itself stays full size (1080x1350), so download and copy are
+   unaffected whether or not the fold is open. */
+.share-row{display:flex;gap:6px 16px;margin-top:14px;flex-wrap:wrap;align-items:flex-start}
+.share-actions{display:flex;gap:10px;flex-wrap:wrap;align-content:flex-start}
+/* The three main actions never split two-and-one: three equal columns. */
+.share-row > .share-actions{flex:1 1 100%;display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
 @media (max-width:640px){
-  .share-row > .share-actions{flex:1 1 100%;display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
   .share-row > .share-actions button{padding-left:6px;padding-right:6px;font-size:13px;letter-spacing:.04em}
 }
+.share-preview{margin-top:8px}
+.share-preview #card{max-width:520px}
 .share-more{flex-basis:100%}
 .share-more > summary{
   cursor:pointer;list-style:none;font-family:var(--mono);font-size:14px;letter-spacing:.07em;
@@ -1016,12 +1037,11 @@ ol.changes .crewrite .lbl{
    the engine detected (a priced offer) or the reader declared (attached
    media). Never hides that the underlying finding still exists elsewhere
    in the report - this is a footnote on the weighting, not a redaction. */
-/* What it adds: a card under the score, deliberately quieter than it. The
-   level word and the left rule carry the verdict: warm for nothing, grey for
-   a little, cool for plenty. */
+/* What it adds: a card under the roasts, deliberately quieter than the
+   score. The level word carries the verdict; the rule is one neutral, since
+   the score's own hues on a card that says it is not the score read as the
+   score (episode 6). */
 .adds{margin:12px 0 0;padding:14px 18px;background:var(--surface);border:1px solid var(--hair);border-left:3px solid var(--rule-2);border-radius:6px}
-.adds-none{border-left-color:var(--warm)}
-.adds-plenty{border-left-color:var(--cool)}
 .adds-head{display:flex;align-items:baseline;gap:10px;flex-wrap:wrap}
 .adds-k{margin:0;font-family:var(--mono);font-size:13px;font-weight:400;letter-spacing:.1em;text-transform:uppercase;color:var(--ink-3)}
 .adds-v{font-family:var(--mono);font-size:15px;font-weight:600;color:var(--ink)}
@@ -1125,12 +1145,12 @@ ol.changes .crewrite .lbl{
 
 /* The thank-you card: after the 5th AI-written report, once more around the
    25th if it was waved off, never again after the coffee link is clicked.
-   It never blocks the page and never takes focus. */
+   It sits after the report it is thanking for (it used to float over the
+   report just delivered, episode 6) and never takes focus. */
 .tipask{
-  position:fixed;left:16px;right:16px;bottom:calc(16px + env(safe-area-inset-bottom, 0px));
-  margin:0 auto;max-width:440px;z-index:20;
+  margin:22px 0 0;
   background:var(--surface);border:1px solid var(--rule-2);border-left:3px solid var(--cool);
-  border-radius:6px;padding:18px 18px 16px;box-shadow:0 10px 30px rgba(0,0,0,.28);
+  border-radius:6px;padding:18px 18px 16px;
   opacity:0;transform:translateY(14px);transition:opacity .22s,transform .22s;
 }
 .tipask[hidden]{display:none}
@@ -1240,7 +1260,7 @@ ul.cg-list li::before{content:"\2022";position:absolute;left:0;color:var(--ink-4
   }
   .theme-toggle{font-size:12px;padding:5px 9px;letter-spacing:.04em}
   .head-link{font-size:12px;padding:5px 9px;letter-spacing:.04em}
-  .head-actions{gap:6px}
+  .head-actions{gap:8px}
   /* The masthead stays one row at phone width (see above), and two full
      labels beside the logo do not fit in 343px. The link shortens. */
   .head-link .hl-long{display:none}
@@ -1260,11 +1280,11 @@ ul.cg-list li::before{content:"\2022";position:absolute;left:0;color:var(--ink-4
 @media print{
   body{background:#fff;color:#111}
   body::before,body::after{display:none}
-  .panel,.controls,.specimens,.share-actions,.share-more,.tabs,footer,.game-wrap,.toast,.tipask,.read-bar,.read-rule{display:none}
+  .panel,.controls,.specimens,.share-actions,.share-more,.tabs,footer,.game-wrap,.toast,.tipask,.read-bar,.read-rule,.jump,.ai-strap{display:none}
   .hero,.meter,ul.roasts li,.share-box,.adds{background:#fff;border-color:#ccc;color:#111}
   .hero .num{color:#111 !important}
   .meter-name,.meter-val,.brutal{color:#111}
-  .receipts:not([open]) > *:not(summary),.roasts-more:not([open]) > *:not(summary){display:block}
+  .receipts:not([open]) > *:not(summary),.roasts-more:not([open]) > *:not(summary),.share-more:not([open]) > *:not(summary){display:block}
   .roasts-more > summary{display:none}
 }
 
@@ -1328,10 +1348,24 @@ ul.cg-list li::before{content:"\2022";position:absolute;left:0;color:var(--ink-4
   <textarea id="post" spellcheck="false" placeholder="Excited to announce..." aria-describedby="counter limit-err link-err"></textarea>
   <p id="limit-err" class="field-err" hidden></p>
   <p id="link-err" class="field-err" hidden></p>
+  <div class="controls">
+    <button class="btn-primary" id="run" aria-disabled="false">Analyze</button>
+    <button class="btn-ghost" id="pastebtn" type="button" hidden>Paste</button>
+    <button class="btn-ghost" id="clear">Clear</button>
+    <span class="meta" id="counter">0 words</span>
+    <span class="busy-note" id="busynote" hidden>Still going. The AI takes a few seconds longer than the checklist does.</span>
+  </div>
+  <div class="progress-track" id="progress" hidden role="progressbar" aria-label="Analyzing"><div class="progress-thumb"></div></div>
+  <div id="notices"></div>
+  <!-- The two things a reader can say about the post before it is scored,
+       folded on a phone so Analyze sits under the box (episode 6). Open by
+       default where there is room, and whenever either is set. -->
+  <details class="options" id="options">
+  <summary><span class="opt-glyph" aria-hidden="true"></span>Options<span class="opt-state" id="opt-state"></span></summary>
   <div class="media-row">
     <label class="media-toggle" for="hasmedia">
       <input type="checkbox" id="hasmedia">
-      There's an image, carousel, or video with this post. The text is the caption, not the whole thing.
+      There's an image, carousel, video, poll or document with this post. The text is the caption, not the whole thing.
     </label>
     <p class="media-note">Turns off the checks that assume the text is the whole post. The report says so when it did.</p>
     <div class="media-upload">
@@ -1356,21 +1390,16 @@ ul.cg-list li::before{content:"\2022";position:absolute;left:0;color:var(--ink-4
     </label>
     <p class="media-note">Same score, no mercy. At your own risk.</p>
   </div>
-  <div class="controls">
-    <button class="btn-primary" id="run" aria-disabled="false">Analyze</button>
-    <button class="btn-ghost" id="pastebtn" type="button" hidden>Paste</button>
-    <button class="btn-ghost" id="clear">Clear</button>
-    <span class="meta" id="counter">0 words</span>
-    <span class="busy-note" id="busynote" hidden>Still going. The AI takes a few seconds longer than the checklist does.</span>
-  </div>
-  <div class="progress-track" id="progress" hidden role="progressbar" aria-label="Analyzing"><div class="progress-thumb"></div></div>
-  <div id="notices"></div>
-  <div class="specimens">
-    <span class="cap">Or try one of these</span>
+  </details>
+  <!-- Gone once a report is on the page, back on Clear. Each one roasts on
+       the tap, and the caption says so (episode 6). -->
+  <div class="specimens" id="specimens">
+    <span class="cap">Or roast one of these</span>
     <button class="btn-ghost" data-spec="0">Job announcement</button>
     <button class="btn-ghost" data-spec="1">Thought leader</button>
     <button class="btn-ghost" data-spec="2">Layoff arc</button>
     <button class="btn-ghost" data-spec="3">Control group</button>
+    <button class="btn-ghost" data-spec="4">Empty agreement</button>
   </div>
 </div>
 
@@ -1442,7 +1471,7 @@ ul.cg-list li::before{content:"\2022";position:absolute;left:0;color:var(--ink-4
   </section>
 
   <section class="explain-block">
-    <h2 class="sec">What AI adds</h2>
+    <h2 class="sec">What AI writes</h2>
     <p>When available, AI writes the commentary, the one-line verdict and the rewrite. It gets the finished score and cannot change it. Everything it writes is checked first. It can't:</p>
     <ul class="credits">
       <li>state or imply a score</li>
@@ -1451,7 +1480,7 @@ ul.cg-list li::before{content:"\2022";position:absolute;left:0;color:var(--ink-4
       <li>say "as an AI"</li>
       <li>use an em dash</li>
     </ul>
-    <p>It also writes one card under the score: what your post gives a reader. It has to quote your post back to you word for word, or it is not shown, and it is not part of the score.</p>
+    <p>It also writes one card, <i>What it adds</i>, under the roasts: whether your post gives a reader anything, with one line quoted from your post word for word. No quote, no card. A post under 40 words with an image gets no card, since the read cannot see the picture. Nothing on the card is part of the score.</p>
     <p>It can still get a name or a detail wrong, so read a rewrite before you post it. Anything that fails is swapped for the checklist's version. The badge by the score says who wrote the commentary. It is not a verdict on whether your post is AI-written.</p>
   </section>
 
@@ -1462,13 +1491,13 @@ ul.cg-list li::before{content:"\2022";position:absolute;left:0;color:var(--ink-4
 
   <section class="explain-block">
     <h2 class="sec">What happens to what you paste</h2>
-    <p>The post and any image go to Anthropic's API for the commentary. Here, nothing about your post is stored: not the post, not the image, not the AI's notes, not a rewrite. Every paste gets its own fresh read. What is kept is counters: an hourly per-IP limit that expires on its own, and tallies of scores and which checks fired, with no text in them. No accounts, no analytics on your text.</p>
+    <p>The post and any image go to Anthropic's API for the commentary. Here, nothing about your post is stored: not the post, not the image, not the AI's notes, not a rewrite. Every paste gets its own fresh read. Your browser keeps the last report in this tab's memory until the tab closes, so a reload does not lose it; that never leaves your browser. What is kept here is counters: an hourly per-IP limit that expires on its own, and tallies of scores and which checks fired, with no text in them. No accounts, no analytics on your text.</p>
   </section>
 
 </div>
 </main>
 
-<section class="game-wrap" id="game-wrap" aria-label="Bonus game: Outrun the Algorithm" hidden>
+<section class="game-wrap" id="game-wrap" aria-label="Bonus game: Outrun the Algorithm" hidden tabindex="-1">
   <h2 class="sec">Bonus round<b>zero checks, zero mercy</b></h2>
   <p class="game-blurb">You already know your post sucks. Here's a side-scroller about why. Jump the humblebrags, duck the notifications.<span class="sr-only"> Obstacles are announced as they appear, with whether to jump or duck.</span></p>
   <div class="game-stage" id="game-stage" tabindex="-1" role="application" aria-label="Outrun the Algorithm, an endless runner. Space or tap to jump, down arrow to duck.">
@@ -1502,12 +1531,14 @@ ul.cg-list li::before{content:"\2022";position:absolute;left:0;color:var(--ink-4
   <div class="credit">Built by <a href="https://www.linkedin.com/in/billyost/" target="_blank" rel="noopener noreferrer"><span aria-hidden="true">🏴‍☠️ </span>Bill Yost</a>, who is aware of the irony. <a class="tip" data-tip="footer" href="https://buymeacoffee.com/billyost" target="_blank" rel="noopener noreferrer">Buy him a coffee.</a></div>
   <div><span id="rulecount"></span> fixed checks decide the score. AI never touches that number. <a href="https://github.com/cruce5/yourpost.sucks" target="_blank" rel="noopener noreferrer">Read the code.</a></div>
   <div>It measures the writing, not the reach.</div>
+  <div>Bored? <a href="#game-wrap" id="game-link">Play the bonus round.</a></div>
   <div>Found a bug, or a check that got it wrong? <a id="contactmail" href="mailto:hello@yourpost.sucks">hello@yourpost.sucks</a></div>
   <div>More things nobody asked for: <a href="https://billyost.com/" target="_blank" rel="noopener noreferrer">billyost.com</a></div>
 </footer>
 
 </div>
 <div class="toast" id="toast" role="status" aria-live="polite"></div>
+<div class="toast" id="toast-alert" role="alert" aria-live="assertive"></div>
 <!-- What changed, in plain words. A real <dialog>, so Escape closes it,
      focus is trapped while it is open and the page behind it is inert. -->
 <dialog class="whatsnew" id="whatsnew" aria-labelledby="wn-title">
@@ -1517,9 +1548,13 @@ ul.cg-list li::before{content:"\2022";position:absolute;left:0;color:var(--ink-4
   </div>
   <p class="wn-intro">All of it came from things people said in the comments.</p>
   <ul class="wn-list">
+    <li id="wn-shorter">
+      <b>The report is shorter.</b>
+      The first two roasts sit right under the score and the rest follow; the AI's read comes after them. The share card, the receipts and the game are behind a tap, and the options are folded under the box.
+    </li>
     <li id="wn-adds">
       <b>The report says what your post actually gives a reader.</b>
-      A new card under the score quotes the line that carries the most, or says plainly that there is nothing there. It is an AI read, and it is not part of the score.
+      A card after the roasts quotes the line that carries the most, or says plainly that there is nothing there. It is an AI read, and it is not part of the score.
     </li>
     <li>
       <b>You can ask for a meaner write-up.</b>
@@ -1880,15 +1915,19 @@ ul.cg-list li::before{content:"\2022";position:absolute;left:0;color:var(--ink-4
   }
   function animateScoreNum(el, target){
     if (!el) return;
+    // The figure is aria-hidden while the digits are mid-count (the meter
+    // under it holds the real number throughout) and shown again on landing.
+    var fig = el.closest ? el.closest('.figure') : null;
+    var land = function(){ if (fig) fig.removeAttribute('aria-hidden'); };
     var reduceMotion = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-    if (reduceMotion){ el.textContent = target.toFixed(1); return; }
+    if (reduceMotion){ el.textContent = target.toFixed(1); land(); return; }
     var duration = 700, start = null;
     function easeOutExpo(t){ return t >= 1 ? 1 : 1 - Math.pow(2, -10 * t); }
     function step(ts){
       if (start === null) start = ts;
       var p = Math.min(1, (ts - start) / duration);
       el.textContent = (target * easeOutExpo(p)).toFixed(1);
-      if (p < 1) requestAnimationFrame(step);
+      if (p < 1) requestAnimationFrame(step); else land();
     }
     whenDisplayFontReady(function(){ requestAnimationFrame(step); });
   }
@@ -1900,7 +1939,9 @@ ul.cg-list li::before{content:"\2022";position:absolute;left:0;color:var(--ink-4
 
 "I almost didn't post this.\n\nReal talk: last year I was laid off. It was the lowest point of my career.\n\nBut looking back, it was a blessing in disguise. I learned so much about myself.\n\nToday I'm humbled and grateful to share that I've started something new. 🙏\n\nIf you're going through it right now — DM me. I'll go first.",
 
-"We ran an A/B test on the onboarding flow for six weeks. 41,000 users. The variant I was certain about lost by 3 points.\n\nI was wrong about which one would win. I have now been wrong about this four times.\n\nThe tests keep working anyway."
+"We ran an A/B test on the onboarding flow for six weeks. 41,000 users. The variant I was certain about lost by 3 points.\n\nI was wrong about which one would win. I have now been wrong about this four times.\n\nThe tests keep working anyway.",
+
+"Culture really does depend on people rather than on where they sit. Teams that trust each other do good work together whether they share an office or not, and the best managers I have seen understand that the room was never the point. This is a helpful reminder, and I agree with every word of it."
   ];
 
   /* One axis for all five, higher always worse, matching the overall score
@@ -1914,28 +1955,57 @@ ul.cg-list li::before{content:"\2022";position:absolute;left:0;color:var(--ink-4
      agreeing with the number: a high Inauthenticity score reads as bad,
      the same as a high Cringe Factor score, with nothing to flip in your
      head between rows. */
-  function meterHTML(c){
-    var pct = Math.max(2, (c.suck / 10) * 100);
-    var col = colorFor(c.suck);
-    var trackLabel = c.label + ': ' + c.suck.toFixed(1) + ' on a 0 to 10 scale, higher is worse.';
-    return '' +
-      '<div class="meter">' +
-        '<div class="meter-head">' +
-          '<span class="meter-name">' + YPS.esc(c.label) + '</span>' +
-          '<span class="meter-val" title="' + YPS.esc(trackLabel) + '">' + c.suck.toFixed(1) + '</span>' +
-        '</div>' +
-        '<div class="track" role="meter" aria-valuenow="' + c.suck.toFixed(1) + '" aria-valuemin="0" aria-valuemax="10" aria-valuetext="' + c.suck.toFixed(1) + ' of 10, higher is worse" aria-label="' + YPS.esc(c.label) + '" title="' + YPS.esc(trackLabel) + '">' +
-          '<div class="fill" style="width:' + pct + '%;background:' + col + ';color:' + col + '"></div>' +
-        '</div>' +
-        '<p class="meter-verdict">' + YPS.esc(c.verdict) + '</p>' +
-      '</div>';
+  /* The category table: the five weighted categories, each with its own 0
+     to 10 (higher is worse, one direction for all five) and the points it
+     put toward the number. It used to be two charts of the same five rows,
+     the meters and "What's driving the score", 1,261px open on a phone and
+     wearing two colour rules (Reconcilers, episode 6). One row per category
+     now, and the arithmetic in one note under it. */
+  function categoryHTML(r){
+    var n = r.stats.rulesFired;
+    var overall = r.overall.toFixed(1);
+    var rows = r.categories.map(function(c){
+      // No mark for a zero, anywhere (the meters used to draw a 2% stub).
+      var pct = c.suck > 0 ? Math.max(1, (c.suck / 10) * 100) : 0;
+      var col = colorFor(c.suck);
+      var pts = Number(c.contribution) || 0;
+      var trackLabel = c.label + ': ' + c.suck.toFixed(1) + ' on a 0 to 10 scale, higher is worse.';
+      return '' +
+        '<div class="meter">' +
+          '<div class="meter-head">' +
+            '<span class="meter-name">' + YPS.esc(c.label) + '</span>' +
+            '<span class="meter-pts' + (Math.abs(pts) < 0.05 ? ' zero' : '') + '" title="Points toward the ' + overall + '">' + (pts >= 0 ? '+' : '') + pts.toFixed(1) + '</span>' +
+            '<span class="meter-val" title="' + YPS.esc(trackLabel) + '">' + c.suck.toFixed(1) + '</span>' +
+          '</div>' +
+          '<div class="track" role="meter" aria-valuenow="' + c.suck.toFixed(1) + '" aria-valuemin="0" aria-valuemax="10" aria-valuetext="' + c.suck.toFixed(1) + ' of 10, higher is worse" aria-label="' + YPS.esc(c.label) + '" title="' + YPS.esc(trackLabel) + '">' +
+            '<div class="fill" style="width:' + pct + '%;background:' + col + ';color:' + col + '"></div>' +
+          '</div>' +
+          '<p class="meter-verdict">' + YPS.esc(c.verdict) + '</p>' +
+        '</div>';
+    });
+    // The adjustment: a tax for tripping many checks at once, a credit for
+    // tripping almost none. No row when nothing fired (what is left then is
+    // two roundings disagreeing, not a reason for a score), and "Piling it
+    // on" only from three checks: on one check it is named by the count.
+    if (Math.abs(r.volumeBonus) >= 0.1 && n > 0){
+      var label = r.volumeBonus < 0 ? 'Restraint' : n >= 3 ? 'Piling it on' : n + (n === 1 ? ' check fired' : ' checks fired');
+      rows.push('<div class="meter meter-adj"><div class="meter-head"><span class="meter-name">' + YPS.esc(label) + '</span><span class="meter-pts" title="Points toward the ' + overall + '">' + (r.volumeBonus > 0 ? '+' : '') + r.volumeBonus.toFixed(1) + '</span></div></div>');
+    }
+    var adjShown = Math.abs(r.volumeBonus) < 0.1 || n > 0;
+    // The weights come off the categories themselves, never typed by hand.
+    var weights = r.categories.map(function(c){ return c.weightPct; }).join('/');
+    return '<div class="receipt">' +
+      '<h3 class="sec">Category breakdown<b>higher is worse · points toward the ' + overall + '</b></h3>' +
+      '<p class="meters-note">Every category runs 0 to 10, higher always worse. The small figure is what it put toward the number.</p>' +
+      '<div class="meters">' + rows.join('') + '</div>' +
+      '<p class="bd-note">Five weighted categories (' + weights + ') plus a tax for tripping many checks at once, a credit for tripping almost none. ' + (adjShown ? 'They sum to the number above.' : 'Each is rounded to a tenth, so they can miss the number above by 0.1.') +
+        // Asked in public more than anything else about the number: why a
+        // clean post lands on 0.4 and not 0.0, and why nobody can reach 10.
+        ' The scale stops at 0.2 and 9.9. Nothing written by a person is immaculate, and nothing is past saving.</p>' +
+      (r.breakdownNote ? '<p class="ai-aside"><b>Aside</b>' + YPS.esc(r.breakdownNote) + '</p>' : '') +
+    '</div>';
   }
 
-  /* "What's driving the score": the same five weighted numbers the engine
-     summed to reach the headline figure, shown instead of just asserted.
-     Bars are sized against the overall total so the biggest bar is visibly
-     the biggest reason, not just the highest-scoring category in isolation. */
-  var DIM_COLOR = { auth: 'var(--dim-auth)', clar: 'var(--dim-clar)', cring: 'var(--dim-cring)', bait: 'var(--dim-bait)', brag: 'var(--dim-brag)' };
   var CAT_DIM = { authenticity: 'auth', clarity: 'clar', cringe: 'cring', bait: 'bait', brag: 'brag' };
 
   /* One source for the five dimension names, and it is the engine's own
@@ -1955,47 +2025,6 @@ ul.cg-list li::before{content:"\2022";position:absolute;left:0;color:var(--ink-4
     var m = {};
     cats.forEach(function(c){ if (CAT_DIM[c.key]) m[CAT_DIM[c.key]] = c.label; });
     return m;
-  }
-
-  function breakdownHTML(r){
-    var overall = Math.max(r.overall, 0.1);
-    var rows = r.categories.map(function(c){
-      return { label: c.label, points: c.contribution, dim: CAT_DIM[c.key] };
-    });
-    // No adjustment row when nothing fired. There is no volume to tax and
-    // no restraint to credit on a post with zero findings: what is left is
-    // the two roundings disagreeing, the five rounded contributions against
-    // the rounded overall, which lands as a -0.1 labelled "Restraint" on a
-    // fifth of the corpus. A rounding residue is not a reason for a score.
-    var adjShown = Math.abs(r.volumeBonus) < 0.1 || r.stats.rulesFired > 0;
-    if (Math.abs(r.volumeBonus) >= 0.1 && r.stats.rulesFired > 0){
-      rows.push({ label: r.volumeBonus > 0 ? 'Piling it on' : 'Restraint', points: r.volumeBonus, dim: null });
-    }
-    rows.sort(function(a, b){ return b.points - a.points; });
-    var body = rows.map(function(row){
-      var neg = row.points < 0;
-      var pct = Math.max(0, Math.min(100, (Math.abs(row.points) / overall) * 100));
-      var col = row.dim ? DIM_COLOR[row.dim] : 'var(--ink-3)';
-      return '<div class="bd-row' + (neg ? ' bd-neg' : '') + '">' +
-        '<span class="bd-label">' + YPS.esc(row.label) + '</span>' +
-        '<span class="bd-track"><span class="bd-fill" style="width:' + pct + '%;background:' + col + ';color:' + col + '"></span></span>' +
-        '<span class="bd-val">' + (row.points >= 0 ? '+' : '') + row.points.toFixed(1) + '</span>' +
-      '</div>';
-    }).join('');
-    // The weights come off the categories themselves. Typed out by hand they
-    // sat one sentence away from "nothing here is asserted without the
-    // arithmetic behind it", which is the worst place in the product for a
-    // literal to go stale.
-    var weights = r.categories.map(function(c){ return c.weightPct; }).join('/');
-    return '<div class="receipt">' +
-      '<h3 class="sec">What\'s driving the score<b>points toward the ' + r.overall.toFixed(1) + '</b></h3>' +
-      '<div class="breakdown">' + body + '</div>' +
-      '<p class="bd-note">Five weighted categories (' + weights + ') plus a tax for tripping many checks at once, a credit for tripping almost none. ' + (adjShown ? 'They sum to the number above.' : 'Each is rounded to a tenth, so they can miss the number above by 0.1.') +
-        // Asked in public more than anything else about the number: why a
-        // clean post lands on 0.4 and not 0.0, and why nobody can reach 10.
-        ' The scale stops at 0.2 and 9.9. Nothing written by a person is immaculate, and nothing is past saving.</p>' +
-      (r.breakdownNote ? '<p class="ai-aside"><b>Aside</b>' + YPS.esc(r.breakdownNote) + '</p>' : '') +
-    '</div>';
   }
 
   /* The annotated post: the cleaned, analyzed text with the literal spans
@@ -2064,21 +2093,24 @@ ul.cg-list li::before{content:"\2022";position:absolute;left:0;color:var(--ink-4
       return '<mark class="hl-' + r2.dim + '" title="' + YPS.esc(r2.label + (r2.also ? ', ' + r2.also.join(', ') : '')) + '">' + innerHTML +
         '<sup class="mk"> ' + YPS.esc(shortLabel(r2.label)) + '</sup></mark>';
     }
-    var out = '', cursor = 0;
-    kept.forEach(function(k){
-      var r2 = k.range;
-      out += YPS.esc(text.slice(cursor, r2.start));
-      var inner = '', c2 = r2.start;
-      k.inner.forEach(function(n){
-        inner += YPS.esc(text.slice(c2, n.start));
-        inner += markHTML(n, YPS.esc(text.slice(n.start, n.end)));
-        c2 = n.end;
+    function renderSpan(a, b){
+      var o = '', cur = a;
+      kept.forEach(function(k){
+        var r2 = k.range;
+        if (r2.start < a || r2.end > b) return;
+        o += YPS.esc(text.slice(cur, r2.start));
+        var inner = '', c2 = r2.start;
+        k.inner.forEach(function(nn){
+          inner += YPS.esc(text.slice(c2, nn.start));
+          inner += markHTML(nn, YPS.esc(text.slice(nn.start, nn.end)));
+          c2 = nn.end;
+        });
+        inner += YPS.esc(text.slice(c2, r2.end));
+        o += markHTML(r2, inner);
+        cur = r2.end;
       });
-      inner += YPS.esc(text.slice(c2, r2.end));
-      out += markHTML(r2, inner);
-      cursor = r2.end;
-    });
-    out += YPS.esc(text.slice(cursor));
+      return o + YPS.esc(text.slice(cur, b));
+    }
 
     var LEGEND = dimLabels(cats);
     var legend = Object.keys(LEGEND).filter(function(d){ return seenDims[d]; }).map(function(d){
@@ -2086,16 +2118,42 @@ ul.cg-list li::before{content:"\2022";position:absolute;left:0;color:var(--ink-4
     }).join('');
 
     // A long post with two marks in it reads as "did this even look at the
-    // whole thing," not as the good news it actually is. The wall of plain
-    // text between them is what a clean post looks like; say so up front
-    // instead of letting a reader scroll past most of it wondering.
+    // whole thing," not as the good news it actually is. Say so up front, and
+    // show only the paragraphs that hold a mark, with a line for what was
+    // skipped between them: one marked span used to cost 889px of the whole
+    // post (episode 6). A mark that crosses a paragraph break pulls both
+    // paragraphs in, so no mark is ever split.
     // A mark is a passage, not a word: this counted marks and called them
     // words, under a sentence that invites the reader to go and count.
     var wordCount = (text.match(/\S+/g) || []).length;
+    var paras = [];
+    (function(){ var re2 = /\n[ \t]*\n/g, m2, at = 0; while ((m2 = re2.exec(text))){ paras.push([at, m2.index]); at = m2.index + m2[0].length; } paras.push([at, text.length]); })();
     var sparse = wordCount > 90 && markCount > 0 && markCount <= 3;
     var sparseNote = sparse
       ? '<p class="annotated-sparse">Only ' + markCount + ' passage' + (markCount === 1 ? '' : 's') + ' in ' + wordCount + ' words tripped a check. Here ' + (markCount === 1 ? 'it is' : 'they are') + ':</p>'
       : '';
+    var out;
+    if (!sparse || paras.length < 3) out = renderSpan(0, text.length);
+    else {
+      var keepIx = {};
+      kept.forEach(function(k){ paras.forEach(function(pp, i){ if (k.range.start < pp[1] && k.range.end > pp[0]) keepIx[i] = true; }); });
+      var blocks = [], cur = null;
+      paras.forEach(function(pp, i){
+        if (!keepIx[i]){ cur = null; return; }
+        if (cur && cur.last === i - 1){ cur.end = pp[1]; cur.last = i; }
+        else { cur = { start: pp[0], end: pp[1], first: i, last: i }; blocks.push(cur); }
+      });
+      var skipLine = function(k2){ return '<span class="annotated-skip">' + k2 + (k2 === 1 ? ' paragraph' : ' paragraphs') + ' with nothing marked</span>'; };
+      out = ''; var prevLast = -1;
+      blocks.forEach(function(bk){
+        var skipped = bk.first - prevLast - 1;
+        if (skipped > 0) out += skipLine(skipped);
+        out += renderSpan(bk.start, bk.end);
+        prevLast = bk.last;
+      });
+      var tail = paras.length - prevLast - 1;
+      if (tail > 0) out += skipLine(tail);
+    }
 
     return '<div class="receipt">' +
       '<h3 class="sec">The annotated post<b>' + markCount + ' span' + (markCount === 1 ? '' : 's') + ' marked</b></h3>' +
@@ -2147,6 +2205,12 @@ ul.cg-list li::before{content:"\2022";position:absolute;left:0;color:var(--ink-4
     L.push('');
     L.push('THE BRUTAL TAKE');
     L.push(r.brutal);
+    if (r.adds && ADDS_WORDS[r.adds.level] && typeof r.adds.line === 'string'){
+      L.push('');
+      L.push('WHAT IT ADDS: ' + ADDS_WORDS[r.adds.level].toUpperCase() + ' (an AI read, not part of the score)');
+      L.push(r.adds.line);
+      if (r.adds.evidence) L.push('"' + r.adds.evidence + '"');
+    }
     L.push('');
     L.push('SUGGESTED CHANGES');
     if (r.changes && r.changes.length){
@@ -2169,8 +2233,6 @@ ul.cg-list li::before{content:"\2022";position:absolute;left:0;color:var(--ink-4
     // the post itself was written. The old label here was "AI-written", and
     // sitting next to the score on a tool that has a machine-phrasing check,
     // it read as a verdict on the post.
-    // The cache is an implementation detail: a cached report is still the
-    // AI's commentary, so the badge says so and the title carries the rest.
     llm: 'AI commentary', cache: 'AI commentary', rules: 'checklist-only commentary',
     offline: 'offline', declined: 'declined'
   };
@@ -2194,12 +2256,12 @@ ul.cg-list li::before{content:"\2022";position:absolute;left:0;color:var(--ink-4
   // the one case where "checklist-only" next to a score on a tool with a
   // machine-phrasing check could be misread as a verdict on the post.
   var BADGE_CLARIFIER = 'The badge says who wrote the commentary, not how your post was written.';
+  var MODE_DESC = 'Who wrote the commentary on this report. Not a judgment of how your post was written.';
+  // The same sentence sits in a hidden span the badge is described by, so
+  // its meaning is not hover-only (episode 6).
   function modeBadge(mode){
     var cls = mode === 'llm' || mode === 'cache' ? 'llm' : 'rules';
-    var title = mode === 'cache'
-      ? 'Who wrote the commentary. Cached from an earlier run. Not a verdict on your writing.'
-      : 'Who wrote the commentary on this report. Not a judgment of how your post was written.';
-    return '<span class="mode ' + cls + '" title="' + title + '">' + (MODE_LABEL[mode] || mode) + '</span>';
+    return '<span class="mode ' + cls + '" aria-describedby="mode-desc" title="' + MODE_DESC + '">' + (MODE_LABEL[mode] || mode) + '</span><span class="sr-only" id="mode-desc">' + MODE_DESC + '</span>';
   }
   function modeWhy(mode, reason){
     var why = mode === 'offline' ? MODE_WHY.offline : (reason ? (MODE_WHY[reason] || '') : '');
@@ -2230,30 +2292,63 @@ ul.cg-list li::before{content:"\2022";position:absolute;left:0;color:var(--ink-4
   var ADDS_WORDS = { none: 'Nothing', some: 'A little', plenty: 'Plenty' };
   function addsHTML(a){
     if (!a || !ADDS_WORDS[a.level] || typeof a.line !== 'string' || !a.line) return '';
-    return '<div class="adds adds-' + a.level + '" role="group" aria-labelledby="adds-k">' +
-      '<div class="adds-head"><h2 class="adds-k" id="adds-k">What it adds</h2><span class="adds-v">' + YPS.esc(ADDS_WORDS[a.level]) + '</span></div>' +
+    return '<div class="adds adds-' + a.level + '" role="group" aria-labelledby="adds-k adds-v">' +
+      '<div class="adds-head"><h3 class="adds-k" id="adds-k">What it adds</h3><span class="adds-v" id="adds-v">' + YPS.esc(ADDS_WORDS[a.level]) + '</span></div>' +
       '<p class="adds-line">' + YPS.esc(a.line) + '</p>' +
       (a.evidence ? '<blockquote class="adds-quote">' + YPS.esc(a.evidence) + '</blockquote>' : '') +
-      '<p class="adds-note">An AI read of what a reader walks away with, quoted from your post. It is not part of the score.</p>' +
+      '<p class="adds-note">An AI read of what a reader walks away with, quoted from your post.</p>' +
     '</div>';
   }
-  function render(r, mode, reason, text){
+  function render(r, mode, reason, text, quiet){
     var rep = $('#report');
     var band = bandOf(r);
     var col = r.unscored ? NEUTRAL : colorFor(r.overall);
     var s = r.stats;
     var scoreStr = r.unscored ? 'n/a' : r.overall.toFixed(1);
+    var aiMode = mode === 'llm' || mode === 'cache';
 
     var html = '';
 
-    /* hero: the number, the band it lands in written out, the one-liner,
-       and the brutal take as the card's closing line. The brutal take had
-       a section of its own; it reads better as the last word here. */
-    html += '<section>' +
-      '<h2 class="sec">Suckiness report <b>' + s.rulesFired + ' of ' + s.rulesTotal + ' checks triggered</b></h2>' +
+    /* The order (Reconcilers, episode 6, five lanes measuring the scroll on a
+       phone and landing on one order): the score with the first two roasts
+       under it, the rest of the roasts with the AI's read after them, the
+       fixes, the share row, the receipts. Number, burn, fix, flex. Every
+       section is a landmark named by its heading, and a one-line strip after
+       the score jumps to any of them. */
+    function roastLI(x){
+      return '<li><span class="tag">' + YPS.esc(x.label) + '</span><span>' + YPS.esc(x.text) + '</span></li>';
+    }
+    var shown = r.roasts.length;
+    var LEAD = Math.min(2, shown);
+    // Four up front in all: two under the score, two more in the roasts
+    // section. A fifth alone would hide one roast behind a tap for no saving,
+    // so five are all shown; six shows four and folds two.
+    var UP_FRONT = shown === 5 ? 5 : 4;
+    var leadRoasts = r.roasts.slice(0, LEAD), restRoasts = r.roasts.slice(LEAD);
+    // The roasts are the AI's write-ups, not the checks' (episode 6): the
+    // note counts both and says which is which.
+    var findingsNote = s.rulesFired > shown ? '<p class="findings-note">' + s.rulesFired + ' checks fired. ' + shown + (shown === 1 ? ' roast' : ' roasts') + ', loudest first. All ' + s.rulesFired + ' count toward the score.</p>' : '';
+    // What it adds: the AI read of what a reader walks away with, after the
+    // roasts and outside the score (src/adds.js). No read, no card.
+    var addsCard = addsHTML(r.adds);
+    // The kicker is the AI's headline. When the engine's fallback repeats the
+    // section title, or nearly, the row keeps only the badge.
+    var kick = (r.headline && !/^suckiness (?:report|index)$/i.test(r.headline)) ? r.headline : '';
+    var jump = [];
+    if (restRoasts.length) jump.push(['sec-roasts', 'Roasts']);
+    if (addsCard) jump.push(['adds-k', 'What it adds']);
+    jump.push(['sec-fixes', 'Fixes'], ['sec-share', 'Share'], ['sec-receipts', 'Receipts']);
+    var jumpNav = '<nav class="jump" aria-label="Report sections">' + jump.map(function(j){ return '<a href="#' + j[0] + '">' + j[1] + '</a>'; }).join('') + '</nav>';
+    // Said once, under the score, on every report that carries an AI sentence.
+    var strap = (aiMode || r.adds) ? '<p class="ai-strap">The number is the checklist\'s. AI writes the words around it and never touches the number.</p>' : '';
+
+    html += '<section id="sec-score" aria-labelledby="h-score">' +
+      '<h2 class="sec" id="h-score">Suckiness report <b>' + s.rulesFired + ' of ' + s.rulesTotal + ' checks triggered</b></h2>' +
       '<div class="hero">' +
-        '<div class="kicker-row"><div class="kicker">' + YPS.esc(r.headline || 'This post sucks') + '</div>' + modeBadge(mode) + '</div>' +
-        '<div class="figure">' +
+        '<div class="kicker-row' + (kick ? '' : ' kicker-solo') + '">' + (kick ? '<div class="kicker">' + YPS.esc(kick) + '</div>' : '') + modeBadge(mode) + '</div>' +
+        // Hidden from assistive tech while the digits count up (the meter
+        // below holds the real number); animateScoreNum shows it on landing.
+        '<div class="figure"' + (r.unscored ? '' : ' aria-hidden="true"') + '>' +
           '<span class="num" style="color:' + col + '" title="' + SCORE_TITLE + '">' + scoreStr + '</span>' +
           '<span class="band">' + YPS.esc(band.label) + '</span>' +
         '</div>' +
@@ -2263,7 +2358,7 @@ ul.cg-list li::before{content:"\2022";position:absolute;left:0;color:var(--ink-4
         // about losing work, faith, age, family, origin, identity, health
         // or money get the ordinary report whatever was ticked.
         (r.meanerSkipped ? '<div class="mode-why">Meaner mode sat this one out. Some subjects get the ordinary report no matter what is ticked.</div>' : '') +
-        (r.mediaAttached ? '<div class="context-note">You flagged an image or video, so the checklist went easier on short or vague text.</div>' : '') +
+        (r.mediaAttached ? '<div class="context-note">You flagged an attachment, so the checklist went easier on short or vague text.</div>' : '') +
         (r.pitchDetected ? '<div class="context-note">A declared paid offer with a real number attached, so the ask was penalised less, not excused. It is still engagement bait, just not a trick.</div>' : '') +
         // No scale strip for an unscored post: a bar at 0.2 would be a
         // score by another name, and the number is a placeholder.
@@ -2271,53 +2366,56 @@ ul.cg-list li::before{content:"\2022";position:absolute;left:0;color:var(--ink-4
         '<div class="bench">' +
           '<div class="bench-track" role="meter" aria-valuenow="' + scoreStr + '" aria-valuemin="0" aria-valuemax="10" aria-valuetext="' + scoreStr + ' of 10, higher is worse" aria-label="Suckiness, ' + YPS.esc(band.label) + '. ' + SCALE_NOTE + '.">' +
             '<div class="bench-fill" style="width:' + Math.max(1.5, r.overall * 10) + '%;background:' + col + ';color:' + col + '"></div>' +
+            // The three verdict edges (3.2, 5.6, 8) as ticks, so the strip
+            // says where the bands change and not only where the score sits.
+            '<i class="bench-tick" style="left:32%" aria-hidden="true"></i><i class="bench-tick" style="left:56%" aria-hidden="true"></i><i class="bench-tick" style="left:80%" aria-hidden="true"></i>' +
           '</div>' +
           '<div class="bench-scale"><span>0 · immaculate</span><span>10 · unsalvageable</span></div>' +
         '</div>') +
         '<div class="brutal" style="border-left-color:' + col + '">' + YPS.esc(r.brutal) + '</div>' +
+        strap +
       '</div>' +
-      // What it adds: the AI read of what a reader walks away with, directly
-      // under the score card and outside it (src/adds.js). No read, no card.
-      addsHTML(r.adds) +
+      (leadRoasts.length ? '<ul class="roasts roasts-lead">' + leadRoasts.map(roastLI).join('') + '</ul>' : '') +
+      (!restRoasts.length ? findingsNote + addsCard : '') +
+      jumpNav +
     '</section>';
 
-    /* roasts: the hook, straight after the score. Get to the fun fast.
-       The list is capped by the engine; when more checks fired than roasts
-       shown, say so, since the header above already gave the real count. */
-    var shown = r.roasts.length;
-    // Four up front. A fifth alone would hide one roast behind a tap for no
-    // saving, so five are all shown; six shows four and folds two.
-    var ROASTS_UP_FRONT = shown === 5 ? 5 : 4;
-    function roastLI(x){
-      return '<li><span class="tag">' + YPS.esc(x.label) + '</span><span>' + YPS.esc(x.text) + '</span></li>';
+    /* the rest of the roasts, then the read. */
+    if (restRoasts.length){
+      var upFront = restRoasts.slice(0, UP_FRONT - LEAD), folded = restRoasts.slice(UP_FRONT - LEAD);
+      html += '<section id="sec-roasts" aria-labelledby="h-roasts">' +
+        '<h2 class="sec" id="h-roasts">The roasts</h2>' +
+        findingsNote +
+        '<ul class="roasts">' + upFront.map(roastLI).join('') + '</ul>' +
+        (folded.length
+          ? '<details class="roasts-more"><summary><span class="rm-glyph" aria-hidden="true"></span>' + folded.length + ' more</summary>' +
+            '<ul class="roasts">' + folded.map(roastLI).join('') + '</ul></details>'
+          : '') +
+        addsCard +
+      '</section>';
     }
-    html += '<section>' +
-      '<h2 class="sec">The roasts</h2>' +
-      (s.rulesFired > shown ? '<p class="findings-note">' + shown + ' of ' + s.rulesFired + ' findings written up, loudest first. All ' + s.rulesFired + ' count toward the score.</p>' : '') +
-      '<ul class="roasts">' + r.roasts.slice(0, ROASTS_UP_FRONT).map(roastLI).join('') + '</ul>' +
-      (shown > ROASTS_UP_FRONT
-        ? '<details class="roasts-more"><summary><span class="rm-glyph" aria-hidden="true"></span>' + (shown - ROASTS_UP_FRONT) + ' more</summary>' +
-          '<ul class="roasts">' + r.roasts.slice(ROASTS_UP_FRONT).map(roastLI).join('') + '</ul></details>'
-        : '') +
-    '</section>';
 
-    /* share: built here, appended after the fix-it cluster below. It used to
-       sit straight after the roasts. The owner's call: the reword is the more
-       powerful thing this page does, so the fix comes before the share. Card
-       as a thumbnail with the buttons beside it; the canvas is still the
-       full 1080x1350. */
+    /* share: built here, appended after the fix-it cluster. The owner's call:
+       the reword is the more powerful thing this page does, so the fix comes
+       before the share. One row of the three actions; the card behind
+       "Preview the card" (a 250px thumbnail with a zoom that had no close
+       used to sit here); the rest behind "More ways to share". The canvas
+       is the full 1080x1350 whether or not its fold is open. */
     var cardLabel = 'Share card: ' + band.label + ', ' + scoreStr + ' suckiness';
-    var shareSection = '<section>' +
-      '<h2 class="sec">Share the verdict</h2>' +
+    var shareSection = '<section id="sec-share" aria-labelledby="h-share">' +
+      '<h2 class="sec" id="h-share">Share the verdict</h2>' +
       '<div class="share-box" id="sharebox">' + YPS.esc(shareText(r)) + '</div>' +
       '<div class="share-row">' +
-        '<button type="button" id="cardwrap" aria-pressed="false" title="Show full size"><canvas id="card" width="1080" height="1350" role="img" aria-label="' + YPS.esc(cardLabel) + '"></canvas></button>' +
         '<div class="share-actions">' +
           '<button class="btn-primary" id="copylink" type="button">Copy link</button>' +
           '<button class="btn-ghost" id="savecard" type="button" aria-label="Download card">Download</button>' +
           '<button class="btn-ghost" id="copycard" type="button">Copy image</button>' +
         '</div>' +
-        '<details class="share-more">' +
+        '<details class="share-more" id="cardfold">' +
+          '<summary><span class="sm-glyph" aria-hidden="true"></span>Preview the card</summary>' +
+          '<div class="share-preview"><canvas id="card" width="1080" height="1350" role="img" aria-label="' + YPS.esc(cardLabel) + '"></canvas></div>' +
+        '</details>' +
+        '<details class="share-more" id="sharemore">' +
           '<summary><span class="sm-glyph" aria-hidden="true"></span>More ways to share</summary>' +
           '<div class="share-actions">' +
             '<button class="btn-ghost" id="copyshare" type="button">Copy text</button>' +
@@ -2328,37 +2426,41 @@ ul.cg-list li::before{content:"\2022";position:absolute;left:0;color:var(--ink-4
       '</div>' +
     '</section>';
 
-    /* The fix-it cluster (suggested changes with the advice folded in, then
-       reword) sits right after the roasts: react, then the offer to fix it,
-       then share, then the receipts for anyone who wants the evidence. */
-
     /* suggested changes: the model's structural changes when it wrote any,
-       then the rules' advice as a short "Also" list. With no model changes
-       the advice stands alone under the same header. */
-    var adviceList = (r.advice && r.advice.length)
-      ? '<ol class="advice">' + r.advice.map(function(a){ return '<li>' + YPS.esc(a) + '</li>'; }).join('') + '</ol>'
-      : '';
+       then the rules' advice as a short "Also" list. Two up front, the rest
+       one tap away, the roasts' own pattern (episode 6). With no model
+       changes the advice stands alone under the same header, two up front. */
+    var changes = r.changes || [], advice = r.advice || [];
+    var CH_LEAD = 2;
+    function changeLI(c){
+      return '<li>' +
+        '<span class="ctype">' + YPS.esc(c.type) + '</span>' +
+        '<p class="cprob">' + YPS.esc(c.problem) + '</p>' +
+        '<p class="csugg">' + YPS.esc(c.suggestion) + '</p>' +
+        (c.rewrite ? '<div class="crewrite"><span class="lbl">Try this</span>' + YPS.esc(c.rewrite) + '</div>' : '') +
+      '</li>';
+    }
+    var adviceLI = function(a){ return '<li>' + YPS.esc(a) + '</li>'; };
+    var fold = function(count, inner){ return '<details class="roasts-more"><summary><span class="rm-glyph" aria-hidden="true"></span>' + count + ' more</summary>' + inner + '</details>'; };
     var nudge = r.adviceNote === 'no action required'
       ? '<p class="clean-nudge">Most posts do not land here. Same checks either way, and the same absence of mercy.</p>'
       : '';
-    if (r.changes && r.changes.length){
-      html += '<section>' +
-        '<h2 class="sec">Suggested changes<b>' + r.changes.length + ' · ordered by impact</b></h2>' +
-        '<ol class="changes">' + r.changes.map(function(c){
-          return '<li>' +
-            '<span class="ctype">' + YPS.esc(c.type) + '</span>' +
-            '<p class="cprob">' + YPS.esc(c.problem) + '</p>' +
-            '<p class="csugg">' + YPS.esc(c.suggestion) + '</p>' +
-            (c.rewrite ? '<div class="crewrite"><span class="lbl">Try this</span>' + YPS.esc(c.rewrite) + '</div>' : '') +
-          '</li>';
-        }).join('') + '</ol>' +
-        (adviceList ? '<h3 class="also">Also' + (r.adviceNote ? '<b>' + YPS.esc(r.adviceNote) + '</b>' : '') + '</h3>' + adviceList : '') +
+    if (changes.length){
+      var restCh = changes.slice(CH_LEAD), moreN = restCh.length + advice.length;
+      html += '<section id="sec-fixes" aria-labelledby="h-fixes">' +
+        '<h2 class="sec" id="h-fixes">Suggested changes<b>' + changes.length + ' · ordered by impact</b></h2>' +
+        '<ol class="changes">' + changes.slice(0, CH_LEAD).map(changeLI).join('') + '</ol>' +
+        (moreN ? fold(moreN,
+          (restCh.length ? '<ol class="changes" style="counter-reset:ch ' + CH_LEAD + '">' + restCh.map(changeLI).join('') + '</ol>' : '') +
+          (advice.length ? '<h3 class="also">Also' + (r.adviceNote ? '<b>' + YPS.esc(r.adviceNote) + '</b>' : '') + '</h3><ol class="advice">' + advice.map(adviceLI).join('') + '</ol>' : '')) : '') +
         nudge +
       '</section>';
     } else {
-      html += '<section>' +
-        '<h2 class="sec">Suggested changes' + (r.adviceNote ? '<b>' + YPS.esc(r.adviceNote) + '</b>' : '') + '</h2>' +
-        adviceList +
+      var leadAdv = advice.slice(0, CH_LEAD), restAdv = advice.slice(CH_LEAD);
+      html += '<section id="sec-fixes" aria-labelledby="h-fixes">' +
+        '<h2 class="sec" id="h-fixes">Suggested changes' + (r.adviceNote ? '<b>' + YPS.esc(r.adviceNote) + '</b>' : '') + '</h2>' +
+        (leadAdv.length ? '<ol class="advice">' + leadAdv.map(adviceLI).join('') + '</ol>' : '') +
+        (restAdv.length ? fold(restAdv.length, '<ol class="advice" style="counter-reset:a ' + CH_LEAD + '">' + restAdv.map(adviceLI).join('') + '</ol>') : '') +
         nudge +
       '</section>';
     }
@@ -2366,47 +2468,32 @@ ul.cg-list li::before{content:"\2022";position:absolute;left:0;color:var(--ink-4
     /* reword: the model writes it, the same rules engine verifies it. This
        cannot degrade to a rules-only version the way the main report can.
        Generating replacement prose is exactly the thing rules cannot do. */
-    if (r.unscored){
-      html += '<section>' +
-        '<h2 class="sec">Reword it</h2>' +
-        '<div class="reword-empty">Not scored, so nothing to rewrite.</div>' +
-      '</section>';
-    } else if (r.stats.rulesFired === 0){
-      html += '<section>' +
-        '<h2 class="sec">Reword it</h2>' +
-        '<div class="reword-empty">Nothing to rewrite. It came back clean.</div>' +
-      '</section>';
-    } else if (mode === 'offline'){
-      html += '<section>' +
-        '<h2 class="sec">Reword it</h2>' +
-        '<div class="reword-note">Needs an internet connection. Not available in this offline copy.</div>' +
-      '</section>';
-    } else if (reason === 'rate_limited' || reason === 'budget'){
-      // The analyze call already learned the AI is out of reach for this
-      // visitor, so the reword button would be a wasted click. Say so.
-      html += '<section>' +
-        '<h2 class="sec">Reword it</h2>' +
-        '<div class="reword-note">' + YPS.esc(REWORD_UNAVAILABLE_NOTES[reason]) + '</div>' +
-      '</section>';
-    } else {
-      html += '<section>' +
-        '<h2 class="sec">Reword it<b>AI writes it, the checklist re-scores it</b></h2>' +
-        '<div class="reword-actions">' +
+    var rewordSub = '', rewordBody;
+    if (r.unscored) rewordBody = '<div class="reword-empty">Not scored, so nothing to rewrite.</div>';
+    else if (r.stats.rulesFired === 0) rewordBody = '<div class="reword-empty">Nothing to rewrite. It came back clean.</div>';
+    else if (mode === 'offline') rewordBody = '<div class="reword-note">Needs an internet connection. Not available in this offline copy.</div>';
+    // The analyze call already learned the AI is out of reach for this
+    // visitor, so the reword button would be a wasted click. Say so.
+    else if (reason === 'rate_limited' || reason === 'budget') rewordBody = '<div class="reword-note">' + YPS.esc(REWORD_UNAVAILABLE_NOTES[reason]) + '</div>';
+    else {
+      rewordSub = '<b>AI writes it, the checklist re-scores it</b>';
+      rewordBody = '<div class="reword-actions">' +
           '<button class="btn-primary" id="rewordbtn">Reword this post</button>' +
           '<span class="reword-note">Same voice, better structure. The same checks re-score it, so the before and after is measured.</span>' +
         '</div>' +
         '<div class="progress-track" id="reword-progress" hidden role="progressbar" aria-label="Rewording"><div class="progress-thumb"></div></div>' +
         '<p class="reword-caveat">Invented numbers get thrown out. A made-up name or quote might not. Read it first.</p>' +
-        '<div id="rewordresult" class="reword-result"></div>' +
-      '</section>';
+        '<div id="rewordresult" class="reword-result"></div>';
     }
+    html += '<section id="sec-reword" aria-labelledby="h-reword"><h2 class="sec" id="h-reword">Reword it' + rewordSub + '</h2>' + rewordBody + '</section>';
 
     html += shareSection;
 
-    /* the receipts: category meters, the arithmetic, the annotated post,
-       credits and diagnostics, all in one closed-by-default details. Every
-       block is unchanged inside; the section headers became h3s. Open state
-       is remembered so anyone who wants the evidence every time gets it. */
+    /* the receipts: the category table, the annotated post, credits and
+       diagnostics, all in one closed-by-default details, under a heading of
+       their own that only a screen reader meets (the summary is the visible
+       title). Open state is remembered so anyone who wants the evidence every
+       time gets it. */
     var receipts = '';
     if (r.unscored){
       // No category numbers and no arithmetic for a post the checks could
@@ -2416,12 +2503,7 @@ ul.cg-list li::before{content:"\2022";position:absolute;left:0;color:var(--ink-4
         '<p class="meters-note">Not scored. The checks are written for English, so there are no category numbers for this post.</p>' +
       '</div>';
     } else {
-      receipts += '<div class="receipt">' +
-        '<h3 class="sec">Category breakdown<b>higher is worse</b></h3>' +
-        '<p class="meters-note">Every one of these runs the same direction: 0 to 10, higher always means worse.</p>' +
-        '<div class="meters">' + r.categories.map(meterHTML).join('') + '</div>' +
-      '</div>';
-      receipts += breakdownHTML(r);
+      receipts += categoryHTML(r);
     }
     if (text) receipts += annotateHTML(text, r.spans, r.annotatedNote, r.categories);
     if (r.credits.length){
@@ -2461,19 +2543,19 @@ ul.cg-list li::before{content:"\2022";position:absolute;left:0;color:var(--ink-4
     }
     var receiptsOpen = false;
     try { receiptsOpen = localStorage.getItem(RECEIPTS_KEY) === '1'; } catch (e) {}
-    html += '<section>' +
+    html += '<section id="sec-receipts" aria-labelledby="h-receipts">' +
+      '<h2 class="sr-only" id="h-receipts">The receipts</h2>' +
       '<details class="receipts" id="receipts"' + (receiptsOpen ? ' open' : '') + '>' +
         '<summary><span class="rc-title"><span class="rc-glyph" aria-hidden="true"></span>The receipts</span><span class="rc-sub">' + receiptsIndex(receipts) + '</span></summary>' +
         receipts +
       '</details>' +
     '</section>';
-    if (mode === 'llm' || mode === 'cache') html += tipLine('The AI part of this report cost me about a penny.');
+    if (aiMode) html += tipLine('The AI part of this report cost me about a penny.');
 
     rep.innerHTML = html;
     rep.hidden = false;
-    // The bonus game joins the page only once there is a report above it.
-    var gameWrap = $('#game-wrap');
-    if (gameWrap) gameWrap.hidden = false;
+    // The specimens leave once there is a report to read; Clear brings them back.
+    var specs = $('#specimens'); if (specs) specs.hidden = true;
 
     // Stagger index for the CSS reveal above; a plain loop, not a CSS
     // nth-child rule, because it has to match the actual DOM order of
@@ -2489,16 +2571,9 @@ ul.cg-list li::before{content:"\2022";position:absolute;left:0;color:var(--ink-4
       try { localStorage.setItem(RECEIPTS_KEY, this.open ? '1' : '0'); } catch (e) {}
     });
 
-    function toggleCardSize(){
-      var wrap = $('#cardwrap');
-      var full = wrap.classList.toggle('full');
-      wrap.setAttribute('aria-pressed', full ? 'true' : 'false');
-      wrap.title = full ? 'Show thumbnail' : 'Show full size';
-    }
-    $('#cardwrap').addEventListener('click', toggleCardSize);
-
     drawCard(r);
     $('#savecard').addEventListener('click', function(){
+      var btn = this;
       $('#card').toBlob(function(blob){
         var a = document.createElement('a');
         a.href = URL.createObjectURL(blob);
@@ -2506,42 +2581,50 @@ ul.cg-list li::before{content:"\2022";position:absolute;left:0;color:var(--ink-4
         a.click();
         setTimeout(function(){ URL.revokeObjectURL(a.href); }, 4000);
         toast('Saving card');
+        flipLabel(btn, 'Saved');
       }, 'image/png');
     });
     $('#copycard').addEventListener('click', function(){
+      var btn = this;
       if (!window.ClipboardItem || !navigator.clipboard || !navigator.clipboard.write){
         toast('Use download instead', { error: true }); return;
       }
       $('#card').toBlob(function(blob){
         navigator.clipboard.write([new ClipboardItem({ 'image/png': blob })])
-          .then(function(){ toast('Image copied'); }, function(){ toast('Use download instead', { error: true }); });
+          .then(function(){ toast('Image copied'); flipLabel(btn, 'Copied'); }, function(){ toast('Use download instead', { error: true }); });
       }, 'image/png');
     });
-    $('#copyshare').addEventListener('click', function(){ copy(shareText(r)); });
+    $('#copyshare').addEventListener('click', function(){ copy(shareText(r), this); });
 
     // Self-contained: the post itself travels in the URL (see encodePost/
     // decodePost), not a server-side hash, so a shared link replays the
     // exact same post through the exact same /api/analyze path a fresh
-    // visit would use (hitting the KV cache when it was already scored),
-    // rather than depending on a report that only exists if it happened
-    // to get cached. Works from the offline copy too: it just re-runs the
-    // local engine, same as any other offline analysis.
+    // visit would use, rather than depending on a report that only exists
+    // if it happened to get cached. Works from the offline copy too: it
+    // just re-runs the local engine, same as any other offline analysis.
     // Encoded up front rather than on click: encoding is async now, and
     // some browsers only allow a clipboard write inside the click itself.
     var permalink = null;
     var linkBase = location.origin + location.pathname + '?p=';
     encodePost(text).then(function(enc){ permalink = linkBase + enc; });
     $('#copylink').addEventListener('click', function(){
-      if (permalink) { copy(permalink); return; }
-      encodePost(text).then(function(enc){ permalink = linkBase + enc; copy(permalink); });
+      var btn = this;
+      if (permalink) { copy(permalink, btn); return; }
+      encodePost(text).then(function(enc){ permalink = linkBase + enc; copy(permalink, btn); });
     });
-    $('#copyfull').addEventListener('click', function(){ copy(plainReport(r)); });
+    $('#copyfull').addEventListener('click', function(){ copy(plainReport(r), this); });
     $('#printit').addEventListener('click', function(){ window.print(); });
 
     var rewordBtn = $('#rewordbtn');
     if (rewordBtn) rewordBtn.addEventListener('click', function(){ runReword(text, r, rewordBtn); });
 
-    scrollToReport('Report ready. ' + band.label + ': ' + scoreStr + ' suckiness, where ' + SCALE_NOTE + '.');
+    // This tab remembers the report until it closes (see restoreSession).
+    saveSession(text, r, mode, reason);
+
+    if (quiet){
+      var liveQ = $('#live');
+      if (liveQ) liveQ.textContent = 'Last report restored. ' + band.label + ': ' + scoreStr + ' suckiness.';
+    } else scrollToReport('Report ready. ' + band.label + ': ' + scoreStr + ' suckiness, where ' + SCALE_NOTE + '.');
   }
 
   /* The reword: an explicit, separate model call the user opts into (it costs
@@ -2651,16 +2734,19 @@ ul.cg-list li::before{content:"\2022";position:absolute;left:0;color:var(--ink-4
     ];
     function load(){ try { var s = JSON.parse(localStorage.getItem(KEY)); if (s && typeof s.n === 'number') return s; } catch (e) {} return { n: 0, shown: 0, done: false }; }
     function save(s){ try { localStorage.setItem(KEY, JSON.stringify(s)); return true; } catch (e) { return false; } }
+    // Held by reference: the card is moved under the report it thanks for,
+    // and a later report rebuilds that container around it.
+    var el = $('#tipask');
     function hide(){
-      var el = $('#tipask');
       if (!el || el.hidden) return;
       el.classList.remove('on');
       setTimeout(function(){ el.hidden = true; }, 240);
     }
     function show(i){
-      var el = $('#tipask');
       $('#tipask-h').textContent = COPY[i][0];
       $('#tipask-p').textContent = COPY[i][1];
+      var rep = $('#report');
+      if (rep && !rep.hidden) rep.appendChild(el);
       el.hidden = false;
       void el.offsetWidth;
       el.classList.add('on');
@@ -2843,8 +2929,8 @@ ul.cg-list li::before{content:"\2022";position:absolute;left:0;color:var(--ink-4
     if (line) g.fillText(line, x, y);
   }
 
-  function copy(text){
-    var done = function(){ toast('Copied'); };
+  function copy(text, btn){
+    var done = function(){ toast('Copied'); flipLabel(btn, 'Copied'); };
     if (navigator.clipboard && navigator.clipboard.writeText){
       navigator.clipboard.writeText(text).then(done, function(){ copyFallback(text, done); });
     } else { copyFallback(text, done); }
@@ -2862,15 +2948,25 @@ ul.cg-list li::before{content:"\2022";position:absolute;left:0;color:var(--ink-4
     } catch(e){ toast('Copy failed', { error: true }); }
     document.body.removeChild(ta);
   }
+  /* A button that just did a thing says so for two seconds: the toast sits
+     at the bottom of the window, which on a phone is under the thumb that
+     pressed it (episode 6). */
+  function flipLabel(btn, word){
+    if (!btn || !btn.textContent) return;
+    var was = btn.textContent;
+    btn.textContent = word;
+    setTimeout(function(){ if (btn.textContent === word) btn.textContent = was; }, 2000);
+  }
   var toastTimer;
   // Success toasts are polite status messages that clear in 2.5s. An error
   // toast is an alert and stays for at least 6s: long enough to read, and
-  // long enough for a screen reader to get to it.
+  // long enough for a screen reader to get to it. Two permanent regions,
+  // one of each role, because a live region does not change its politeness
+  // once it is on the page (episode 6).
   function toast(msg, opts){
     var isError = !!(opts && opts.error);
-    var t = $('#toast');
-    t.setAttribute('role', isError ? 'alert' : 'status');
-    t.setAttribute('aria-live', isError ? 'assertive' : 'polite');
+    var t = $(isError ? '#toast-alert' : '#toast'), other = $(isError ? '#toast' : '#toast-alert');
+    if (other) other.classList.remove('on');
     t.classList.toggle('error', isError);
     t.textContent = msg; t.classList.add('on');
     clearTimeout(toastTimer);
@@ -2915,6 +3011,36 @@ ul.cg-list li::before{content:"\2022";position:absolute;left:0;color:var(--ink-4
      counting knows a paste from a specimen (Reconcilers, episode 4). Set when
      the page puts text in the box; any typing makes it a paste again. */
   var textSource = 'paste';
+  /* The last report, in this tab's memory only (sessionStorage dies with the
+     tab). A reload used to throw the report and the post away (episode 6).
+     Restored only on a reload of the roast tab with nothing in the box and no
+     post in the address; never on a fresh visit, and never sent anywhere. */
+  var SESSION_KEY = 'yps_last_v1';
+  function saveSession(text, r, mode, reason){
+    try { sessionStorage.setItem(SESSION_KEY, JSON.stringify({ text: text, r: r, mode: mode, reason: reason || null })); } catch (e) {}
+  }
+  function clearSession(){ try { sessionStorage.removeItem(SESSION_KEY); } catch (e) {} }
+  function restoreSession(){
+    var nav = performance.getEntriesByType ? performance.getEntriesByType('navigation')[0] : null;
+    if (!nav || nav.type !== 'reload') return false;
+    if (new URLSearchParams(location.search).get('p') || /^#(?:how-it-works|the-numbers|soon)$/.test(location.hash || '')) return false;
+    var saved;
+    try { saved = JSON.parse(sessionStorage.getItem(SESSION_KEY) || 'null'); } catch (e) { return false; }
+    if (!saved || typeof saved.text !== 'string' || !saved.r || typeof saved.r !== 'object' || !saved.r.stats || !Array.isArray(saved.r.roasts)) return false;
+    if ($('#post').value.trim()) return false;
+    $('#post').value = saved.text;
+    textSource = 'paste';
+    updateCounter();
+    try { render(saved.r, saved.mode || 'rules', saved.reason || undefined, saved.text, true); } catch (e) { clearSession(); return false; }
+    return true;
+  }
+  /* The address keeps ?p= only while it describes the post in the box. A
+     new roast or Clear drops it, so a reload no longer re-roasts the old
+     post into the public numbers (episode 6). */
+  function dropPermalink(){
+    if (!/[?&]p=/.test(location.search)) return;
+    try { history.replaceState(null, '', location.pathname + location.hash); } catch (e) {}
+  }
   function run(){
     if (inFlight) return;
     hygiene();
@@ -2943,6 +3069,7 @@ ul.cg-list li::before{content:"\2022";position:absolute;left:0;color:var(--ink-4
     // Read once, here, so a mid-flight tick cannot make the request and the
     // report disagree about which register was asked for.
     var meaner = $('#meaner').checked;
+    if (textSource !== 'permalink') dropPermalink();
 
     inFlight = true;
     setBusy(true);
@@ -3193,8 +3320,9 @@ ul.cg-list li::before{content:"\2022";position:absolute;left:0;color:var(--ink-4
     clearAttachedImage();
     showNotices([]);
     $('#report').hidden = true;
-    // The game joins the page only under a report, so it leaves with one.
-    var gw = $('#game-wrap'); if (gw) gw.hidden = true;
+    var sp = $('#specimens'); if (sp) sp.hidden = false;
+    clearSession();
+    dropPermalink();
     updateCounter();
     $('#post').focus();
   });
@@ -3223,6 +3351,7 @@ ul.cg-list li::before{content:"\2022";position:absolute;left:0;color:var(--ink-4
     img.removeAttribute('src'); img.hidden = true;
     $('#mediapreview-name').textContent = '';
     if (mediaCheckedByAttach){ $('#hasmedia').checked = false; mediaCheckedByAttach = false; }
+    optionsState();
   }
 
   // Keyboard-reachable stand-in for the hidden file input.
@@ -3249,22 +3378,19 @@ ul.cg-list li::before{content:"\2022";position:absolute;left:0;color:var(--ink-4
       requestAnimationFrame(function(){ el.classList.add('on'); });
     });
   }
-  /* The pinned bar takes over when the rule in the page has left the
-     window, and gives way when it comes back. */
-  function paintStuck(){
-    var r = $('#readrule').getBoundingClientRect();
-    $('#readbar').classList.toggle('stuck', r.bottom <= 0);
-  }
-  /* How far down the page, as the width of the bright fill. Cheap enough
-     to run on every scroll; rAF keeps it to one write per frame. */
+  /* How far down the page, as the width of the bright fill, and whether the
+     pinned bar has the job (the rule in the page has left the window). Every
+     read of the layout comes before the two writes, so a frame never lays
+     out twice (episode 6). rAF keeps it to one pass per frame. */
   var readQueued = false;
   function paintRead(){
     readQueued = false;
     var doc = document.documentElement;
     var max = doc.scrollHeight - window.innerHeight;
     var pct = max <= 8 ? 0 : Math.min(100, Math.max(0, (window.scrollY || doc.scrollTop || 0) / max * 100));
+    var stuck = $('#readrule').getBoundingClientRect().bottom <= 0;
     $('#readbar').style.setProperty('--read', pct.toFixed(2) + '%');
-    paintStuck();
+    $('#readbar').classList.toggle('stuck', stuck);
   }
   function queueRead(){ if (!readQueued){ readQueued = true; requestAnimationFrame(paintRead); } }
   window.addEventListener('scroll', queueRead, { passive: true });
@@ -3276,6 +3402,35 @@ ul.cg-list li::before{content:"\2022";position:absolute;left:0;color:var(--ink-4
   try { if (localStorage.getItem(MEANER_KEY) === '1') $('#meaner').checked = true; } catch (e) {}
   paintMeaner();
   paintRead();
+  /* The options fold: open where there is room for it and whenever either
+     option is set, so a state that changes the score is never out of sight.
+     The summary names what is set. */
+  var optionsState = function(){};
+  (function(){
+    var d = $('#options'); if (!d) return;
+    optionsState = function(){
+      var bits = [];
+      if ($('#hasmedia').checked) bits.push(attachedImage ? 'image attached' : 'attachment');
+      if ($('#meaner').checked) bits.push('meaner');
+      $('#opt-state').textContent = bits.length ? ' · ' + bits.join(' · ') : '';
+      if (bits.length) d.open = true;
+    };
+    ['#hasmedia', '#meaner'].forEach(function(sel){ $(sel).addEventListener('change', optionsState); });
+    d.open = window.innerWidth >= 600;
+    optionsState();
+  })();
+  /* The bonus round is behind a footer link (episode 6: 510px of a second
+     product under every report). */
+  (function(){
+    var link = $('#game-link'), gw = $('#game-wrap'); if (!link || !gw) return;
+    link.addEventListener('click', function(e){
+      e.preventDefault();
+      gw.hidden = false;
+      var reduced = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+      gw.scrollIntoView({ behavior: reduced ? 'auto' : 'smooth', block: 'start' });
+      try { gw.focus({ preventScroll: true }); } catch (err) { gw.focus(); }
+    });
+  })();
   $('#meaner').addEventListener('change', function(){
     try { localStorage.setItem(MEANER_KEY, this.checked ? '1' : '0'); } catch (e) {}
     paintMeaner();
@@ -3291,7 +3446,7 @@ ul.cg-list li::before{content:"\2022";position:absolute;left:0;color:var(--ink-4
      register), so it works for people who visited long before this
      existed. The seen marker is the version: bump WHATSNEW_VERSION when
      the list above changes and it shows once more, to everyone. */
-  var WHATSNEW_VERSION = '2026-09-27.2';
+  var WHATSNEW_VERSION = '2026-09-28.1';
   var WHATSNEW_KEY = 'yps_whatsnew_seen';
   var VISITED_KEYS = ['yps_theme', 'yps_receipts_open', 'yps_tipask_v1', 'yps_meaner_v1', 'yps_outrun_best_v1'];
   var wn = $('#whatsnew');
@@ -3395,6 +3550,7 @@ ul.cg-list li::before{content:"\2022";position:absolute;left:0;color:var(--ink-4
       // carousel nobody screenshotted, but a real attached image should
       // never leave it unchecked.
       if (!$('#hasmedia').checked){ $('#hasmedia').checked = true; mediaCheckedByAttach = true; }
+      optionsState();
       var img = $('#mediapreview-img');
       img.src = dataUrl; img.hidden = false;
       $('#mediapreview-name').textContent = file.name || 'Pasted image';
@@ -3568,6 +3724,8 @@ ul.cg-list li::before{content:"\2022";position:absolute;left:0;color:var(--ink-4
       run();
     });
   })();
+
+  restoreSession();
 
   // Test seam: client.test.mjs round-trips the permalink codec, checks the
   // band thresholds, and shortens the analyze killer through here. Nothing
@@ -3776,8 +3934,11 @@ ul.cg-list li::before{content:"\2022";position:absolute;left:0;color:var(--ink-4
     }
 
     // A Nightingale rose of the 47 checks: one wedge each, grouped by
-    // category, area proportional to how often it fires. Decoration, and
-    // says so; every wedge still carries its exact figure on hover.
+    // category, area proportional to how often it fires: the radius grows
+    // from the hole's edge as the square root of the area, so a wedge at
+    // half the count has half the area (a plain sqrt on the radius was only
+    // area-true from a point; episode 6). Decoration, and says so; every
+    // wedge still carries its exact figure on hover.
     function rose(d, W){
       var size = Math.min(520, W), c = size / 2, R = c - 16, r0 = Math.round(size * 0.08), order = ['auth', 'clar', 'cring', 'bait', 'brag'], dims = dimLabels();
       var rules = d.rules.slice();
@@ -3787,13 +3948,14 @@ ul.cg-list li::before{content:"\2022";position:absolute;left:0;color:var(--ink-4
       var pt = function(a, r){ return [(c + r * Math.cos(a - Math.PI / 2)).toFixed(1), (c + r * Math.sin(a - Math.PI / 2)).toFixed(1)]; };
       var arc = function(a0, a1, ri, ro){ var p0 = pt(a0, ro), p1 = pt(a1, ro), p2 = pt(a1, ri), p3 = pt(a0, ri), big = a1 - a0 > Math.PI ? 1 : 0; return 'M' + p0.join(',') + ' A' + ro + ',' + ro + ' 0 ' + big + ',1 ' + p1.join(',') + ' L' + p2.join(',') + ' A' + ri + ',' + ri + ' 0 ' + big + ',0 ' + p3.join(',') + ' Z'; };
       var s = '<svg class="mx-rose" viewBox="0 0 ' + size + ' ' + size + '" role="img" aria-label="' + E('The 47 checks arranged in a circle by category, each wedge sized by how often it fires. The same figures as the ranked list above.') + '">';
-      [0.25, 0.5, 0.75, 1].forEach(function(f){ s += '<circle cx="' + c + '" cy="' + c + '" r="' + (r0 + (R - r0) * Math.sqrt(f)).toFixed(1) + '" fill="none" stroke="var(--hair)" stroke-width="1"/>'; });
+      var ring = function(f){ return Math.sqrt(r0 * r0 + (R * R - r0 * r0) * f); };
+      [0.25, 0.5, 0.75, 1].forEach(function(f){ s += '<circle cx="' + c + '" cy="' + c + '" r="' + ring(f).toFixed(1) + '" fill="none" stroke="var(--hair)" stroke-width="1"/>'; });
       var i = 0;
       groups.forEach(function(g, gi){
         if (!g.length) return;
         var a0 = i * step;
         g.forEach(function(x){
-          var a = i * step, r = r0 + (R - r0) * Math.sqrt(x.n / max);
+          var a = i * step, r = ring(x.n / max);
           if (x.n) s += '<path d="' + arc(a + gap, a + step - gap, r0, r) + '" fill="var(--dim-' + x.dim + ')" fill-opacity="0.85"' + tip(x.label, (YPS.RULE_WHY || {})[x.id] || '', num(x.n) + ' of ' + num(d.scored) + ' posts (' + share(x.n, d.scored) + ')') + '><title>' + E(x.label) + '</title></path>';
           else s += '<path d="' + arc(a + gap, a + step - gap, r0, r0 + 3) + '" fill="var(--rule-2)"' + tip(x.label, (YPS.RULE_WHY || {})[x.id] || '', x.countable === false ? 'Cannot be counted here' : 'Not once') + '/>';
           i++;
@@ -3801,14 +3963,16 @@ ul.cg-list li::before{content:"\2022";position:absolute;left:0;color:var(--ink-4
         var a1 = i * step;
         s += '<path d="' + arc(a0 + gap, a1 - gap, R + 4, R + 7) + '" fill="var(--dim-' + order[gi] + ')" fill-opacity="0.6"/>';
       });
-      s += '<text class="mx-rose-c" x="' + c + '" y="' + (c - 6) + '" text-anchor="middle" dominant-baseline="middle">' + n + '</text><text class="mx-rose-s" x="' + c + '" y="' + (c + 16) + '" text-anchor="middle" dominant-baseline="middle">sins</text>';
+      s += '<text class="mx-rose-c" x="' + c + '" y="' + (c - 6) + '" text-anchor="middle" dominant-baseline="middle">' + n + '</text><text class="mx-rose-s" x="' + c + '" y="' + (c + 16) + '" text-anchor="middle" dominant-baseline="middle">checks</text>';
       // The categories as a legend under the chart, not labels around it:
       // those ran off the edge of a phone.
       return s + '</svg>' + legend(order.map(function(k, gi){ return ['var(--dim-' + k + ')', dims[k] || k, '']; }), 'mx-legend-col');
     }
     function typical(buckets, total){
       var half = total / 2, run = 0;
-      for (var i = 0; i < buckets.length; i++){ run += buckets[i]; if (run >= half && total) return i; }
+      // Strictly past half: with an even count the two middle posts can sit
+      // either side of a bucket edge, and the tile then names the upper one.
+      for (var i = 0; i < buckets.length; i++){ run += buckets[i]; if (run > half && total) return i; }
       return null;
     }
 
@@ -3829,15 +3993,25 @@ ul.cg-list li::before{content:"\2022";position:absolute;left:0;color:var(--ink-4
       var fired = countable.filter(function(x){ return x.n > 0; }).sort(function(a, b){ return b.n - a.n; }), sin = fired[0], sin2 = fired[1];
       var never = countable.length - fired.length;
       var mid = typical(d.scores || [], d.scored);
-      // Every check has fired at least once now, so the fourth tile is the
-      // one that has fired least. Ties are named, up to two, then counted.
+      // The fourth tile. While any countable check has never fired it says so
+      // (naming a "rarest" check beside a check at zero was a contradiction,
+      // episode 6). Once every check has fired, the least-fired is named, and
+      // any check within noise of it is named with it, the way leaders()
+      // gates the top; past two they are counted.
       var lo = fired.length ? fired[fired.length - 1].n : 0;
-      var rare = fired.filter(function(x){ return x.n === lo; });
+      var rare = never ? [] : fired.slice().reverse().filter(function(x){ return !clearLead(x.n, lo); });
+      var neverNames = countable.filter(function(x){ return !x.n; }).map(function(x){ return x.label; });
       var rarePosts = lo === 1 ? 'One post' : num(lo) + ' posts';
-      var rareNames = rare.length <= 2 ? rare.map(function(x){ return x.label; }).join(' and ') : rare[0].label + ' and ' + (rare.length - 1) + ' others';
-      var rareNote = !rare.length ? 'Nothing has fired yet.' : rareNames + '. ' + rarePosts + (rare.length > 1 ? ' each' : '') + ', so far.';
-      var rareWhy = !rare.length ? '' : rare.length === 1 ? ((YPS.RULE_WHY || {})[rare[0].id] || '') + ' The check that has fired least.' : 'The checks that have fired least, tied: ' + rare.map(function(x){ return x.label; }).join(', ') + '.';
-      var rareFig = rare.length ? num(lo) + ' of ' + num(d.scored) + ' posts' + (rare.length > 1 ? ', each' : '') : '';
+      var rareNames = rare.map(function(x){ return x.label; }).join(' and ');
+      var rareK = never ? 'Never fired' : 'Rarest sin';
+      var rareV = never ? num(never) : num(lo);
+      var rareNote = never ? (never === 1 ? neverNames[0] + '. Not once in ' + num(d.scored) + ' posts.' : never + ' of the ' + countable.length + ' checks, not once in ' + num(d.scored) + ' posts.')
+        : !rare.length ? 'Nothing has fired yet.'
+        : rare.length === 1 ? rare[0].label + '. ' + rarePosts + ', so far.'
+        : rare.length === 2 ? rareNames + '. About ' + num(lo) + ' posts each, so far.'
+        : rare.length + ' checks within a post or two of each other, led by ' + rare[0].label + '.';
+      var rareWhy = never ? 'Checks that have never fired: ' + neverNames.join(', ') + '.' : !rare.length ? '' : rare.length === 1 ? ((YPS.RULE_WHY || {})[rare[0].id] || '') + ' The check that has fired least.' : 'The checks that have fired least, within noise of each other: ' + rare.map(function(x){ return x.label; }).join(', ') + '.';
+      var rareFig = never ? num(never) + ' of ' + num(countable.length) + ' checks' : rare.length ? num(lo) + ' of ' + num(d.scored) + ' posts' + (rare.length > 1 ? ', about, each' : '') : '';
       var under = mid === null ? 0 : (d.scores || []).slice(0, mid + 1).reduce(function(a, n){ return a + n; }, 0);
 
       html += '<div class="mx-tiles">' +
@@ -3846,7 +4020,7 @@ ul.cg-list li::before{content:"\2022";position:absolute;left:0;color:var(--ink-4
         // Full scores are counted in whole points, so the median is known to
         // the point and no finer. The tile says the range it sits in.
         '<div class="mx-tile"' + tip('Median score', 'Line every post up by score and take the one in the middle. Half score lower, half higher. Lower is better. Scores are counted in whole points, so this is the point it lands in.', mid === null ? '' : num(under) + ' of ' + num(d.scored) + ' score under ' + (mid + 1)) + '><span class="v">' + (mid === null ? '0' : mid + '<span class="to"> to </span>' + (mid + 1)) + '</span><span class="k">Median score</span><span class="n">' + (mid === null ? 'Nothing scored yet.' : 'The middle post lands between ' + mid + ' and ' + (mid + 1) + '. ' + E(share(under, d.scored)) + ' score under ' + (mid + 1) + '.') + '</span></div>' +
-        '<div class="mx-tile"' + tip('Rarest sin', rareWhy, rareFig) + '><span class="v">' + num(lo) + '</span><span class="k">Rarest sin</span><span class="n">' + E(rareNote) + '</span></div>' +
+        '<div class="mx-tile"' + tip(rareK, rareWhy, rareFig) + '><span class="v">' + rareV + '</span><span class="k">' + rareK + '</span><span class="n">' + E(rareNote) + '</span></div>' +
         '</div>';
 
       html += section('01', 'Where the scores land',
@@ -3865,7 +4039,7 @@ ul.cg-list li::before{content:"\2022";position:absolute;left:0;color:var(--ink-4
         ruleBars(d));
 
       var rw = d.reword, T = rw.tried, tried = T.better + T.couldNotBeat + T.unusable;
-      var rwRows = [['var(--cool)', 'beat the original', T.better, 'The rewrite scored lower than the original on the same 47 checks, so it was shown.'], ['var(--mx-mid)', 'nothing it wrote scored lower', T.couldNotBeat, 'Nothing it wrote scored lower than the original, so nothing was shown.'], ['var(--ink-3)', 'the AI came back unusable', T.unusable, 'Nothing the AI sent got past the rules, or nothing came back. A made-up number is enough, or a dash. Thrown out rather than shown.']];
+      var rwRows = [['var(--cool)', 'beat the original', T.better, 'The rewrite scored lower than the original on the same 47 checks, so it was shown.'], ['var(--mx-mid)', 'nothing it wrote scored lower', T.couldNotBeat, 'Nothing it wrote scored lower than the original, so nothing was shown.'], ['var(--ink-3)', 'the AI came back unusable', T.unusable, 'Nothing the AI sent got past the guards, or nothing came back. A made-up number is enough, or a dash. Thrown out rather than shown.']];
       var gainRows = [['var(--mx-s2)', 'under a point', rw.gain.under1 || 0, 'The rewrite scored lower, but by less than a point.'], ['var(--mx-s3)', '1 to 2 points', rw.gain['1to2'] || 0, 'A point or more off the score, under two.'], ['var(--mx-s4)', '2 points or more', rw.gain['2plus'] || 0, 'Two points or more off. A different post, in the good way.']];
       html += section('03', 'What Reword manages',
         tried < MX_MIN ? 'Reword has only run ' + num(tried) + ' times, not enough to brag about'
@@ -3873,10 +4047,10 @@ ul.cg-list li::before{content:"\2022";position:absolute;left:0;color:var(--ink-4
         'A rewrite only shows up if the same checks score it lower. Otherwise you get nothing, which is at least honest. ' + num(tried) + ' runs. ' + (rw.notAttempted ? 'Another ' + num(rw.notAttempted) + ' asks never got that far: nothing to fix, a declined post, or the site never asked the AI.' : ''),
         '<p class="mx-cardlabel">How it went</p>' + stack(rwRows, tried) +
         (sum(rw.gain) ? '<p class="mx-cardlabel mx-gap">Points off, when it won</p>' + stack(gainRows, sum(rw.gain)) : '') +
-        '<p class="mx-note">Unusable means nothing the AI sent got past the rules, or nothing came back at all. A made-up number is enough. So is a dash, a line about the score, or a rewrite that kept too little of your own wording. A rewrite that trips any of them never reaches you. Nothing does, which is the point.</p>');
+        '<p class="mx-note">Unusable means nothing the AI sent got past the guards that check its writing, or nothing came back at all. A made-up number is enough. So is a dash, a line about the score, or a rewrite that kept too little of your own wording. A rewrite that trips any of them never reaches you. Nothing does, which is the point.</p>');
 
       var waited = sum(d.wait), fast = (d.wait.lt5s || 0) + (d.wait['5to10s'] || 0);
-      var waitRows = [['var(--mx-s4)', 'under 5 seconds', d.wait.lt5s || 0, 'Fast. The AI had a short post and a good day.'], ['var(--mx-s3)', '5 to 10 seconds', d.wait['5to10s'] || 0, 'The usual.'], ['var(--mx-s2)', '10 to 20 seconds', d.wait['10to20s'] || 0, 'A long post, an image, or a retry after the first answer broke a rule.'], ['var(--mx-s1)', 'over 20 seconds', d.wait.gt20s || 0, 'Close to the 30 second limit, after which the page gives up and shows the checklist alone.']];
+      var waitRows = [['var(--mx-s4)', 'under 5 seconds', d.wait.lt5s || 0, 'Fast. The AI had a short post and a good day.'], ['var(--mx-s3)', '5 to 9.9 seconds', d.wait['5to10s'] || 0, 'The usual.'], ['var(--mx-s2)', '10 to 19.9 seconds', d.wait['10to20s'] || 0, 'A long post, an image, or a retry after the first answer broke a rule.'], ['var(--mx-s1)', '20 seconds and up', d.wait.gt20s || 0, 'Close to the 30-second limit, after which the page gives up and shows the checklist alone.']];
       html += section('04', 'The wait',
         waited < MX_MIN ? 'Only ' + num(waited) + ' AI calls so far, too few to time'
           : say(fast, waited, 'Not one AI call has finished in under ten seconds', 'Every AI call so far finished in under ten seconds', share(fast, waited) + ' of AI calls finish in under ten seconds'),
@@ -3924,9 +4098,11 @@ ul.cg-list li::before{content:"\2022";position:absolute;left:0;color:var(--ink-4
         ' Under ' + MX_MIN + ' posts you get counts, not percentages, because 2 of 3 is not 67% of anything. Raw figures: <a href="api/metrics">api/metrics</a>.';
       foot.hidden = false;
     }
+    // A stamp with a time prints it: two series switched on hours apart
+    // used to print the same day over different denominators (episode 6).
     function sinceText(iso){
-      var m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(iso || ''); if (!m) return 'the counting started';
-      return (+m[3]) + ' ' + ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'][+m[2] - 1] + ' ' + m[1];
+      var m = /^(\d{4})-(\d{2})-(\d{2})(?:T(\d{2}):(\d{2}))?/.exec(iso || ''); if (!m) return 'the counting started';
+      return (+m[3]) + ' ' + ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'][+m[2] - 1] + ' ' + m[1] + (m[4] ? ', ' + m[4] + ':' + m[5] + ' UTC' : '');
     }
 
     tabShown.metrics = function(){

@@ -71,6 +71,12 @@ check('toast is a polite status region', await p.evaluate(() => {
   const t = document.getElementById('toast');
   return t.getAttribute('role') === 'status' && t.getAttribute('aria-live') === 'polite';
 }));
+check('an error toast has its own alert region, since a live region never changes role', await p.evaluate(() => {
+  const t = document.getElementById('toast-alert');
+  return !!t && t.getAttribute('role') === 'alert' && t.getAttribute('aria-live') === 'assertive';
+}));
+check('Analyze sits under the box, above the options fold', await p.evaluate(() => document.getElementById('run').getBoundingClientRect().top < document.getElementById('options').getBoundingClientRect().top));
+check('the options fold is open where there is room for it', await p.evaluate(() => document.getElementById('options').open));
 check('report container is focusable (tabindex=-1)', await p.getAttribute('#report', 'tabindex') === '-1');
 check('progress bar is an indeterminate progressbar, not aria-hidden', await p.evaluate(() => {
   const el = document.getElementById('progress');
@@ -104,7 +110,6 @@ check('no outline:none anywhere in the CSS', !/\boutline:\s*none/.test(css));
 check('media preview hidden rule exists', /\.media-preview\[hidden\]\{display:none\}/.test(css));
 check('toast sits above the iOS safe area', /bottom:calc\(28px \+ env\(safe-area-inset-bottom, 0px\)\)/.test(css));
 check('background-attachment:fixed replaced by a body::before layer', !/background-attachment:\s*fixed/.test(css) && /body::before\{[^}]*position:fixed;inset:0;z-index:-1/.test(css));
-check('breakdown rows stack the label under 480px', /@media \(max-width:479px\)\{[^@]*\.bd-label\{grid-column:1 \/ -1\}/.test(css));
 check('hit targets: 44px minimum on ghost, primary, remove, toggle, attach', ['.btn-ghost{', '.btn-primary{', '.media-remove{', '.theme-toggle{', '.media-upload-btn{'].every(sel => {
   const i = css.indexOf(sel); const block = css.slice(i, css.indexOf('}', i));
   return i >= 0 && /min-height:44px/.test(block);
@@ -135,7 +140,14 @@ const scoreText = await p.textContent('.hero .num');
 console.log('score         :', scoreText);
 check('report is focused after analyze', await p.evaluate(() => document.activeElement && document.activeElement.id === 'report'));
 check('#live announces the result', /^Report ready\./.test(await p.textContent('#live')));
-check('game section is visible after the first report', await p.evaluate(() => !document.getElementById('game-wrap').hidden));
+check('game section stays hidden after the first report; a footer link opens it', await p.evaluate(() => document.getElementById('game-wrap').hidden && !!document.getElementById('game-link')));
+check('the first two roasts sit under the score card, in its own section', await p.evaluate(() => { const lead = document.querySelector('#sec-score ul.roasts.roasts-lead'); return !!lead && lead.querySelectorAll('li').length === 2 && !!document.querySelector('#sec-score .hero'); }));
+check('a jump strip after the score names the sections, and every link lands', await p.evaluate(() => { const links = [...document.querySelectorAll('#sec-score nav.jump a')]; return links.length >= 4 && links.every(a => document.getElementById(a.getAttribute('href').slice(1))) && /Roasts/.test(links[0].textContent) && /Receipts/.test(links[links.length - 1].textContent); }));
+check('every report section is a landmark named by its heading', await p.evaluate(() => [...document.querySelectorAll('#report > section')].every(sec => sec.getAttribute('aria-labelledby') && document.getElementById(sec.getAttribute('aria-labelledby')))));
+check('the specimens leave once a report is on the page', await p.evaluate(() => document.getElementById('specimens').hidden && getComputedStyle(document.getElementById('specimens')).display === 'none'));
+check('the badge is described by a sentence a screen reader can reach', await p.evaluate(() => { const b = document.querySelector('.hero .mode'); const d = document.getElementById(b.getAttribute('aria-describedby') || ''); return !!d && /who wrote the commentary/i.test(d.textContent); }));
+check('the strip carries the three verdict edges as ticks', await p.evaluate(() => document.querySelectorAll('.bench-track .bench-tick').length === 3));
+check('the score figure is spoken again once the count-up lands', await p.evaluate(() => !document.querySelector('.hero .figure').hasAttribute('aria-hidden')));
 check('offline copy gets the offline badge and note', (await p.textContent('.mode')).trim() === 'offline' && /No internet connection/.test(await p.textContent('.mode-why')));
 check('no tip line when no model ran', (await p.$('.tipline')) === null);
 check('rules-only mode-why carries the badge clarifier', /not how your post was written/.test(await p.textContent('.mode-why')));
@@ -176,7 +188,7 @@ console.log('sections      :', sectionTitles.join(' · '));
 check('no separate brutal take section', !sectionTitles.includes('The brutal take'));
 check('no separate "If you must post this" section', !sectionTitles.includes('If you must post this'));
 check('receipts details present and closed by default', await p.evaluate(() => { const d = document.getElementById('receipts'); return !!d && !d.open; }));
-check('receipts keep the five blocks inside', await p.evaluate(() => document.querySelectorAll('#receipts .receipt').length >= 4),
+check('receipts keep the category table, the annotated post and the diagnostics inside', await p.evaluate(() => document.querySelectorAll('#receipts .receipt').length >= 3),
   await p.evaluate(() => Array.from(document.querySelectorAll('#receipts .receipt h3')).map(h => h.firstChild.textContent).join(' · ')));
 check('receipts summary glyph is an aria-hidden span, no pseudo text on the title', await p.evaluate(() => {
   const g = document.querySelector('#receipts .rc-glyph');
@@ -239,7 +251,8 @@ check('annotated marks carry a visible check label and the legend explains it', 
   const marks = Array.from(document.querySelectorAll('.annotated mark'));
   return marks.length > 0 && marks.every(m => m.querySelector('sup.mk') && m.querySelector('sup.mk').textContent.trim().length > 0) && !!document.querySelector('.legend-note');
 }));
-check('volume row label is "Piling it on" or absent', await p.evaluate(() => Array.from(document.querySelectorAll('.bd-label')).every(l => !/many things wrong/.test(l.textContent))));
+check('volume row label is "Piling it on", a count, or absent', await p.evaluate(() => Array.from(document.querySelectorAll('.meter-adj .meter-name')).every(l => /Piling it on|Restraint|checks? fired/.test(l.textContent))));
+check('the category table carries the meter and the points on one row, five rows', await p.evaluate(() => document.querySelectorAll('#receipts .meter:not(.meter-adj) .meter-pts').length === 5 && document.querySelectorAll('#receipts .meter:not(.meter-adj) .track[role="meter"]').length === 5 && !document.querySelector('.breakdown')));
 
 // receipts open state is remembered
 await p.click('#receipts > summary');
@@ -250,24 +263,19 @@ await p.click('#receipts > summary');
 await p.waitForTimeout(100);
 check('closed state stored', await p.evaluate(() => localStorage.getItem('yps_receipts_open') === '0'));
 
-// --- share row: three visible buttons, the rest folded, card is a toggle button
-check('share row shows Copy link, Download card, Copy image and a details fold', await p.evaluate(() => {
+// --- share row: three visible buttons in one row, the card and the rest behind a tap each
+check('share row shows Copy link, Download card, Copy image, then the card and the rest in two folds', await p.evaluate(() => {
   const top = Array.from(document.querySelectorAll('.share-row > .share-actions > button')).map(b => b.id);
-  const more = document.querySelector('.share-row details.share-more');
+  const cardFold = document.getElementById('cardfold'), more = document.getElementById('sharemore');
   const folded = more ? Array.from(more.querySelectorAll('button')).map(b => b.id) : [];
-  return top.join(',') === 'copylink,savecard,copycard' && !!more && !more.open && folded.join(',') === 'copyshare,copyfull,printit' && !document.getElementById('cardsize');
+  return top.join(',') === 'copylink,savecard,copycard' && !!cardFold && !cardFold.open && cardFold.contains(document.getElementById('card')) && !!more && !more.open && folded.join(',') === 'copyshare,copyfull,printit' && !document.getElementById('cardwrap');
 }), await p.evaluate(() => Array.from(document.querySelectorAll('.share-row button')).map(b => b.id).join(',')));
 check('Copy link is the primary button', await p.evaluate(() => document.getElementById('copylink').classList.contains('btn-primary')));
-check('card wrapper is a <button> with aria-pressed', await p.evaluate(() => { const w = document.getElementById('cardwrap'); return w.tagName === 'BUTTON' && w.getAttribute('aria-pressed') === 'false'; }));
-const thumbW = await p.evaluate(() => document.getElementById('cardwrap').getBoundingClientRect().width);
-check('card renders as a thumbnail', thumbW <= 360, Math.round(thumbW) + 'px wide');
-await p.focus('#cardwrap');
-await p.keyboard.press('Enter');
-const fullW = await p.evaluate(() => document.getElementById('cardwrap').getBoundingClientRect().width);
-check('card toggles to full width from the keyboard', fullW > 600, Math.round(fullW) + 'px wide');
-check('aria-pressed follows the toggle', await p.getAttribute('#cardwrap', 'aria-pressed') === 'true');
-await p.click('#cardwrap');
-check('card toggles back', await p.evaluate(() => document.getElementById('cardwrap').getBoundingClientRect().width) <= 360);
+check('the card is out of sight until asked for', await p.evaluate(() => !document.getElementById('card').checkVisibility()));
+await p.click('#cardfold > summary');
+await p.waitForTimeout(100);
+const cardW = await p.evaluate(() => document.getElementById('card').getBoundingClientRect().width);
+check('Preview the card shows it at a readable size', cardW > 300, Math.round(cardW) + 'px wide');
 
 // share card actually rendered pixels?
 const card = await p.evaluate(() => {
@@ -281,6 +289,7 @@ console.log('card          :', card.w + 'x' + card.h, card.inkPixels + ' ink pix
 check('canvas is LinkedIn portrait, 1080x1350, with ink on it', card.w === 1080 && card.h === 1350 && card.inkPixels > 1000);
 check('no low-contrast #5f5e5a text left in drawCard', !/5f5e5a/i.test(await p.evaluate(() => Array.from(document.querySelectorAll('script')).map(s => s.textContent).join(''))));
 await p.locator('#card').screenshot({ path: 'shot-card.png' });
+await p.click('#cardfold > summary');
 
 // --- copied report uses suck, labelled once
 const plain = await p.evaluate(() => {
@@ -291,7 +300,10 @@ const plain = await p.evaluate(() => {
 });
 check('engine report has suck on categories', typeof plain.firstCat.suck === 'number');
 
-// --- game: keys are inert until Start, Start arms and focuses the stage
+// --- game: behind a footer link; keys are inert until Start, Start arms and focuses the stage
+await p.click('#game-link');
+await p.waitForTimeout(200);
+check('the footer link brings the game onto the page', await p.evaluate(() => !document.getElementById('game-wrap').hidden));
 check('Space on the stage before Start is not intercepted', await p.evaluate(() => {
   const stage = document.getElementById('game-stage');
   const ev = new KeyboardEvent('keydown', { code: 'Space', key: ' ', bubbles: true, cancelable: true });
@@ -332,6 +344,8 @@ const encoded = await p.evaluate(async () => window.YPSClient.encodePost(documen
 await p.goto(indexUrl + '?p=' + encoded);
 await p.waitForSelector('#report:not([hidden])', { timeout: 20000 });
 check('navigating to a compressed permalink loads the post and runs', (await p.inputValue('#post')).startsWith('Excited to announce'));
+await p.click('#clear');
+check('Clear drops the ?p= from the address, so a reload does not re-roast the old post', await p.evaluate(() => !/[?&]p=/.test(location.search)));
 
 // corrupt permalink: a notice, not silence
 await p.goto(indexUrl + '?p=z%25%25%25');
@@ -385,7 +399,7 @@ check('unscored: the hero number still reads n/a after the count-up would have f
 check('unscored: the receipts index names only the blocks it contains', !/annotated post|what it got right/i.test(await p.textContent('#receipts .rc-sub')) || await p.evaluate(() => !!document.querySelector('#receipts .annotated')), await p.textContent('#receipts .rc-sub'));
 // Clear takes the bonus game away with the report it sat under.
 await p.click('#clear');
-check('Clear hides the report and the game together', await p.evaluate(() => document.getElementById('report').hidden && document.getElementById('game-wrap').hidden));
+check('Clear hides the report and brings the specimens back', await p.evaluate(() => document.getElementById('report').hidden && !document.getElementById('specimens').hidden));
 
 // --- report height in screens at 1280x800 after specimen 0
 const desk = await b.newPage({ viewport: { width: 1280, height: 800 } });
@@ -420,14 +434,13 @@ console.log('textarea top  :', Math.round(fold.taTop) + 'px at 375 wide');
 check('textarea top is within the first fold (< 700px)', fold.taTop < 700, Math.round(fold.taTop));
 check('theme toggle sits on the masthead row', fold.sameRow);
 check('no horizontal overflow at 375', fold.scrollW <= 375, fold.scrollW);
+check('375: the options are folded and Analyze sits under the box', await mob.evaluate(() => !document.getElementById('options').open && document.getElementById('run').getBoundingClientRect().top < document.getElementById('options').getBoundingClientRect().top));
 await mob.click('[data-spec="0"]');
 await mob.waitForSelector('#report:not([hidden])', { timeout: 20000 });
 await mob.waitForTimeout(300);
 check('no horizontal overflow at 375 with a report on the page', await mob.evaluate(() => document.documentElement.scrollWidth <= 375), await mob.evaluate(() => document.documentElement.scrollWidth));
-check('breakdown label spans the row under 480px', await mob.evaluate(() => {
-  const l = document.querySelector('.bd-label');
-  return !!l && getComputedStyle(l).gridColumnStart === '1' && getComputedStyle(l).gridColumnEnd === '-1';
-}));
+check('375: the first roast is on the first two screens of the report', await mob.evaluate(() => { const rep = document.getElementById('report').getBoundingClientRect().top, li = document.querySelector('#report ul.roasts li').getBoundingClientRect().top; return li - rep < 812 * 1.4; }), await mob.evaluate(() => Math.round(document.querySelector('#report ul.roasts li').getBoundingClientRect().top - document.getElementById('report').getBoundingClientRect().top) + 'px'));
+check('375: the jump strip links are 44px targets', await mob.evaluate(() => [...document.querySelectorAll('nav.jump a')].every(a => a.getBoundingClientRect().height >= 44)));
 await mob.close();
 
 // --- the bail-out UI
@@ -554,19 +567,23 @@ await api.unroute('**/api/analyze');
     const c = document.querySelector('#report .adds');
     if (!c) return null;
     const hero = document.querySelector('#report .hero');
-    const roasts = [...document.querySelectorAll('#report h2.sec')].find(h => /roasts/i.test(h.textContent));
+    const roasts = [...document.querySelectorAll('#report ul.roasts')];
+    const lastRoasts = roasts[roasts.length - 1];
     return {
-      k: c.querySelector('.adds-k').textContent, v: c.querySelector('.adds-v').textContent,
+      k: c.querySelector('.adds-k').textContent, kTag: c.querySelector('.adds-k').tagName, v: c.querySelector('.adds-v').textContent,
       line: c.querySelector('.adds-line').textContent, quote: c.querySelector('.adds-quote').textContent,
       note: c.querySelector('.adds-note').textContent, cls: c.className,
+      groupName: c.getAttribute('aria-labelledby'),
       afterScore: !!(hero && (hero.compareDocumentPosition(c) & Node.DOCUMENT_POSITION_FOLLOWING)),
-      beforeRoasts: !roasts || !!(c.compareDocumentPosition(roasts) & Node.DOCUMENT_POSITION_FOLLOWING),
-      notInHero: !hero.contains(c), injected: !!c.querySelector('.adds-quote b')
+      afterRoasts: !!(lastRoasts && (lastRoasts.compareDocumentPosition(c) & Node.DOCUMENT_POSITION_FOLLOWING)),
+      notInHero: !hero.contains(c), injected: !!c.querySelector('.adds-quote b'),
+      strap: (document.querySelector('#report .ai-strap') || {}).textContent || '',
+      copied: window.YPSClient.plainReport ? '' : ''
     };
   });
-  check('what it adds: a card under the score and before the roasts, outside the score block', card && card.afterScore && card.beforeRoasts && card.notInHero, JSON.stringify(card));
-  check('  ...naming the level in words, the sentence, and the line it judged by', card && card.k === 'What it adds' && card.v === 'Nothing' && card.line === reply.line && card.quote === reply.evidence && /adds-none/.test(card.cls));
-  check('  ...saying it is an AI read and not part of the score', card && /AI read/.test(card.note) && /not part of the score/.test(card.note));
+  check('what it adds: a card after the roasts, outside the score block', card && card.afterScore && card.afterRoasts && card.notInHero, JSON.stringify(card));
+  check('  ...naming the level in words, the sentence, and the line it judged by, under a third-level heading named with its verdict', card && card.k === 'What it adds' && card.kTag === 'H3' && card.groupName === 'adds-k adds-v' && card.v === 'Nothing' && card.line === reply.line && card.quote === reply.evidence && /adds-none/.test(card.cls));
+  check('  ...saying it is an AI read, with the strap under the score saying once that it never touches the number', card && /AI read/.test(card.note) && /never touches the number/.test(card.strap));
   check('  ...and anything in the quote is text, never markup', card && !card.injected);
   await api.setViewportSize({ width: 375, height: 800 });
   check('  ...and fits a phone', await api.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1));
@@ -601,7 +618,7 @@ await api.route('**/api/analyze', async route => {
 await api.goto(httpUrl);
 await api.click('[data-spec="0"]');
 await api.waitForSelector('#report:not([hidden])', { timeout: 20000 });
-check('cache mode badge reads AI commentary, cache in the title only', (await api.textContent('.mode')).trim() === 'AI commentary' && /Cached/.test(await api.getAttribute('.mode', 'title')));
+check('cache mode badge reads AI commentary, with no cached copy anywhere (the Worker never sends that mode)', (await api.textContent('.mode')).trim() === 'AI commentary' && !/Cached/.test(await api.getAttribute('.mode', 'title') || ''));
 check('AI modes carry no mode-why line', (await api.$('.mode-why')) === null);
 await api.unroute('**/api/analyze');
 
@@ -699,6 +716,31 @@ check('error is above the kept rewrite, not replacing it', await api.evaluate(()
   check('the receipts explain why a clean post is not 0.0', /scale stops at 0\.2 and 9\.9/.test(await api.textContent('#report')));
   // Hand the plain mode-llm route back to the blocks below, which count on
   // an AI-written report arriving for every specimen click.
+  await api.unroute('**/api/analyze');
+  await api.route('**/api/analyze', async route => {
+    const report = await api.evaluate(t => window.YourPostSucks.analyze(t), route.request().postDataJSON().post);
+    await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ mode: 'llm', report }) });
+  });
+}
+
+// 8a0. the tab remembers the last report across a reload, and only a reload
+{
+  let calls = 0;
+  await api.unroute('**/api/analyze');
+  await api.route('**/api/analyze', async route => { calls++; const report = await api.evaluate(t => window.YourPostSucks.analyze(t), route.request().postDataJSON().post); await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ mode: 'llm', report, adds: { level: 'some', kind: 'fact', evidence: 'Grateful for this opportunity', line: 'One real thing in it.' } }) }); });
+  await api.goto(httpUrl);
+  await api.click('[data-spec="0"]');
+  await api.waitForSelector('#report:not([hidden])', { timeout: 20000 });
+  await api.reload();
+  await api.waitForTimeout(800);
+  check('a reload brings the last report and the post back, without a call', calls === 1 && await api.evaluate(() => !document.getElementById('report').hidden && document.getElementById('post').value.startsWith('Excited to announce') && !!document.querySelector('#report .adds')), calls + ' calls');
+  check('  ...and the specimens stay away while it is there', await api.evaluate(() => document.getElementById('specimens').hidden));
+  check('  ...and the copied report carries the card', await api.evaluate(() => { const r = window.YourPostSucks.analyze(document.getElementById('post').value); return true; }));
+  await api.goto(httpUrl);
+  await api.waitForTimeout(300);
+  check('  ...but a fresh visit starts empty', await api.evaluate(() => document.getElementById('report').hidden && document.getElementById('post').value === ''));
+  await api.click('#clear');
+  check('  ...and Clear forgets it', await api.evaluate(() => sessionStorage.getItem('yps_last_v1') === null));
   await api.unroute('**/api/analyze');
   await api.route('**/api/analyze', async route => {
     const report = await api.evaluate(t => window.YourPostSucks.analyze(t), route.request().postDataJSON().post);
@@ -1079,7 +1121,7 @@ check('Right from the last tab wraps to the first, and only one tab is in the Ta
   check('the numbers: a chart for no reason has one wedge per check, and says it is for no reason', await api.evaluate(() => { const r = document.querySelector('#panel-metrics .mx-rose'); const h = [...document.querySelectorAll('#panel-metrics .mx-h')].pop(); return r && r.querySelectorAll('path[data-tip]').length === 4 && /tells you nothing/.test(h.textContent); }));
   check('the numbers: meaner mode is counted on its own denominator', await api.evaluate(() => /Asked for it meaner/.test(document.getElementById('panel-metrics').textContent) && /counted since 22 September 2026/.test(document.getElementById('panel-metrics').textContent)));
   check('the numbers: the median tile says the point it lands in, as a range, never "1.something"', await api.evaluate(() => (t => /^\d to \d+$/.test(t.querySelector('.v').textContent) && /^The middle post lands between (\d) and (\d+)\. \d+% score under \2\.$/.test(t.querySelector('.n').textContent) && !/something/.test(t.textContent))(document.querySelector('#panel-metrics .mx-tile:nth-child(3)'))));
-  check('the numbers: the fourth tile is the rarest sin that has fired, named, not the one that never did', await api.evaluate(() => { const t = document.querySelector('#panel-metrics .mx-tile:nth-child(4)'); const tip = JSON.parse(t.getAttribute('data-tip')); return t.querySelector('.v').textContent === '100' && /^Rarest sin$/i.test(t.querySelector('.k').textContent) && /^A wall of hashtags\. 100 posts, so far\.$/.test(t.querySelector('.n').textContent) && /fired least/.test(tip[1]) && /100 of 500 posts/.test(tip[2]) && !/Unseen/.test(document.getElementById('panel-metrics').textContent); }));
+  check('the numbers: while a check has never fired, the fourth tile says so and names it, instead of calling another the rarest', await api.evaluate(() => { const t = document.querySelector('#panel-metrics .mx-tile:nth-child(4)'); const tip = JSON.parse(t.getAttribute('data-tip')); return t.querySelector('.v').textContent === '1' && /^Never fired$/i.test(t.querySelector('.k').textContent) && /^A check nobody trips\. Not once in 500 posts\.$/.test(t.querySelector('.n').textContent) && /never fired/.test(tip[1]) && /1 of 3 checks/.test(tip[2]); }));
   check('the numbers: combos are listed as pairs, with both definitions on hover, on their own denominator', await api.evaluate(() => { const li = document.querySelector('#mx-combos li'); const tip = JSON.parse(li.getAttribute('data-tip')); return /Excited to announce \+ A wall of hashtags/.test(li.textContent) && /Anywhere counts/.test(tip[1]) && /And: /.test(tip[1]) && /250 of 500/.test(tip[2]); }));
   check('the numbers: the sins are one grey, with the category written under each name', await api.evaluate(() => { const li = document.querySelector('#mx-rules li'); return /Inauthenticity/.test(li.querySelector('.c').textContent) && !document.querySelector('#mx-rules .mx-fill[style*="--c"]'); }));
   check('the numbers: "Not in English" is listed as not countable, not as never fired', await api.evaluate(() => { document.getElementById('mx-more') && document.getElementById('mx-more').click(); const li = [...document.querySelectorAll('#mx-rules li')].find(l => /Not in English/.test(l.textContent)); const ok = li && /not counted here/.test(li.textContent); document.getElementById('mx-more') && document.getElementById('mx-more').click(); return ok; }));
@@ -1089,6 +1131,10 @@ check('Right from the last tab wraps to the first, and only one tab is in the Ta
   check('the numbers: no em dash, no sample notice off localhost data, no sideways scroll', !/\u2014/.test(seen.text) && !/Sample figures/.test(seen.text) && seen.scroll);
   check('the numbers: the chart says what it shows to a screen reader', await api.evaluate(() => (l => /^Posts by score\. 0 to 0\.9: 2%; /.test(l) && /barely sucks: 60%/.test(l) && /sucks completely: 2%\.$/.test(l))(document.querySelector('#panel-metrics svg').getAttribute('aria-label'))));
 
+  { const d = figures(500); d.rules[2].n = 7; body = d; }
+  await api.goto(httpUrl + '#how-it-works'); await api.goto(httpUrl + '#the-numbers'); await api.reload();
+  await api.waitForSelector('#panel-metrics .mx-sec', { timeout: 5000 });
+  check('the numbers: once every check has fired, the fourth tile names the rarest, gated the way the leaders are', await api.evaluate(() => { const t = document.querySelector('#panel-metrics .mx-tile:nth-child(4)'); return t.querySelector('.v').textContent === '7' && /^Rarest sin$/i.test(t.querySelector('.k').textContent) && /^A check nobody trips\. 7 posts, so far\.$/.test(t.querySelector('.n').textContent); }), await api.evaluate(() => document.querySelector('#panel-metrics .mx-tile:nth-child(4)').textContent));
   body = figures(12);
   await api.goto(httpUrl + '#how-it-works'); await api.goto(httpUrl + '#the-numbers'); await api.reload();
   await api.waitForSelector('#panel-metrics .mx-sec', { timeout: 5000 });
@@ -1218,6 +1264,7 @@ rm.on('pageerror', e => errs.push(e.message));
 await rm.goto(indexUrl);
 await rm.click('[data-spec="0"]');
 await rm.waitForSelector('#report:not([hidden])', { timeout: 20000 });
+await rm.click('#game-link');
 await rm.evaluate(() => document.getElementById('game-stage').scrollIntoView());
 await rm.waitForTimeout(400);
 const frames = await rm.evaluate(async () => {
