@@ -457,11 +457,14 @@ const fold = await mob.evaluate(() => {
   const ta = document.getElementById('post').getBoundingClientRect();
   const brand = document.querySelector('.brand').getBoundingClientRect();
   const toggle = document.getElementById('themetoggle').getBoundingClientRect();
-  return { taTop: ta.top, sameRow: Math.abs(brand.top - toggle.top) < brand.height + 8, scrollW: document.documentElement.scrollWidth };
+  const link = document.getElementById('whatsnewbtn').getBoundingClientRect();
+  const overlaps = r => r.left < brand.right && r.right > brand.left && r.top < brand.bottom && r.bottom > brand.top;
+  return { taTop: ta.top, clear: !overlaps(toggle) && !overlaps(link) && toggle.top < ta.top && link.top < ta.top, scrollW: document.documentElement.scrollWidth };
 });
 console.log('textarea top  :', Math.round(fold.taTop) + 'px at 375 wide');
 check('textarea top is within the first fold (< 700px)', fold.taTop < 700, Math.round(fold.taTop));
-check('theme toggle sits on the masthead row', fold.sameRow);
+check('the header actions sit in the masthead, never on the logo, above the box', fold.clear);
+check('375: the four tabs sit on one row, one line each, and keep their full names for assistive tech', await mob.evaluate(() => { const b = [...document.querySelectorAll('.tab-btn')].filter(x => !x.hidden); const tops = new Set(b.map(x => Math.round(x.getBoundingClientRect().top))); return b.length === 4 && tops.size === 1 && b.every(x => x.getBoundingClientRect().height <= 48) && /Roast my post/.test(b[0].textContent) && /The numbers/.test(b[2].textContent); }));
 check('no horizontal overflow at 375', fold.scrollW <= 375, fold.scrollW);
 check('375: the options are folded and Analyze sits under the box', await mob.evaluate(() => !document.getElementById('options').open && document.getElementById('run').getBoundingClientRect().top < document.getElementById('options').getBoundingClientRect().top));
 await mob.click('[data-spec="0"]');

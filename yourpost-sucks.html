@@ -282,6 +282,8 @@ body.meaner .brand-flag .flag-red{opacity:1}
 }
 
 .tab-btn[hidden]{display:none}
+.tab-btn .tb-short{display:none}
+.tab-btn{white-space:nowrap}
 .tab-btn:hover{color:var(--ink-2)}
 .tab-btn[aria-selected="true"]{color:var(--ink);border-bottom-color:var(--ink)}
 .tab-btn:focus-visible{outline:2px solid var(--cool);outline-offset:2px}
@@ -870,8 +872,11 @@ ol.changes .crewrite .lbl{
 #lab-mount[hidden]{display:none}
 @media (max-width:599px){
   
-  .tabs{gap:14px}
-  .tab-btn{font-size:13px;letter-spacing:.04em}
+  .tabs{gap:12px}
+  .tab-btn{font-size:12.5px;letter-spacing:.03em}
+  .tab-btn .tb-long{display:none}
+  .tab-btn .tb-short{display:inline}
+  [data-theme="rainbow"] .brand::after{content:none}
 }
 
 .tipline{margin:18px 0 0;font-size:14px;color:var(--ink-3);line-height:1.55}
@@ -1080,6 +1085,11 @@ ul.cg-list li::before{content:"\2022";position:absolute;left:0;color:var(--ink-4
   .wrap{padding-top:22px}
   header{padding-bottom:14px;margin-bottom:18px}
   .masthead-row{flex-wrap:nowrap}
+  
+  @media (max-width:479px){
+    .masthead-row{flex-wrap:wrap;row-gap:4px}
+    .head-actions{margin-left:auto}
+  }
   .brand{font-size:21px}
   .brand-flag{margin-right:2px}
   @media (max-width:419px){.brand{font-size:19px}}
@@ -1157,9 +1167,9 @@ ul.cg-list li::before{content:"\2022";position:absolute;left:0;color:var(--ink-4
 </header>
 
 <div class="tabs" role="tablist" aria-label="Site sections">
-  <button class="tab-btn" id="tab-tool" role="tab" type="button" aria-selected="true" aria-controls="panel-tool">Roast my post</button>
-  <button class="tab-btn" id="tab-explain" role="tab" type="button" aria-selected="false" tabindex="-1" aria-controls="panel-explain">How this works</button>
-  <button class="tab-btn" id="tab-metrics" role="tab" type="button" aria-selected="false" tabindex="-1" aria-controls="panel-metrics">The numbers</button>
+    <button class="tab-btn" id="tab-tool" role="tab" type="button" aria-selected="true" aria-controls="panel-tool"><span class="tb-long">Roast my post</span><span class="tb-short" aria-hidden="true">Roast</span></button>
+  <button class="tab-btn" id="tab-explain" role="tab" type="button" aria-selected="false" tabindex="-1" aria-controls="panel-explain"><span class="tb-long">How this works</span><span class="tb-short" aria-hidden="true">How it works</span></button>
+  <button class="tab-btn" id="tab-metrics" role="tab" type="button" aria-selected="false" tabindex="-1" aria-controls="panel-metrics"><span class="tb-long">The numbers</span><span class="tb-short" aria-hidden="true">Numbers</span></button>
   <button class="tab-btn" id="tab-lab" role="tab" type="button" aria-selected="false" tabindex="-1" aria-controls="panel-lab"><span class="lab-ico" id="lab-ico" aria-hidden="true">&#128274;</span> Soon</button>
 </div>
 
