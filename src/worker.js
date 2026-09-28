@@ -2151,6 +2151,11 @@ async function handleAnalyze(request, env, ctx) {
   // the rules-written report with reason "turnstile", never a bare 403.
   if (!(await turnstileOK(env, body.turnstileToken, ip))) return degrade('turnstile');
 
+  // Conscientious objector mode (the page's No AI option): the checklist's
+  // report and nothing else. Counted like every scored post, and past the
+  // bot check like every counted post; no key, no budget, no model call.
+  if (body.noAI === true) return degrade('objector');
+
   if (!env.ANTHROPIC_API_KEY) return degrade('no_key');
 
   // 4. Budget first, and charged in the same step as it is checked, so a

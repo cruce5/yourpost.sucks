@@ -1639,6 +1639,14 @@ console.log('\n=== the ticker ===');
   const noDO = baseEnv();
   const r = await (await go(noDO, from('/api/analyze', { post: NEUTRAL }))).json();
   check('ticker: no counter bound means no count, no error, and no number', r.mode === 'llm' && (await status(noDO)).ticker === null);
+  // Conscientious objector mode: the checklist's report, counted, no model.
+  const envO = baseEnv(); envO.COUNTERS = mockCounters(); llmCalls = 0; toneCalls = 0;
+  const beforeO = (await status(envO)).ticker;
+  const o = await (await worker.fetch(post({ post: BAD, noAI: true }), envO, ctx)).json();
+  await new Promise(z => setTimeout(z, 40));
+  const so = await readStats(envO);
+  check('objector: No AI gets the checklist\'s report from the server, with no model call and no spend', o.mode === 'rules' && o.reason === 'objector' && o.report && typeof o.report.overall === 'number' && o.adds === undefined && llmCalls === 0 && toneCalls === 0 && await spentMicros(envO) === 0, JSON.stringify([o.mode, o.reason, llmCalls, await spentMicros(envO)]));
+  check('  ...and it is counted like every scored post: the ticker, the post tallies, and its own reason', (await status(envO)).ticker === beforeO + 1 && so['post:all'] === 1 && so['analyze:why:objector'] === 1 && so['analyze:mode:rules'] === 1, JSON.stringify(so).slice(0, 200));
 }
 
 console.log('\n=== the numbers, for anyone: an allow-list ===');

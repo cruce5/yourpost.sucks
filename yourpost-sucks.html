@@ -1172,7 +1172,7 @@ ul.cg-list li::before{content:"\2022";position:absolute;left:0;color:var(--ink-4
       <input type="checkbox" id="noai">
       No AI. Score it with the checklist alone.
     </label>
-    <p class="media-note">Conscientious objector mode. Nothing is sent anywhere: the 47 checks run here, in your browser. No AI write-up, no read, no rewrite.</p>
+    <p class="media-note">Conscientious objector mode. The 47 checks score it and nothing else does: no AI write-up, no read, no rewrite. Counted like every post, kept like every post, which is not at all.</p>
   </div>
   </details>
     <div class="specimens" id="specimens">
@@ -1254,7 +1254,7 @@ ul.cg-list li::before{content:"\2022";position:absolute;left:0;color:var(--ink-4
 
   <section class="explain-block">
     <h2 class="sec">What happens to what you paste</h2>
-    <p>The post and any image go to Anthropic's API for the commentary. Here, nothing about your post is stored: not the post, not the image, not the AI's notes, not a rewrite. Every paste gets its own fresh read. Your browser keeps the last report in this tab's memory until the tab closes, so a reload does not lose it; that never leaves your browser. Tick <i>No AI</i> under Options and nothing is sent at all: the checklist runs in your browser and your post goes nowhere. What is kept here is counters: an hourly per-IP limit that expires on its own, and tallies of scores and which checks fired, with no text in them. No accounts, no analytics on your text.</p>
+    <p>The post and any image go to Anthropic's API for the commentary. Here, nothing about your post is stored: not the post, not the image, not the AI's notes, not a rewrite. Every paste gets its own fresh read. Your browser keeps the last report in this tab's memory until the tab closes, so a reload does not lose it; that never leaves your browser. Tick <i>No AI</i> under Options and the checklist scores your post on its own: nothing about it goes to Anthropic, and it is counted and forgotten like every other post. What is kept here is counters: an hourly per-IP limit that expires on its own, and tallies of scores and which checks fired, with no text in them. No accounts, no analytics on your text.</p>
   </section>
 
 </div>
@@ -1309,7 +1309,7 @@ ul.cg-list li::before{content:"\2022";position:absolute;left:0;color:var(--ink-4
   <ul class="wn-list">
     <li id="wn-noai">
       <b>Conscientious objector mode.</b>
-      Tick <i>No AI</i> under Options and the checklist scores your post alone, in your browser. No AI write-up, no read, no rewrite, and your post goes nowhere.
+      Tick <i>No AI</i> under Options and the checklist scores your post alone. No AI write-up, no read, no rewrite.
     </li>
     <li id="wn-metrics">
       <b>The numbers tab is open.</b>
@@ -4198,7 +4198,7 @@ ul.cg-list li::before{content:"\2022";position:absolute;left:0;color:var(--ink-4
     timeout:          'The AI ran past 30 seconds. Your browser\'s checklist wrote this one.',
     server:           'The server had a problem. Your browser scored it instead.',
     offline:          'No internet connection. Everything ran right here in your browser, score included.',
-    objector:         'AI was not asked. You switched it off, so the checklist wrote this one, here in your browser, and your post went nowhere.'
+    objector:         'AI was not asked. You switched it off, so the checklist wrote this one.'
   };
   var BADGE_CLARIFIER = 'The badge says who wrote the commentary, not how your post was written.';
   var MODE_DESC = 'Who wrote the commentary on this report. Not a judgment of how your post was written.';
@@ -4841,10 +4841,7 @@ ul.cg-list li::before{content:"\2022";position:absolute;left:0;color:var(--ink-4
     var meaner = $('#meaner').checked;
     if (textSource !== 'permalink') dropPermalink();
 
-    if ($('#noai').checked){
-      render(YPS.analyze(text, flags), 'rules', 'objector', text);
-      return;
-    }
+    var objector = $('#noai').checked;
 
     inFlight = true;
     setBusy(true);
@@ -4891,7 +4888,7 @@ ul.cg-list li::before{content:"\2022";position:absolute;left:0;color:var(--ink-4
       fetch('api/analyze', {
         method: 'POST',
         headers: { 'content-type': 'application/json', 'x-yps-source': textSource },
-        body: JSON.stringify({ post: text, flags: flags, meaner: meaner, image: attachedImage || undefined, turnstileToken: turnstileToken }),
+        body: JSON.stringify({ post: text, flags: flags, meaner: meaner, image: objector ? undefined : (attachedImage || undefined), noAI: objector || undefined, turnstileToken: turnstileToken }),
         signal: ctrl ? ctrl.signal : undefined
       }).then(function(res){
         if (res.ok) return res.json();

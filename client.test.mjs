@@ -773,14 +773,14 @@ check('error is above the kept rewrite, not replacing it', await api.evaluate(()
 
 // 8a0b. conscientious objector mode: the checklist alone, nothing sent
 {
-  let calls = 0;
+  let calls = 0, sentBody = null;
   await api.unroute('**/api/analyze');
-  await api.route('**/api/analyze', route => { calls++; return route.fulfill({ status: 500, body: 'should not be asked' }); });
+  await api.route('**/api/analyze', async route => { calls++; sentBody = route.request().postDataJSON(); if (sentBody.noAI !== true) return route.fulfill({ status: 500, body: 'no' }); const report = await api.evaluate(t => window.YourPostSucks.analyze(t), sentBody.post); return route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ mode: 'rules', reason: 'objector', report }) }); });
   await api.goto(httpUrl);
   await api.check('#noai');
   await api.click('[data-spec="0"]');
   await api.waitForSelector('#report:not([hidden])', { timeout: 20000 });
-  check('with No AI ticked, the post is scored in the browser and the server is never asked', calls === 0 && (await api.textContent('.mode')).trim() === 'checklist-only commentary' && /You switched it off/.test(await api.textContent('.mode-why')) && /Same score either way/.test(await api.textContent('.mode-why')), calls + ' calls');
+  check('with No AI ticked, the post goes to the server flagged noAI, with no image, and comes back as the checklist\'s report', calls === 1 && sentBody && sentBody.noAI === true && sentBody.image === undefined && (await api.textContent('.mode')).trim() === 'checklist-only commentary' && /You switched it off/.test(await api.textContent('.mode-why')) && /Same score either way/.test(await api.textContent('.mode-why')), calls + ' calls ' + JSON.stringify(sentBody && Object.keys(sentBody)));
   check('  ...the rewrite section says why there is none, and the options summary says no AI', /No AI, by your choice/.test(await api.textContent('#sec-reword')) && /no AI/.test(await api.textContent('#opt-state')));
   check('  ...and the score is the engine\'s own', await api.evaluate(() => document.querySelector('.hero .num').textContent === window.YourPostSucks.analyze(document.getElementById('post').value).overall.toFixed(1)));
   await api.goto(httpUrl);
