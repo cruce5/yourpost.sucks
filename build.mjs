@@ -5,6 +5,7 @@
  *   yourpost-sucks.html — identical standalone copy that works from file://
  */
 import { readFileSync, writeFileSync, mkdirSync } from 'node:fs';
+import vm from 'node:vm';
 
 const engine = readFileSync('src/engine.js', 'utf8');
 const shell = readFileSync('shell.html', 'utf8');
@@ -22,9 +23,38 @@ writeFileSync('src/engine.mjs',
 // silently corrupts countPhrase's regex-escaping and breaks every phrase
 // containing a regex metacharacter ("thoughts?", "agree?"). Guarded by
 // parity.mjs, which compares browser-computed scores against node.
-const page = shell.replace('/*ENGINE*/', () => engine);
+const page = strip(shell.replace('/*ENGINE*/', () => engine));
 writeFileSync('public/index.html', page);
 writeFileSync('yourpost-sucks.html', page);
+
+/* The design record travels in shell.html and src/engine.js, not on the
+ * wire: about 31 percent of the built page's bytes were comments
+ * (Reconcilers, episode 6). Stripped conservatively, so nothing that is
+ * not a comment can be mistaken for one:
+ *   script: block comments that begin a line, and whole-line // comments
+ *           (a comment after code on the same line is left, since a //
+ *           inside a string or a regex is not one);
+ *   style:  every comment (CSS has no strings here that hold one);
+ *   markup: HTML comments outside script and style.
+ * Every script block is parsed afterwards, so a strip that broke one
+ * fails the build instead of the page. */
+function strip(html) {
+  const parts = html.split(/(<script>[\s\S]*?<\/script>|<style>[\s\S]*?<\/style>)/);
+  return parts.map(part => {
+    if (part.startsWith('<script>')) {
+      const body = part.slice(8, -9)
+        .replace(/^[ \t]*\/\*[\s\S]*?\*\/[ \t]*\r?\n?/gm, '')
+        .replace(/^[ \t]*\/\/.*\r?\n?/gm, '')
+        .replace(/\n{3,}/g, '\n\n');
+      new vm.Script(body);
+      return '<script>' + body + '</script>';
+    }
+    if (part.startsWith('<style>')) {
+      return '<style>' + part.slice(7, -8).replace(/\/\*[\s\S]*?\*\//g, '').replace(/\n{3,}/g, '\n\n') + '</style>';
+    }
+    return part.replace(/<!--[\s\S]*?-->\r?\n?/g, '').replace(/\n{3,}/g, '\n\n');
+  }).join('');
+}
 
 // The craft reference is authored as markdown and compiled into the Worker so
 // the prompt and the human-readable doc can never drift apart.
