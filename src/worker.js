@@ -1427,6 +1427,27 @@ Every roast is delivered this way: the check's finding stays and is named plainl
 Never claim the post has no notes: the findings stand, kindly delivered. Never state or imply a score, points, a grade, reach or engagement. No emoji, no dashes.
 Hard limits, unchanged: never remark on who the writer is from how they write or what they mention: not their first language, nationality, age, gender, religion, family, health, or whether they have a job. Nothing about grief, illness, redundancy, or hardship is a subject for either praise or jokes.`;
 
+/* Said again at the end of the user turn, where an instruction weighs most:
+ * with the note alone the model warmed up and skipped the compliment
+ * (2026-09-28, the jeans post). */
+const NICE_TURN = `
+
+REGISTER: THE KIND EDIT. Every roast opens with what the writer got right in that very line, then names the finding as the one step left. The headline and the one-liner are proud of them. The brutal take is a pat on the head, and its final sentence is a compliment about the reader that has nothing to do with the post (their hair, their posture, their timing), stated as fact. Same findings, same score.`;
+/* And guaranteed: when the model still forgets, the management adds it.
+ * Picked by the post's length, so the same post gets the same line. */
+const COMPLIMENTS = [
+  'Also, your hair looks great today.',
+  'Also, your posture right now is excellent.',
+  'Also, your timing is impeccable.',
+  'Also, you have a very good name for a byline.'
+];
+const COMPLIMENT_RE = /\b(?:hair|posture|timing|byline|smile|handwriting|taste)\b/i;
+function withCompliment(brutal, post) {
+  const b = String(brutal || '').trim();
+  if (!b || COMPLIMENT_RE.test(b)) return b;
+  return b.replace(/\s*$/, '') + ' ' + COMPLIMENTS[String(post).length % COMPLIMENTS.length];
+}
+
 /* Where the harsher register is never used, whatever the reader ticked.
  * Decided here, by pattern, before any model is involved, because an
  * instruction is a request and this has to be a guarantee: a sweep of the
@@ -1465,7 +1486,7 @@ async function callClaude(env, post, report, image, m, meaner, nice) {
   const ctrl = new AbortController();
   const timer = setTimeout(() => ctrl.abort(), LLM_TIMEOUT_MS);
   try {
-    const userMessage = buildUserMessage(post, report, !!image);
+    const userMessage = buildUserMessage(post, report, !!image) + (nice ? NICE_TURN : '');
     // The image, when present, goes in as its own content block ahead of
     // the text, the ordering Anthropic recommends for a single image plus
     // a question about it. Text-only requests keep sending a bare string,
@@ -2255,7 +2276,7 @@ async function handleAnalyze(request, env, ctx) {
     ...report,
     oneLiner: llm.oneLiner,
     roasts: llm.roasts,
-    brutal: llm.brutal,
+    brutal: nice ? withCompliment(llm.brutal, post) : llm.brutal,
     advice: llm.advice.length ? llm.advice : report.advice,
     adviceNote: llm.advice.length ? report.adviceNote : 'no action required',
     changes: llm.changes,
