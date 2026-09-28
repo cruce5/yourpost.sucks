@@ -95,11 +95,20 @@ check('pirate flag in the footer is aria-hidden', await p.evaluate(() => {
   return a.querySelector('[aria-hidden="true"]') !== null && a.textContent.includes('Bill Yost');
 }));
 check('explain-tab summaries carry an aria-hidden glyph span', await p.evaluate(() => Array.from(document.querySelectorAll('.check-group summary')).every(s => s.querySelector('.cg-glyph[aria-hidden="true"]'))));
-check('font stylesheet loads non-blocking with a noscript fallback', await p.evaluate(() => {
+check('font stylesheet loads non-blocking with a noscript fallback, and no inline handler (the script policy is by hash)', await p.evaluate(() => {
   const link = document.querySelector('link[href*="fonts.googleapis.com/css2"]');
   const ns = document.querySelector('noscript');
-  return !!link && link.hasAttribute('onload') && !!ns && ns.textContent.includes('fonts.googleapis.com');
+  return !!link && !link.hasAttribute('onload') && !document.querySelector('[onload],[onclick],[onerror]') && !!ns && ns.textContent.includes('fonts.googleapis.com');
 }));
+check('the built headers name every inline script by hash and allow no other', await (async () => {
+  const { createHash } = await import('node:crypto');
+  const page = await readFile(join(publicDir, 'index.html'), 'utf8');
+  const headers = await readFile(join(publicDir, '_headers'), 'utf8');
+  const csp = (headers.match(/Content-Security-Policy: (.*)/) || [])[1] || '';
+  const script = (csp.match(/script-src ([^;]*)/) || [])[1] || '';
+  const want = [...page.matchAll(/<script>([\s\S]*?)<\/script>/g)].map(m => "'sha256-" + createHash('sha256').update(m[1], 'utf8').digest('base64') + "'");
+  return want.length >= 3 && want.every(h => script.includes(h)) && !/unsafe-inline/.test(script);
+})());
 
 // --- built CSS: tokens, focus ring, layout rules
 const css = await p.evaluate(() => Array.from(document.querySelectorAll('style')).map(s => s.textContent).join('\n'));
@@ -1190,8 +1199,9 @@ check('Right from the last tab wraps to the first, and only one tab is in the Ta
 {
   let uiAsks = 0, unlockBodies = [], interestBodies = [], unlockStatus = 401, uiOpen = false;
   await api.route('**/api/lab/ui', route => { uiAsks++; return uiOpen
-    ? route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ css: '.lab-proof{color:rgb(1,2,3)}', html: '<div class="panel"><p class="lab-proof" id="lab-proof">inside</p></div>', js: 'window.__labRan = typeof window.YPSLab.handoff === "function" && typeof window.YPSLab.token === "function";' }) })
+    ? route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ css: '.lab-proof{color:rgb(1,2,3)}', html: '<div class="panel"><p class="lab-proof" id="lab-proof">inside</p></div>', jsSrc: 'api/lab/ui.js' }) })
     : route.fulfill({ status: 401, contentType: 'application/json', body: '{"error":"locked"}' }); });
+  await api.route('**/api/lab/ui.js', route => route.fulfill({ status: 200, contentType: 'text/javascript', body: 'window.__labRan = typeof window.YPSLab.handoff === "function" && typeof window.YPSLab.token === "function";' }));
   await api.route('**/api/lab/unlock', route => { unlockBodies.push(route.request().postDataJSON()); if (unlockStatus === 200) uiOpen = true; return route.fulfill({ status: unlockStatus, contentType: 'application/json', body: '{}' }); });
   await api.route('**/api/lab/interest', route => { interestBodies.push(route.request().postDataJSON()); return route.fulfill({ status: 200, contentType: 'application/json', body: '{"ok":true}' }); });
 

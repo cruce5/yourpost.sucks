@@ -1,7 +1,9 @@
 # Response headers for every static asset the Worker serves from ./public
 # (Workers Assets reads this file; the /api/* routes set their own headers
 # in src/worker.js). The CSP is built from what shell.html actually loads:
-# inline scripts and styles (the engine is inlined by build.mjs), JetBrains
+# the page's own inline scripts, each named by its hash (build.mjs writes
+# the sha256 list into script-src from the page as built; the room's script
+# arrives by URL, under 'self'), inline styles, JetBrains
 # Mono from Google Fonts, the canvas share-card exported as data:/blob:
 # images, fetch() to the same-origin /api, and Cloudflare Turnstile when a
 # site key is configured. Anything not on that list is blocked by default,
@@ -16,7 +18,7 @@
   Referrer-Policy: strict-origin-when-cross-origin
   Permissions-Policy: camera=(), microphone=(), geolocation=()
   Strict-Transport-Security: max-age=31536000; includeSubDomains
-  Content-Security-Policy: default-src 'self'; script-src 'self' 'unsafe-inline' https://challenges.cloudflare.com https://static.cloudflareinsights.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; img-src 'self' data: blob:; connect-src 'self' https://cloudflareinsights.com; frame-src https://challenges.cloudflare.com; frame-ancestors 'none'; base-uri 'self'; form-action 'self'
+  Content-Security-Policy: default-src 'self'; script-src 'self' 'sha256-NRBlksvhavImA63axnpmOp9+4MJPuNyliVrf8gytw4s=' 'sha256-K701j951ZyEDroeoDF8H/qSJ6khk4Dr0pH3bxvQiBjk=' 'sha256-GqBimr3LaNU3/+WusVkYayheoOUwHPLd7u9dkoVXYeI=' 'sha256-Ll4Iv/MXHg9cQlkq4PcgrXvfusug3B7k7muJb9NKyEo=' https://challenges.cloudflare.com https://static.cloudflareinsights.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; img-src 'self' data: blob:; connect-src 'self' https://cloudflareinsights.com; frame-src https://challenges.cloudflare.com; frame-ancestors 'none'; base-uri 'self'; form-action 'self'
 # The page inlines the whole engine, so a deploy that changes a rule must
 # reach visitors on their next load, not after a CDN TTL.
 /

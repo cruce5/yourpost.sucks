@@ -6,6 +6,7 @@
  */
 import { readFileSync, writeFileSync, mkdirSync } from 'node:fs';
 import vm from 'node:vm';
+import { createHash } from 'node:crypto';
 
 const engine = readFileSync('src/engine.js', 'utf8');
 const shell = readFileSync('shell.html', 'utf8');
@@ -26,6 +27,18 @@ writeFileSync('src/engine.mjs',
 const page = strip(shell.replace('/*ENGINE*/', () => engine));
 writeFileSync('public/index.html', page);
 writeFileSync('yourpost-sucks.html', page);
+
+// The script policy names each inline script by its hash instead of
+// allowing every inline script (Reconcilers, episode 6: 'unsafe-inline' was
+// the one thing left in the CSP that a hash policy could replace). Written
+// here, from the page as built, so the header and the page cannot drift.
+const hashes = [...page.matchAll(/<script>([\s\S]*?)<\/script>/g)].map(m => "'sha256-" + createHash('sha256').update(m[1], 'utf8').digest('base64') + "'");
+const headersPath = 'public/_headers';
+const headers = readFileSync(headersPath, 'utf8');
+const policy = /script-src 'self'(?: 'sha256-[A-Za-z0-9+\/=]+')*(?: 'unsafe-inline')?/;
+if (!policy.test(headers)) throw new Error('public/_headers lost its script-src');
+const next = headers.replace(policy, "script-src 'self' " + hashes.join(' '));
+if (next !== headers) writeFileSync(headersPath, next);
 
 /* The design record travels in shell.html and src/engine.js, not on the
  * wire: about 31 percent of the built page's bytes were comments

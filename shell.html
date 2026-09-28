@@ -24,7 +24,7 @@
      the page stays on system fonts on purpose (fast, neutral, "internal
      report" register) — this is the one place that earns a real typeface,
      because it's the one number the whole page exists to deliver. -->
-<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@800&display=swap" rel="stylesheet" media="print" onload="this.media='all'">
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@800&display=swap" rel="stylesheet" media="print">
 <noscript><link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@800&display=swap" rel="stylesheet"></noscript>
 <script>
   // No data-theme attribute on <html> by default: dark is the bare-root
@@ -38,6 +38,11 @@
     var t = localStorage.getItem('theme');
     if (t === 'light' || t === 'dark') document.documentElement.setAttribute('data-theme', t);
   } catch (e) {}
+  // The display face loads without blocking: print media until it has
+  // arrived, then all. This was an onload attribute on the link, which a
+  // hash-based script policy cannot allow (episode 6).
+  var fontLink = document.querySelector('link[href*="fonts.googleapis.com"][media="print"]');
+  if (fontLink) fontLink.addEventListener('load', function(){ fontLink.media = 'all'; }, { once: true });
 </script>
 
 <!-- Open Graph / Twitter Card. Live on the real domain now. -->
@@ -1414,7 +1419,7 @@ ul.cg-list li::before{content:"\2022";position:absolute;left:0;color:var(--ink-4
      nowhere but there, so reading this source gets nobody any closer. -->
 <!-- The numbers: what the posts were like, never how the site is doing. -->
 <div id="panel-metrics" role="tabpanel" aria-labelledby="tab-metrics" tabindex="-1" hidden>
-  <p class="mx-intro">Everyone's posts, added up. Scores, sins, and how long the AI took. Not one word of anyone's post is in here. Just the damage.</p>
+  <p class="mx-intro">Everyone's posts, added up. Scores, sins, and how long the AI took. A sin here is one of the report's checks, fired. Not one word of anyone's post is in here. Just the damage.</p>
   <div class="panel lab-lock" id="mx-lock" hidden>
     <div class="lab-pad" aria-hidden="true">&#128274;</div>
     <h2 class="lab-h" id="mx-lock-h" tabindex="-1">The numbers are locked while someone checks them.</h2>
@@ -1586,7 +1591,7 @@ ul.cg-list li::before{content:"\2022";position:absolute;left:0;color:var(--ink-4
       <i>The numbers</i> adds up everyone's posts: where the scores land and which sins are the most popular. It counts them. It doesn't keep a word of them.
     </li>
   </ul>
-  <p class="wn-tip">Every AI-written report costs me about a penny, and the site is free with no sign-up and no ads. If it has made one of your posts less bad, <a data-tip="whatsnew" href="https://buymeacoffee.com/billyost" target="_blank" rel="noopener noreferrer">buy me a coffee</a>.</p>
+  <p class="wn-tip">Every AI-written report costs me a penny or two, and the site is free with no sign-up and no ads. If it has made one of your posts less bad, <a data-tip="whatsnew" href="https://buymeacoffee.com/billyost" target="_blank" rel="noopener noreferrer">buy me a coffee</a>.</p>
   <div class="wn-actions"><button class="btn-ghost" id="wn-done" type="button">Got it</button></div>
 </dialog>
 
@@ -2550,7 +2555,7 @@ ul.cg-list li::before{content:"\2022";position:absolute;left:0;color:var(--ink-4
         receipts +
       '</details>' +
     '</section>';
-    if (aiMode) html += tipLine('The AI part of this report cost me about a penny.');
+    if (aiMode) html += tipLine('The AI part of this report cost me a penny, maybe two.');
 
     rep.innerHTML = html;
     rep.hidden = false;
@@ -2728,9 +2733,9 @@ ul.cg-list li::before{content:"\2022";position:absolute;left:0;color:var(--ink-4
     var KEY = 'yps_tipask_v1', AT = [5, 25], DELAY_MS = 2500;
     var COPY = [
       ['Five reports in. Thank you for using this.',
-       'Each AI-written report costs me about a penny, and I am happy to keep paying. If you would like to chip in, one coffee covers the next 500 or so.'],
+       'Each AI-written report costs me a penny or two, and I am happy to keep paying. If you would like to chip in, one coffee covers the next 500 or so.'],
       ['Twenty-five reports. You are my best customer.',
-       'Still about a penny each, still happy to pay it. One coffee keeps the lights on for everyone after you.']
+       'Still a penny or two each, still happy to pay it. One coffee keeps the lights on for everyone after you.']
     ];
     function load(){ try { var s = JSON.parse(localStorage.getItem(KEY)); if (s && typeof s.n === 'number') return s; } catch (e) {} return { n: 0, shown: 0, done: false }; }
     function save(s){ try { localStorage.setItem(KEY, JSON.stringify(s)); return true; } catch (e) { return false; } }
@@ -4214,7 +4219,10 @@ ul.cg-list li::before{content:"\2022";position:absolute;left:0;color:var(--ink-4
     $('#lab-lock').hidden = true;
     $('#lab-mount').hidden = false;
     $('#lab-ico').textContent = '\uD83D\uDD13';
-    if (p.js){ var sc = document.createElement('script'); sc.textContent = p.js; document.body.appendChild(sc); }
+    // The room's script comes by address, not as text: an inline script the
+    // page writes itself is exactly what the script policy refuses now, and
+    // a same-origin URL behind the same cookie is allowed under 'self'.
+    if (typeof p.jsSrc === 'string' && /^api\/lab\/[a-z.-]+$/.test(p.jsSrc)){ var sc = document.createElement('script'); sc.src = p.jsSrc; document.body.appendChild(sc); }
   }
   function labFetchUI(){
     return fetch('api/lab/ui', { credentials: 'same-origin', cache: 'no-store' })
