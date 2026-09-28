@@ -785,6 +785,12 @@ check('error is above the kept rewrite, not replacing it', await api.evaluate(()
   check('  ...and the score is the engine\'s own', await api.evaluate(() => document.querySelector('.hero .num').textContent === window.YourPostSucks.analyze(document.getElementById('post').value).overall.toFixed(1)));
   await api.goto(httpUrl);
   check('  ...and the choice is remembered', await api.evaluate(() => document.getElementById('noai').checked));
+  check('  ...and meaner, which only changes the AI write-up, is greyed out, unticked and says why while No AI is on', await api.evaluate(() => { const m = document.getElementById('meaner'); return m.disabled && !m.checked && document.querySelector('.meaner-row').classList.contains('off') && /no write-up to be meaner in/.test(document.querySelector('.meaner-row .media-note').textContent) && !document.body.classList.contains('meaner'); }));
+  await api.evaluate(() => { localStorage.setItem('yps_meaner_v1', '1'); });
+  await api.uncheck('#noai');
+  check('  ...and comes back, with the saved choice, once No AI is off', await api.evaluate(() => { const m = document.getElementById('meaner'); return !m.disabled && m.checked && !document.querySelector('.meaner-row').classList.contains('off') && document.body.classList.contains('meaner'); }));
+  await api.evaluate(() => { localStorage.setItem('yps_meaner_v1', '0'); });
+  await api.check('#noai');
   await api.uncheck('#noai');
   await api.goto(httpUrl);
   check('  ...and unticking it is remembered too', await api.evaluate(() => !document.getElementById('noai').checked));

@@ -445,6 +445,10 @@ textarea::placeholder{color:var(--ink-4)}
   font-size:15px;color:var(--ink-3);line-height:1.45;cursor:pointer;
 }
 .media-toggle input{flex:none;cursor:pointer;width:18px;height:18px}
+/* Meaner changes only the AI's write-up, so under No AI it is greyed out
+   and off, with the note saying why. */
+.meaner-row.off .media-toggle{opacity:.45;cursor:not-allowed}
+.meaner-row.off .media-toggle input{cursor:not-allowed}
 /* The options fold (episode 6): Analyze sits under the box; the attachment
    and the register are one tap away on a phone and open on a wider screen. */
 .options{margin-top:12px}
@@ -3431,8 +3435,23 @@ ul.cg-list li::before{content:"\2022";position:absolute;left:0;color:var(--ink-4
 
   try { if (localStorage.getItem(MEANER_KEY) === '1') $('#meaner').checked = true; } catch (e) {}
   try { if (localStorage.getItem(NOAI_KEY) === '1') $('#noai').checked = true; } catch (e) {}
+  /* No AI means no write-up, so there is nothing for meaner to be meaner
+     in: the box is greyed out and unticked while No AI is on, and the saved
+     choice comes back when it goes off. The saved choice itself is never
+     touched by this. */
+  var MEANER_NOTE = 'Same score, no mercy. At your own risk.';
+  function applyObjector(){
+    var on = $('#noai').checked, m = $('#meaner'), row = document.querySelector('.meaner-row');
+    m.disabled = on;
+    if (on) m.checked = false;
+    else { try { m.checked = localStorage.getItem(MEANER_KEY) === '1'; } catch (e) { m.checked = false; } }
+    row.classList.toggle('off', on);
+    row.querySelector('.media-note').textContent = on ? 'Off while No AI is on: there is no write-up to be meaner in.' : MEANER_NOTE;
+    paintMeaner(); queueRead(); optionsState();
+  }
   $('#noai').addEventListener('change', function(){
     try { localStorage.setItem(NOAI_KEY, this.checked ? '1' : '0'); } catch (e) {}
+    applyObjector();
   });
   paintMeaner();
   paintRead();
@@ -3454,6 +3473,7 @@ ul.cg-list li::before{content:"\2022";position:absolute;left:0;color:var(--ink-4
     d.open = window.innerWidth >= 600;
     optionsState();
   })();
+  applyObjector();
   /* The bonus round is behind a footer link (episode 6: 510px of a second
      product under every report). */
   (function(){

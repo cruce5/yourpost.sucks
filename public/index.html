@@ -368,6 +368,9 @@ textarea::placeholder{color:var(--ink-4)}
 }
 .media-toggle input{flex:none;cursor:pointer;width:18px;height:18px}
 
+.meaner-row.off .media-toggle{opacity:.45;cursor:not-allowed}
+.meaner-row.off .media-toggle input{cursor:not-allowed}
+
 .options{margin-top:12px}
 .options > summary{
   list-style:none;cursor:pointer;min-height:44px;display:flex;align-items:center;gap:8px;
@@ -5138,8 +5141,19 @@ ul.cg-list li::before{content:"\2022";position:absolute;left:0;color:var(--ink-4
 
   try { if (localStorage.getItem(MEANER_KEY) === '1') $('#meaner').checked = true; } catch (e) {}
   try { if (localStorage.getItem(NOAI_KEY) === '1') $('#noai').checked = true; } catch (e) {}
+  var MEANER_NOTE = 'Same score, no mercy. At your own risk.';
+  function applyObjector(){
+    var on = $('#noai').checked, m = $('#meaner'), row = document.querySelector('.meaner-row');
+    m.disabled = on;
+    if (on) m.checked = false;
+    else { try { m.checked = localStorage.getItem(MEANER_KEY) === '1'; } catch (e) { m.checked = false; } }
+    row.classList.toggle('off', on);
+    row.querySelector('.media-note').textContent = on ? 'Off while No AI is on: there is no write-up to be meaner in.' : MEANER_NOTE;
+    paintMeaner(); queueRead(); optionsState();
+  }
   $('#noai').addEventListener('change', function(){
     try { localStorage.setItem(NOAI_KEY, this.checked ? '1' : '0'); } catch (e) {}
+    applyObjector();
   });
   paintMeaner();
   paintRead();
@@ -5158,6 +5172,7 @@ ul.cg-list li::before{content:"\2022";position:absolute;left:0;color:var(--ink-4
     d.open = window.innerWidth >= 600;
     optionsState();
   })();
+  applyObjector();
   (function(){
     var link = $('#game-link'), gw = $('#game-wrap'); if (!link || !gw) return;
     link.addEventListener('click', function(e){
