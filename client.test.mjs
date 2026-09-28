@@ -828,7 +828,7 @@ check('error is above the kept rewrite, not replacing it', await api.evaluate(()
   check("what's new: the header link opens it as a modal", await api.evaluate(() => document.getElementById('whatsnew').open));
   check('  ...and it says what changed in plain words', await api.evaluate(() => {
     const t = document.getElementById('whatsnew').textContent;
-    return /numbers tab is open/i.test(t) && /three screens shorter/i.test(t) && /What it adds/.test(t) && /reload no longer loses/i.test(t) && /Fixes\./.test(t);
+    return /numbers tab is open/i.test(t) && /report is shorter/i.test(t) && /What it adds/.test(t) && /reload keeps your report/i.test(t) && /Fixes\./.test(t) && t.length < 1400;
   }));
   check('  ...and it asks for a coffee, labelled as its own place', await api.evaluate(() => {
     const a = document.querySelector('#whatsnew a[data-tip="whatsnew"]');
