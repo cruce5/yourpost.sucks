@@ -1469,12 +1469,13 @@ const MEANER_OFF = new RegExp('\\b(?:' + [
   // age
   'at \\d{2}\\b', '\\d{2} years old', 'too old', 'too young', 'my age', 'ageis\\w*', 'retirement', 'boomer', 'gen ?z',
   // family
-  'mom', 'mum', 'mother\\w*', 'dad', 'father\\w*', 'parent\\w*', 'pregnan\\w*', 'maternity', 'paternity', 'ivf', 'miscarr\\w*', 'caregiv\\w*', 'single (?:mom|mum|dad|parent)', 'widow\\w*', 'divorc\\w*',
+  'mom', 'mum', 'mother\\w*', 'dad', 'father\\w*', 'parent\\w*', 'wife', 'husband', 'spouse', 'son', 'sons', 'daughters?', 'kids?', 'child(?:ren)?', 'bab(?:y|ies)', 'newborn', 'toddler', 'pregnan\\w*', 'maternity', 'paternity', 'ivf', 'miscarr\\w*', 'caregiv\\w*', 'single (?:mom|mum|dad|parent)', 'widow\\w*', 'divorc\\w*',
   // origin and language
   'immigra\\w*', 'visa', 'h-?1b', 'green card', 'refugee', 'asylum', 'first[- ]generation', 'first[- ]gen', 'second language', 'my english', 'accent', 'my country', 'back home',
   // identity
   'as a (?:woman|man|black|latina?o?|asian|muslim|christian|jew|gay|lesbian|trans\\w*|queer|veteran|person of colou?r)', 'women in', 'woman in', 'lgbt\\w*', 'gay', 'lesbian', 'trans(?:gender)?', 'queer', 'non-?binary', 'pronouns', 'racis\\w*', 'sexis\\w*', 'discriminat\\w*', 'harass\\w*', 'veteran', 'military service',
   // health and money
+  'depress\\w*', 'anxiety', 'mental health', 'cancer', 'grie\\w*', 'died', 'death', 'passed away', 'funeral', 'non-?native', 'first language',
   'disab\\w*', 'neurodiver\\w*', 'adhd', 'autis\\w*', 'dyslex\\w*', 'burn(?:ed|t)? ?out', 'burnout', 'therapy', 'therapist', 'sober', 'sobriety', 'in recovery', 'rehab', '(?:in|my|student|medical|credit card) debt', 'evict\\w*', 'homeless\\w*', 'food stamps'
 ].join('|') + ')\\b', 'i');
 

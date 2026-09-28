@@ -46,7 +46,10 @@ export const signOffName = post => { const m = String(post).match(/(?:(?:^|\n)[ 
 /* A sign-off is where the joke lives ("-- I'm Bill and 72 people have blocked
  * me"). A number that only appears there is a punchline, and a sentence that
  * repeats it has reported the joke as a fact (the corpus run of 2026-09-27). */
-const signOff = post => { const m = String(post).match(/(?:(?:^|\n)[ \t]*|--+[ \t]*)I[\u2019']?m[ \t]+[\s\S]*$/u); return m ? m[0] : ''; };
+// The last line only, with or without a dash lead-in: a post that opens
+// "I'm" used to be read as all sign-off, so every number in it counted as a
+// punchline (Sieve M8).
+const signOff = post => { const m = String(post).replace(/\s+$/, '').match(/(?:^|\n)[ \t]*(?:--+[ \t]*)?I[\u2019']?m[ \t]+[^\n]*$/u); return m ? m[0] : ''; };
 const repeatsPunchline = (line, post) => {
   const tail = signOff(post); if (!tail) return false;
   const body = String(post).slice(0, String(post).length - tail.length);

@@ -149,6 +149,7 @@
     var t = String(text == null ? '' : text);
     t = t.normalize('NFKC');
     t = t.replace(/[­​‌⁠﻿]/g, '')
+         .replace(/[\u2010\u2011]/g, '-')
          .replace(STRAY_ZWJ_RE, '')
          .replace(/\r\n?/g, '\n')
          .replace(/[‘’‚‛]/g, "'")
@@ -345,6 +346,18 @@
     return distinctOccurrences(hits);
   }
 
+  /* "Who else" and "who should be" are asks only as a question: "the guy who
+     should be sweating this" is not bait (Sieve M6). Outside a sentence that
+     ends in "?" they are blanked, keeping every offset where it was. */
+  var ASK_QUESTION_ONLY = /\b(?:who else|who should be|who should we)\b[^.?!\n]*(?:[.?!\n]|$)/g;
+  function askLower(lower) {
+    return lower.replace(ASK_QUESTION_ONLY, function (m) {
+      // A question in the past tense is a story ("Who else was in the room?
+      // Nobody."), not a request.
+      var ask = /\?$/.test(m) && !/^(?:who else|who should be|who should we)\s+(?:was|were|had|did|knew|saw|came|went|got|would have|could have)\b/.test(m);
+      return ask ? m : m.replace(/^(who else|who should be|who should we)/, function (p) { return p.replace(/./g, ' '); });
+    });
+  }
   function anyPhrase(ctx, list) {
     logList(list);
     var hits = [];
@@ -470,11 +483,15 @@
       }
     }
 
-    var ACRONYMS = /^(CEO|CTO|CFO|COO|CIO|CDO|CHRO|SQL|API|AI|ML|HR|KPI|OKR|ROI|SAAS|B2B|B2C|USA|USD|UK|EU|IPO|VP|PM|UX|UI|LLM|GPT|ETL|ELT|BI|CTE|DBT|AWS|GCP|CSV|PDF|NBA|NFL|MLB|PHD|MBA|TLDR|TL|DR|OKRS|KPIS|NPS|CSAT|ARR|MRR|QBR|EOD|EOY|WFH|PTO|RTO|IRL|FYI|ASAP|LOL|OK|AMA|IPA|SVP|EVP|OOO)$/i;
+    var ACRONYMS = /^(CEO|CTO|CFO|COO|CIO|CDO|CHRO|SQL|API|AI|ML|HR|KPI|OKR|ROI|SAAS|B2B|B2C|USA|US|USD|UK|EU|COVID|HIPAA|GDPR|SOC|SNAFU|NASA|FAANG|MAANG|IPO|VP|PM|UX|UI|LLM|GPT|ETL|ELT|BI|CTE|DBT|AWS|GCP|CSV|PDF|NBA|NFL|MLB|PHD|MBA|TLDR|TL|DR|OKRS|KPIS|NPS|CSAT|ARR|MRR|QBR|EOD|EOY|WFH|PTO|RTO|IRL|FYI|ASAP|LOL|OK|AMA|IPA|SVP|EVP|OOO)$/i;
 
     // Acronyms that name a thing (MRI, SQL, NPS, an employer's ticker) are
     // concrete references. Chat shorthand and interjections are not.
-    var CHATTER = /^(OK|LOL|LMAO|OMG|TBH|IMO|IMHO|FYI|ASAP|IRL|AMA|IDK|BTW|FWIW|SMH|NBD|TL|DR|TLDR|WTF|PS|AM|PM|OOO|RN|TY|YW|BRB|DM|DMS)$/;
+    var CHATTER = /^(OK|LOL|LMAO|OMG|TBH|IMO|IMHO|FYI|ASAP|IRL|AMA|IDK|BTW|FWIW|SMH|NBD|TL|DR|TLDR|WTF|PS|AM|PM|OOO|RN|TY|YW|BRB|DM|DMS|ICYMI)$/;
+    // The audience writes its tools in capitals: spreadsheet functions and
+    // SQL keywords are names, not volume (Sieve M2: three data posts in the
+    // corpus were scored as shouting for VLOOKUP and LEFT JOIN).
+    var TOOL_WORDS = /^(VLOOKUP|XLOOKUP|HLOOKUP|INDEX|MATCH|SUMIF|SUMIFS|COUNTIF|COUNTIFS|IFERROR|IFS|LEFT|RIGHT|INNER|OUTER|FULL|JOIN|DISTINCT|SELECT|FROM|WHERE|GROUP|ORDER|BY|HAVING|UNION|ALL|FALSE|TRUE|NULL|AND|OR|NOT|CASE|WHEN|THEN|ELSE|END|LIMIT|AS|ON|WITH|OVER|PARTITION)$/;
     var acronyms = [];
     var acrToks = stripped.match(/\b[A-Z][A-Z0-9]{1,4}\b/g) || [];
     for (var ax = 0; ax < acrToks.length; ax++) {
@@ -485,7 +502,11 @@
     // a lone acronym is fine; shouting is a long word or two caps words in a row
     var allCaps = [];
     var capRun = strippedProse.match(/\b[A-Z]{2,}(?:[ ,]+[A-Z]{2,})+\b/g) || [];
-    for (var ac = 0; ac < capRun.length; ac++) allCaps.push(capRun[ac]);
+    for (var ac = 0; ac < capRun.length; ac++) {
+      var runToks = capRun[ac].split(/[ ,]+/);
+      if (runToks.every(function (t) { return ACRONYMS.test(t) || TOOL_WORDS.test(t); })) continue;
+      allCaps.push(capRun[ac]);
+    }
     /* A long caps word is usually emphasis, but in a citation it is a name:
        a conference, a body, a standard ("the SANER 2025 study", "an ASHRAE
        standard", "the NHANES cohort"). Those were being scored as shouting,
@@ -498,7 +519,7 @@
     var CITE_NEAR = /(\b(?:19|20)\d{2}\b|\bn\s*=\s*\d|\bet al\b|\b(?:stud(?:y|ies)|paper|papers|research|journal|conference|workshop|symposium|proceedings|dataset|corpus|cohort|benchmark|standard|protocol|framework|guidelines?|trial|survey|preprint|arxiv|doi|edition|revision|spec|specification)\b|https?:\/\/)/i;
     var SHOUTED = /^(NEVER|ALWAYS|EVERY|EVERYONE|EVERYTHING|ANYONE|SOMEONE|NOTHING|PLEASE|STOP|LISTEN|ATTENTION|IMPORTANT|URGENT|BREAKING|ANNOUNCEMENT|HIRING|TODAY|FINALLY|THANK|THANKS|CONGRATS|CONGRATULATIONS|WINNER|LIMITED|MUST|SHOULD|ACTUALLY|LITERALLY|REALLY|SERIOUSLY|ABSOLUTELY|INSANE|CRAZY|AMAZING|INCREDIBLE|UNBELIEVABLE|MASSIVE|HUGE|EXCITED|PROUD|HONORED|HONOURED|HUMBLED|RIGHT|WRONG|TRUTH|FACTS|SHARE|REPOST|COMMENT|FOLLOW|APPLY|READ|WATCH|REMEMBER|UNDERSTAND|WORKING|LEARNING|BUILDING|GROWTH|MINDSET|PEOPLE|LEADERS|LEADERSHIP|BUSINESS|CULTURE|WINNING|WITHOUT|BECAUSE|MYSELF|YOURSELF)$/;
     var capLong = (strippedProse.match(/\b[A-Z]{5,}\b/g) || []).filter(function (w) {
-      if (ACRONYMS.test(w)) return false;
+      if (ACRONYMS.test(w) || TOOL_WORDS.test(w)) return false;
       if (SHOUTED.test(w)) return true;
       // The window never includes the word being judged: a shouted
       // "WORKSHOP" or "RESEARCH" is a citation word in capitals and would
@@ -935,7 +956,10 @@
       // k/m/million suffix must be a whole token. "R$ 38 mil" used to be
       // captured as "$ 38 m": a Portuguese thousand sliced into an English
       // million, and quoted back to the author as a figure they never wrote.
-      var f = ctx.raw.match(/(?:R\$|\$|£|€)\d[\d,.]*(?:\s?(?:k|m|b|bn|million|billion)(?=$|\s|[.,;:!?)]))?|\b\d[\d,.]*\s?(k|m)\s?(arr|mrr|followers|subscribers|users|downloads|applicants|impressions)\b|\b\d{2,3}\s?%\s?(growth|increase|lift|more)\b|\b\d[\d,.]*\s?(figure|figures)\b/gi);
+      // (?<![\d,.]) keeps each digit run from restarting at every digit, which
+      // made this quadratic on "1.1.1.1..." (Sieve M1). The plain count needs
+      // 1,000 or more, so "3 users" is not a flex (Sieve M4).
+      var f = ctx.raw.match(/(?:R\$|\$|£|€|₹|¥)\d[\d,.]*(?:\s?(?:k|m|b|bn|million|billion|crore|lakh)(?=$|\s|[.,;:!?)]))?|(?<![\d,.])\b\d[\d,.]*\s?(?:k|m|million)\s?(?:arr|mrr|followers|subscribers|users|downloads|applicants|impressions)\b|(?<![\d,.])\b(?:\d{1,3}(?:,\d{3})+|\d{4,})\s?(?:followers|subscribers|users|downloads|applicants|impressions)\b|(?<![\d,.])\b\d{2,}(?:,\d{3})*\s?%\s?(?:growth|increase|lift|more|roi|return)\b|(?<![\d,.])\b\d[\d,.]*[\s-]?(?:figure|figures)\b/gi);
       if (!f) return null;
       f = f.filter(function (v) { return !isNumberRefuted(ctx, v.trim()); });
       if (!f.length) return null;
@@ -982,7 +1006,7 @@
   // its absence. A phrase added to one list and not the other produced a
   // roast and a compliment about the same sentence.
   var ASK_COMMENT = ['comment below', 'drop a comment', 'let me know in the comments',
-    'comment "', 'type yes', 'comment yes', 'drop a', 'sound off', 'i\'ll go first',
+    'comment "', 'type yes', 'comment yes', 'drop a like', 'drop a yes', 'drop an emoji', 'drop your thoughts', 'drop it below', 'drop them below', 'sound off', 'i\'ll go first',
     'who should be', 'who should we', 'any suggestions', 'suggestions welcome',
     'tag someone', 'tag a friend', 'who else', 'raise your hand', 'am i the only one',
     'thoughts?', 'agree?', 'am i wrong', 'change my mind', 'who\'s with me',
@@ -1005,7 +1029,7 @@
     label: 'Comment bait',
     dim: 'bait',
     test: function (ctx) {
-      var f = anyPhrase(ctx, ASK_COMMENT);
+      var f = anyPhrase({ lower: askLower(ctx.lower) }, ASK_COMMENT);
       if (!f.length) return null;
       var n = totalOf(f);
       return { n: n, vars: { n: n, p: f[0].phrase }, pen: { bait: clamp(2.4 + (n - 1) * 1.1, 0, 6.0), auth: clamp(0.8 * n, 0, 2.2) } };
@@ -1304,7 +1328,7 @@
     label: 'It is not just X, it is Y',
     dim: 'auth',
     test: function (ctx) {
-      var m = ctx.raw.match(/(?:it'?s|this is|that'?s|we'?re|i'?m)\s+not\s+(?:just|only|merely)\s+([^.,;!?\n]{2,40})[.,;]?\s*(?:it'?s|this is|that'?s|we'?re|i'?m|—|-)\s*([^.,;!?\n]{2,40})/i);
+      var m = ctx.raw.replace(/[’]/g, "'").match(/\b(?:[a-z]+'(?:s|re|m)\s+not|[a-z]+\s+(?:is|are|am)\s+not|[a-z]+\s+(?:isn't|aren't))\s+(?:just|only|merely)\s+([^.,;!?\n—]{2,40}?)\s*[.,;]?\s*(?:(?:it'?s|it is|this is|that'?s|that is|we'?re|we are|i'?m|i am|they'?re|they are|but(?: also)?)\b|—|\s-\s)\s*([^.,;!?\n]{2,40})/i);
       if (!m) return null;
       return { n: 1, vars: { a: m[1].trim(), b: m[2].trim() }, pen: { auth: 1.8, cring: 1.2 } };
     },
@@ -1641,10 +1665,10 @@
     test: function (ctx) {
       var first = (ctx.sentences[0] || '').toLowerCase();
       if (!first) return null;
-      var logistics = /\b(is back|join us|tune in|catch us|catch the|find us on|register|sign up|don't miss|coming soon|live (?:at|on)|streaming|new episode|previous episodes|learn more|more on|available on|subscribe|this (?:week|tuesday|wednesday|thursday|friday)|tomorrow at|rsvp|we'd love for you|link below)\b/;
+      var logistics = /\b(is back|join us|tune in|catch us|catch the|find us on|register (?:now|here|today|for (?:the|our|free|this|it)|at the link)|sign up|don't miss|coming soon|live (?:at|on)|streaming|new episode|previous episodes|learn more|more on (?:our|the) (?:podcast|episode|show|site|website|blog|channel)|available on|subscribe|this (?:week|tuesday|wednesday|thursday|friday)(?:'s)?\b[^.\n]{0,40}\b(?:episode|webinar|live|session|show|stream|podcast|event|talk|workshop|panel|guest)|tomorrow at|rsvp|we'd love for you|link below)\b/;
       if (!logistics.test(ctx.lower)) return null;
       // a human hook in the opening sentence buys it out of this
-      var opensWithBrand = /^[A-Z][\w'’-]*(\s+[A-Z][\w'’-]*){0,3}\s+(is|are|will|returns|comes)/.test(ctx.sentences[0] || '');
+      var opensWithBrand = /^(?!(?:I|It|We|This|That|There|They|You|He|She|Our|My|Your)\b)[A-Z][\w'’-]*(\s+[A-Z][\w'’-]*){0,3}\s+(is|are|will|returns|comes)/.test(ctx.sentences[0] || '');
       var early = logistics.test(first);
       if (!opensWithBrand && !early) return null;
       return {
@@ -2198,7 +2222,7 @@
    * ------------------------------------------------------------------ */
 
   var PITCH_LAUNCH_RE = /\b(launching|now (?:offering|open|enrolling|booking)|new (?:offering|program|cohort|course)|enrollment is open|now accepting (?:clients|applications)|spots? (?:are |is )?(?:open|available|limited)|accepting new clients|now booking|doors are open|now available for)\b/;
-  var PITCH_PRICE_RE = /\$\s?\d[\d,.]*\s?(k|m|b|million|billion)?|\b\d[\d,.]*\s?(k|m)\s?(arr|mrr|clients|students|spots|seats|sessions)\b/i;
+  var PITCH_PRICE_RE = /\$\s?\d[\d,.]*\s?(k|m|b|million|billion)?|(?<![\d,.])\b\d[\d,.]*\s?(k|m)\s?(arr|mrr|clients|students|spots|seats|sessions)\b/i;
 
   function pitchCheck(ctx) {
     return PITCH_LAUNCH_RE.test(ctx.lower) && PITCH_PRICE_RE.test(ctx.raw);
@@ -2402,14 +2426,21 @@
     'passed away', 'passed peacefully', 'rest in peace', 'in loving memory',
     'in memory of', 'celebration of life', 'obituary', 'condolences',
     // sexual violence and abuse
-    'sexual assault', 'sexually assaulted', 'raped', 'molested',
+    'sexual assault', 'sexually assaulted', 'raped', 'rape', 'molested',
     'domestic violence', 'abusive relationship', 'was abused',
     // pregnancy and fertility loss
     'miscarriage', 'miscarried', 'stillbirth', 'stillborn', 'lost our baby',
     'lost the baby', 'born sleeping',
     // acute medical crisis
     'in the icu', 'life support', 'palliative', 'terminal illness',
-    'hospitalized', 'hospitalised',
+    'hospitalized', 'hospitalised', 'coma', 'dementia', 'alzheimer\'?s', 'leukemia', 'leukaemia',
+    'tumou?r', 'lou gehrig',
+    // killed, as it happens to a person. "Killed it" and "killed the deal"
+    // are the platform's own idioms, so the bare word is tier 2 (below).
+    '(?:was|were|got|been) killed', 'killed (?:him|her|them)sel(?:f|ves)',
+    'killed in (?:a|an|the) (?:car|crash|accident|attack|shooting|war|fire|collision|explosion)',
+    // passed, when the subject is a person (Sieve, 2026-09-28)
+    '(?:mom|mum|mother|dad|father|wife|husband|partner|son|daughter|brother|sister|grandmother|grandfather|grandma|grandpa|nana|papa|uncle|aunt|cousin|friend|niece|nephew) passed(?! (?:the|a|an|on|over|up|by|out|along|me|us|it|this|that|him|her|them)\b)',
     // hate-motivated and identity-based violence (racial, religious, or
     // otherwise): a post recounting or organizing against real atrocities
     // like this is not roast material any more than a post about a death
@@ -2422,7 +2453,7 @@
 
   // Idioms that contain a tier 1 word and mean nothing of the kind. Removed
   // from the text before the tier 1 scan, and nothing else.
-  var SENSITIVE_T1_IDIOM = /\b(?:career|political|brand|commercial|social|professional|reputational) suicide\b|\boverdose (?:of|on) (?:buzzwords|jargon|acronyms|emoji|hashtags|caffeine|coffee|content|meetings|slides|optimism|nostalgia|information|data)\b/g;
+  var SENSITIVE_T1_IDIOM = /\bsuicide squad\b|\b(?:stack|product|project|brand|startup|company|tool|platform|app|budget|deal|campaign|feature|server|model|pipeline|dashboard|newsletter|podcast|business|roadmap|initiative) (?:is|was|are|were|has been|remains|stays) on life support\b|\b(?:career|political|brand|commercial|social|professional|reputational) suicide\b|\boverdose (?:of|on) (?:buzzwords|jargon|acronyms|emoji|hashtags|caffeine|coffee|content|meetings|slides|optimism|nostalgia|information|data|dashboards|slides|metrics|reports|spreadsheets|kpis|okrs|charts)\b|\bin memory of the (?:worker|process|server|cache|machine|model|gpu|cluster|browser|app|job|container|session|pod)\b/g;
 
   // Tier 2: words that are grave in a personal frame and ordinary in a
   // business one. They decline only with a first-person or family word in
@@ -2432,54 +2463,67 @@
     'died', 'death', 'cancer', 'chemo', 'chemotherapy', 'stroke', 'hospice',
     'funeral', 'remission', 'ivf', 'assault', 'assaulted', 'harassment',
     'abuse', 'abused', 'grief', 'grieving', 'lost my', 'we lost', 'heart attack',
-    'diagnosed', 'diagnosis', 'terminal', 'surgery', 'pet scan', 'infertility',
-    'stalked', 'in the hospital', 'out of the hospital', 'hospital stay',
+    'diagnosed', 'diagnosis', 'terminal', 'surgery', 'surgeries', 'pet scan', 'infertility',
+    'stalked', 'killed', 'in the hospital', 'out of the hospital', 'hospital stay',
     'rushed to the hospital', 'admitted to the hospital'
   ];
 
-  var PERSONAL_CONTEXT_RE = /\b(?:i|i'm|i've|i'd|me|my|our|mom|mum|mother|dad|father|wife|husband|partner|son|daughter|brother|sister|grandmother|grandfather|grandma|grandpa|friend|colleague|she|he|her|his|i was|i am|i've been)\b/;
+  var PERSONAL_CONTEXT_RE = /\b(?:i|i'm|i've|i'd|me|my|our|us|we|him|them|they|mom|mum|mother|dad|father|wife|husband|partner|son|daughter|brother|sister|grandmother|grandfather|grandma|grandpa|grandson|granddaughter|nana|papa|uncle|aunt|cousin|niece|nephew|kid|kids|child|children|baby|fiance|fiancee|boyfriend|girlfriend|family|friend|colleague|she|he|her|his|i was|i am|i've been)\b/;
 
   // Per-term frames in which the tier 2 word is plainly not about a person.
   // Each is deliberately narrow: a frame has to name the business or idiom
   // reading, not merely fail to name the personal one.
   var SENSITIVE_T2_FRAME = {
-    'cancer': /\bcancer[- ](?:screening|research|detection|diagnostic|diagnostics|cent(?:er|re)|institute|society|foundation|startup|study|data|dataset|model|drug|charity|awareness|biology|cell|cells|treatment (?:company|startup|market))\b|\b(?:anti-?cancer|oncology)\b/,
-    'died': /\b(?:project|battery|laptop|phone|server|deal|startup|company|idea|thread|feature|product|app|website|site|market|trend|meeting|joke|plan|initiative|momentum|engine|car|business|brand|proposal|hype|internet|wifi|connection|signal|link|page|post|account|channel|conversation|dream|pitch|bill|campaign|format|genre|platform|dashboard|pipeline|query|process|model)\s+(?:has\s+|had\s+|just\s+|finally\s+|basically\s+|officially\s+|quietly\s+)?died\b|\bdied\s+(?:down|out|off|on the vine|in committee|laughing|a (?:slow|quiet|quick) death|with the)\b/,
-    'death': /\bdeath (?:by|spiral|march|knell|row|valley|star|grip|metal|of a thousand)\b|\bto death\b|\bthe death of (?:the|a|an)\b/,
-    'stroke': /\bstrokes? of (?:luck|genius|a pen|the pen|midnight|brilliance|inspiration|fortune)\b|\b(?:one|two|three|four|five|a|\d+) strokes? (?:off|under|over|ahead|behind|back|better|worse)\b|\bbroad strokes\b|\bstroke (?:play|rate|count)\b/,
+    'cancer': /\bcancer[- ](?:screening|research|detection|diagnostic|diagnostics|society|foundation|startup|study|data|dataset|model|drug|charity|awareness|biology|cell|cells|treatment (?:company|startup|market))\b|\b(?:anti-?cancer|oncology)\b/,
+    'died': /\b(?:project|battery|laptop|phone|server|deal|startup|company|idea|thread|feature|product|app|website|site|market|trend|meeting|joke|plan|initiative|momentum|engine|car|business|brand|proposal|hype|internet|wifi|connection|signal|link|page|post|account|channel|conversation|dream|pitch|campaign|format|genre|platform|dashboard|pipeline|query|process|model|kernel|notebook|build|demo|excel|laptop battery|tab|browser)\s+(?:has\s+|had\s+|just\s+|finally\s+|basically\s+|officially\s+|quietly\s+)?died\b|\bdied\s+(?:down|out|off|on the vine|in committee|laughing|a (?:slow|quiet|quick) death)\b/,
+    // "Death to Marketing" is a slogan (and a conference), never a loss.
+    'death': /\bdeath (?:by|spiral|march|knell|row|valley|star|grip|metal|of a thousand|to)\b|\b(?:bored|scared|worked|loved|talked|frightened|tickled|worried|stressed|meetinged) to death\b|\bthe death of (?:the|a|an) (?:office|dashboard|spreadsheet|slide|slides|memo|meeting|newsletter|pivot table|blog|email|feature|product|brand|career ladder|salesman|salesperson|industry|job title|resume|cover letter|funnel|website|startup|trend|format)\b/,
+    'stroke': /\bstrokes? of (?:luck|genius|a pen|the pen|midnight|brilliance|inspiration|fortune)\b|\b(?:one|two|three|four|five|\d+) strokes? (?:off|under|over|ahead|behind|better|worse)\b|\bbroad strokes\b|\bstroke (?:play|rate|count)\b/,
     'remission': /\bremission of (?:fees?|debts?|tax|taxes|sins|penalt(?:y|ies)|charges|tuition)\b|\bfee remission\b/,
     'ivf': /\bivf (?:committee|clinic chain|industry|market|startup|company|sector|policy|coverage|benefits?|funding|legislation|bill|provider|providers)\b/,
-    'funeral': /\bfuneral (?:homes?|industry|directors?|business|insurance|chain|startup|market|costs?|planning)\b/,
+    // A funeral home as a client or a market is business; one where a
+    // service is planned is not (Sieve, 2026-09-28).
+    'funeral': /\bfuneral (?:industry|business|insurance|chain|startup|market)\b|\bfuneral homes? (?:chains?|business|industry|operators?|software|clients?|market|group|franchises?|sector|brand)\b/,
     'harassment': /\banti-?harassment\b|\bharassment (?:polic(?:y|ies)|training|prevention|laws?|compliance|module|course|reporting|hotline)\b/,
     'grief': /\bgood grief\b/,
     'heart attack': /\b(?:stock|stocks|market|markets|server|servers|dashboard|spreadsheet|deploy|pipeline|budget|database|cluster|chart|graph|index|price|prices|ticker|economy|team|inbox|slack|internet|cfo|finance team)\s+(?:had|having|nearly had|almost had|gave me|is having|just had)\s+a heart attack\b|\b(?:almost|nearly|practically|about) (?:had|gave \w+|gives me|give me) a heart attack\b/,
     'assault': /\bassault on (?:the|our|your|my) (?:senses|eyes|ears|inbox|attention|budget|calendar)\b|\bassault (?:rifle|course|weapon)\b/,
     'assaulted': /\bassaulted by (?:spreadsheets?|emails?|notifications?|ads?|meetings?|slack|pop-?ups?|dashboards?|acronyms|jargon|buzzwords|pings|pdfs?|data|numbers|charts?|noise|content|the algorithm|linkedin|banners?|marketing|tabs|invites|calendar)\b/,
-    'abuse': /\babuse of (?:power|process|the system|the platform|the api|privilege)\b|\b(?:api|platform|system|rate.?limit|substance|drug|alcohol|token|credit|resource|account|refund|promo|coupon) abuse\b|\babuse (?:detection|team|reports?|reporting|prevention|policy|filter)\b/,
+    'abuse': /\babuse of (?:power|process|the system|the platform|the api|privilege)\b|\b(?:api|platform|system|rate.?limit|token|credit|resource|account|refund|promo|coupon) abuse\b|\babuse (?:detection|team|reports?|reporting|prevention|policy|filter)\b/,
     'abused': /\babused (?:the|a|an|this|our|its|their|it|them) (?:system|platform|api|process|privilege|loophole|feature|metric|word|term)\b/,
-    'diagnosed': /\bdiagnos(?:ed|e|ing) (?:the|a|an|this|that|our|its|it|them|what|why|which|where)\b/,
-    'terminal': /\bterminal (?:window|command|session|emulator|velocity|value|output|app|tab|access|screen|node|prompt|ui|interface|commands?)\b|\b(?:airport|bus|train|ferry|payment|pos|card|bloomberg|shipping|container|cargo|the|a|my|your) terminal\b|\bterminals\b/,
+    // "Diagnosed the churn problem" is business; "diagnosed a year ago" is not.
+    'diagnosed': /\bdiagnos(?:ed|e|ing) (?:the|our|its|it|them|what|why|which|where|how)\b(?! (?:with|cancer|year|month|week|spring|summer|fall|autumn|winter)\b)|\bdiagnos(?:ed|e|ing) (?:a|an|this|that) (?:bug|issue|problem|leak|bottleneck|churn|drop|spike|gap|failure|outage|regression|error|mismatch|flaw|slowdown|decline)\b/,
+    'terminal': /\bterminal (?:window|command|session|emulator|velocity|value|output|app|tab|access|screen|node|prompt|ui|interface|commands?)\b|\b(?:airport|bus|train|ferry|payment|pos|card|bloomberg|shipping|container|cargo|the|a|my|your) terminal\b(?! (?:phase|stage|diagnosis|illness|cancer|condition)\b)|\bterminals\b/,
     'surgery': /\b(?:open-?heart|brain|plastic) surgery on (?:the|our|a|this) (?:codebase|schema|budget|org|process|deck|pipeline|database|roadmap)\b/,
     // "lost my job" and "we lost the deal" are not bereavement. These two
     // only count when the thing lost is a person (or a pet).
-    'lost my': /\blost my (?!(?:mom|mum|mother|dad|father|wife|husband|partner|son|daughter|brother|sister|grandmother|grandfather|grandma|grandpa|best friend|friend|baby|child|children|little one|uncle|aunt|cousin|nephew|niece|fiance|fiancee|boyfriend|girlfriend|dog|cat)\b)/,
-    'we lost': /\bwe lost (?!(?:my|our) (?:mom|mum|mother|dad|father|wife|husband|partner|son|daughter|brother|sister|grandmother|grandfather|grandma|grandpa|friend|baby|child|children|little one|uncle|aunt|cousin|nephew|niece|dog|cat)\b)/
+    // An allow-list of the things, not a deny-list of the people: "lost my
+    // beloved grandmother" slipped the old one (Sieve, 2026-09-28).
+    'lost my': /\blost my (?:job|role|position|deal|keys|voice|way|mind|temper|train of thought|place|password|phone|laptop|wallet|luggage|bag|streak|edge|nerve|cool|patience|mojo|footing|balance|bet|shot|chance|seat|spot|title|biggest client|client|clients|account|accounts|funding|savings|data|files|work|notes|draft|followers|audience|focus|appetite|lunch|breakfast|coffee|connection|signal|internet|wifi|login|badge|job title|hair)\b/,
+    'we lost': /\bwe lost (?:the|a|an|that|this|it|them|money|momentum|track|time|ground|focus|sight|steam|traction|customers?|clients?|deals?|funding|power|internet|wifi|signal|access|data|revenue|share|market share|\d)\b|\bwe lost our (?!(?:mom|mum|mother|dad|father|wife|husband|partner|son|daughter|brother|sister|grandmother|grandfather|grandma|grandpa|nana|papa|friend|baby|child|children|little one|uncle|aunt|cousin|nephew|niece|dog|cat)\b)/,
+    // The platform's own idioms for "did well" and "stopped".
+    'killed': /\bkilled it\b|\bkilled (?:off|two birds)\b|\bkilled (?:the|our|a|an|this|that|my|his|her|their|your) (?:deal|project|feature|idea|launch|product|roadmap|meeting|vibe|momentum|joke|mood|plan|budget|initiative|conversation|thread|pipeline|dashboard|report|campaign|process|app|buzz|energy|presentation|pitch|talk|demo|keynote|interview|quarter|game)\b/
   };
 
+  // A term also takes its plural ("miscarriages", "mass shootings"), which the
+  // closing word edge used to refuse (Sieve, 2026-09-28).
   function boundaryRe(term) {
     var pre = /^\w/.test(term) ? '\\b' : '';
-    var post = /\w$/.test(term) ? '\\b' : '';
-    return new RegExp(pre + term + post);
+    var post = /\w$/.test(term) ? '(?:s|es)?\\b' : '';
+    return new RegExp(pre + '(?:' + term + ')' + post);
   }
 
   function sensitiveCheck(ctx) {
-    var lower = ctx.lower.replace(SENSITIVE_T1_IDIOM, ' ');
+    var lower = ctx.lower.replace(/\u2013/g, '-').replace(SENSITIVE_T1_IDIOM, ' ');
     for (var i = 0; i < SENSITIVE_T1.length; i++) {
       if (boundaryRe(SENSITIVE_T1[i]).test(lower)) return SENSITIVE_T1[i];
     }
     for (var s = 0; s < ctx.sentences.length; s++) {
       var sent = ctx.sentences[s].toLowerCase();
-      if (!PERSONAL_CONTEXT_RE.test(sent)) continue;
+      // The person can be named a sentence either side: "The funeral was on
+      // Friday. Uncle Ray would have hated the speeches."
+      var near = [ctx.sentences[s - 1] || '', sent, ctx.sentences[s + 1] || ''].join(' ').toLowerCase();
+      if (!PERSONAL_CONTEXT_RE.test(near)) continue;
       for (var j = 0; j < SENSITIVE_T2.length; j++) {
         var term = SENSITIVE_T2[j];
         if (!boundaryRe(term).test(sent)) continue;
