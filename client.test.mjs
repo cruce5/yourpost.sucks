@@ -584,13 +584,13 @@ await api.unroute('**/api/analyze');
       note: c.querySelector('.adds-note').textContent, cls: c.className,
       groupName: c.getAttribute('aria-labelledby'),
       afterScore: !!(hero && (hero.compareDocumentPosition(c) & Node.DOCUMENT_POSITION_FOLLOWING)),
-      afterRoasts: !!(lastRoasts && (lastRoasts.compareDocumentPosition(c) & Node.DOCUMENT_POSITION_FOLLOWING)),
+      beforeRoasts: !!(lastRoasts && (c.compareDocumentPosition(document.querySelector('#report ul.roasts')) & Node.DOCUMENT_POSITION_FOLLOWING)),
       notInHero: !hero.contains(c), injected: !!c.querySelector('.adds-quote b'),
       strap: (document.querySelector('#report .ai-strap') || {}).textContent || '',
       copied: window.YPSClient.plainReport ? '' : ''
     };
   });
-  check('what it adds: a card after the roasts, outside the score block', card && card.afterScore && card.afterRoasts && card.notInHero, JSON.stringify(card));
+  check('what it adds: a card right after the score card and before the roasts, outside the score block', card && card.afterScore && card.beforeRoasts && card.notInHero, JSON.stringify(card));
   check('  ...naming the level in words, the sentence, and the line it judged by, under a third-level heading named with its verdict', card && card.k === 'What it adds' && card.kTag === 'H3' && card.groupName === 'adds-k adds-v' && card.v === 'Nothing' && card.line === reply.line && card.quote === reply.evidence && /adds-none/.test(card.cls));
   check('  ...saying it is an AI read, with the strap under the score saying once that it never touches the number', card && /AI read/.test(card.note) && /never touches the number/.test(card.strap));
   check('  ...and anything in the quote is text, never markup', card && !card.injected);

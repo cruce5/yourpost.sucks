@@ -1234,7 +1234,7 @@ ul.cg-list li::before{content:"\2022";position:absolute;left:0;color:var(--ink-4
       <li>say "as an AI"</li>
       <li>use an em dash</li>
     </ul>
-    <p>It also writes one card, <i>What it adds</i>, under the roasts: whether your post gives a reader anything, with one line quoted from your post word for word. No quote, no card. A post under 40 words with an image gets no card, since the read cannot see the picture. Nothing on the card is part of the score.</p>
+    <p>It also writes one card, <i>What it adds</i>, under the score: whether your post gives a reader anything, with one line quoted from your post word for word. No quote, no card. A post under 40 words with an image gets no card, since the read cannot see the picture. Nothing on the card is part of the score.</p>
     <p>It can still get a name or a detail wrong, so read a rewrite before you post it. Anything that fails is swapped for the checklist's version. The badge by the score says who wrote the commentary. It is not a verdict on whether your post is AI-written.</p>
   </section>
 
@@ -1308,7 +1308,7 @@ ul.cg-list li::before{content:"\2022";position:absolute;left:0;color:var(--ink-4
     </li>
     <li id="wn-adds">
       <b>What it adds.</b>
-      A card after the roasts says what a reader walks away with, quoted from your post. Never part of the score.
+      A card under the score says what a reader walks away with, quoted from your post. Never part of the score.
     </li>
     <li id="wn-memory">
       <b>A reload keeps your report.</b>
@@ -4254,7 +4254,6 @@ ul.cg-list li::before{content:"\2022";position:absolute;left:0;color:var(--ink-4
     var kick = (r.headline && !/^suckiness (?:report|index)$/i.test(r.headline)) ? r.headline : '';
     var jump = [];
     if (restRoasts.length) jump.push(['sec-roasts', 'Roasts']);
-    if (addsCard) jump.push(['adds-k', 'What it adds']);
     jump.push(['sec-fixes', 'Fixes'], ['sec-share', 'Share'], ['sec-receipts', 'Receipts']);
     var jumpNav = '<nav class="jump" aria-label="Report sections">' + jump.map(function(j){ return '<a href="#' + j[0] + '">' + j[1] + '</a>'; }).join('') + '</nav>';
     var strap = (aiMode || r.adds) ? '<p class="ai-strap">The number is the checklist\'s. AI writes the words around it and never touches the number.</p>' : '';
@@ -4283,8 +4282,9 @@ ul.cg-list li::before{content:"\2022";position:absolute;left:0;color:var(--ink-4
         '<div class="brutal" style="border-left-color:' + col + '">' + YPS.esc(r.brutal) + '</div>' +
         strap +
       '</div>' +
+      addsCard +
       (leadRoasts.length ? '<ul class="roasts roasts-lead">' + leadRoasts.map(roastLI).join('') + '</ul>' : '') +
-      (!restRoasts.length ? findingsNote + addsCard : '') +
+      (!restRoasts.length ? findingsNote : '') +
       jumpNav +
     '</section>';
 
@@ -4298,7 +4298,6 @@ ul.cg-list li::before{content:"\2022";position:absolute;left:0;color:var(--ink-4
           ? '<details class="roasts-more"><summary><span class="rm-glyph" aria-hidden="true"></span>' + folded.length + ' more</summary>' +
             '<ul class="roasts">' + folded.map(roastLI).join('') + '</ul></details>'
           : '') +
-        addsCard +
       '</section>';
     }
 
