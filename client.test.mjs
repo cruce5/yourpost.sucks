@@ -504,6 +504,12 @@ await api.goto(httpUrl);
 await api.click('[data-spec="0"]');
 await api.waitForTimeout(150);
 check('#live announces analyzing during a run', (await api.textContent('#live')) === 'Analyzing. This can take up to 30 seconds.');
+check('while the AI works, one true thing about the site shows under the buttons, and it changes', await (async () => {
+  const first = await api.evaluate(() => { const n = document.getElementById('busynote'); return n.hidden ? null : n.textContent; });
+  await api.waitForTimeout(3400);
+  const second = await api.evaluate(() => document.getElementById('busynote').textContent);
+  return !!first && first.length > 20 && second !== first && !/\u2014/.test(first + second);
+})());
 check('panel is aria-busy and the bar is showing during a run', await api.evaluate(() => document.getElementById('panel-tool').getAttribute('aria-busy') === 'true' && !document.getElementById('progress').hidden));
 check('#run is aria-disabled and specimens are disabled during a run', await api.evaluate(() => document.getElementById('run').getAttribute('aria-disabled') === 'true' && Array.from(document.querySelectorAll('[data-spec]')).every(b => b.disabled)));
 check('#clear reads Cancel during a run', (await api.textContent('#clear')).trim() === 'Cancel');
@@ -615,7 +621,7 @@ await api.unroute('**/api/analyze');
   await api.click('[data-spec="0"]');
   await api.waitForSelector('#report:not([hidden])', { timeout: 20000 });
   check('  ...and a level the page does not know is no card either', await api.evaluate(() => !document.querySelector('#report .adds')));
-  check('what it adds: the what\'s-new line says so, near the top of the list', await api.evaluate(() => { const li = document.getElementById('wn-adds'); return !!li && [...li.parentElement.children].indexOf(li) <= 2 && /never part of the score/i.test(li.textContent); }));
+  check('what it adds: the what\'s-new line says so, near the top of the list', await api.evaluate(() => { const li = document.getElementById('wn-adds'); return !!li && [...li.parentElement.children].indexOf(li) <= 3 && /never part of the score/i.test(li.textContent); }));
   await api.unroute('**/api/analyze');
 }
 
@@ -765,6 +771,30 @@ check('error is above the kept rewrite, not replacing it', await api.evaluate(()
   });
 }
 
+// 8a0b. conscientious objector mode: the checklist alone, nothing sent
+{
+  let calls = 0;
+  await api.unroute('**/api/analyze');
+  await api.route('**/api/analyze', route => { calls++; return route.fulfill({ status: 500, body: 'should not be asked' }); });
+  await api.goto(httpUrl);
+  await api.check('#noai');
+  await api.click('[data-spec="0"]');
+  await api.waitForSelector('#report:not([hidden])', { timeout: 20000 });
+  check('with No AI ticked, the post is scored in the browser and the server is never asked', calls === 0 && (await api.textContent('.mode')).trim() === 'checklist-only commentary' && /You switched it off/.test(await api.textContent('.mode-why')) && /Same score either way/.test(await api.textContent('.mode-why')), calls + ' calls');
+  check('  ...the rewrite section says why there is none, and the options summary says no AI', /No AI, by your choice/.test(await api.textContent('#sec-reword')) && /no AI/.test(await api.textContent('#opt-state')));
+  check('  ...and the score is the engine\'s own', await api.evaluate(() => document.querySelector('.hero .num').textContent === window.YourPostSucks.analyze(document.getElementById('post').value).overall.toFixed(1)));
+  await api.goto(httpUrl);
+  check('  ...and the choice is remembered', await api.evaluate(() => document.getElementById('noai').checked));
+  await api.uncheck('#noai');
+  await api.goto(httpUrl);
+  check('  ...and unticking it is remembered too', await api.evaluate(() => !document.getElementById('noai').checked));
+  await api.unroute('**/api/analyze');
+  await api.route('**/api/analyze', async route => {
+    const report = await api.evaluate(t => window.YourPostSucks.analyze(t), route.request().postDataJSON().post);
+    await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ mode: 'llm', report }) });
+  });
+}
+
 // 8a1. the footer ticker
 {
   check('ticker: offline there is no line at all, not a zero', await p.evaluate(() => document.getElementById('ticker').hidden));
@@ -836,7 +866,7 @@ check('error is above the kept rewrite, not replacing it', await api.evaluate(()
   check("what's new: the header link opens it as a modal", await api.evaluate(() => document.getElementById('whatsnew').open));
   check('  ...and it says what changed in plain words', await api.evaluate(() => {
     const t = document.getElementById('whatsnew').textContent;
-    return /numbers tab is open/i.test(t) && /report is shorter/i.test(t) && /What it adds/.test(t) && /reload keeps your report/i.test(t) && /Fixes\./.test(t) && t.length < 1400;
+    return /objector/i.test(t) && /numbers tab is open/i.test(t) && /report is shorter/i.test(t) && /What it adds/.test(t) && /reload keeps your report/i.test(t) && /Fixes\./.test(t) && t.length < 1600;
   }));
   check('  ...and it asks for a coffee, labelled as its own place', await api.evaluate(() => {
     const a = document.querySelector('#whatsnew a[data-tip="whatsnew"]');
@@ -1062,7 +1092,7 @@ check('Right from the last tab wraps to the first, and only one tab is in the Ta
     wait: { lt5s: 30, '5to10s': 50, '10to20s': 15, gt20s: 5 } });
   let body = figures(500), hits = 0;
   await api.goto(httpUrl);
-  check('the numbers: the what\'s-new line about it leads the list, and the tab is in the nav for everyone', await api.evaluate(() => { const li = document.getElementById('wn-metrics'); return !li.hidden && li === li.parentElement.firstElementChild && !document.getElementById('tab-metrics').hidden && [...document.querySelectorAll('.tab-btn')].filter(x => getComputedStyle(x).display !== 'none').length === 4 && !document.getElementById('mx-lock') && !document.querySelector('#panel-metrics input'); }));
+  check('the numbers: the what\'s-new line about it leads the list, and the tab is in the nav for everyone', await api.evaluate(() => { const li = document.getElementById('wn-metrics'); return !li.hidden && [...li.parentElement.children].indexOf(li) <= 1 && !document.getElementById('tab-metrics').hidden && [...document.querySelectorAll('.tab-btn')].filter(x => getComputedStyle(x).display !== 'none').length === 4 && !document.getElementById('mx-lock') && !document.querySelector('#panel-metrics input'); }));
   await api.route('**/api/metrics', route => { hits++; return route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(body) }); });
   await api.goto(httpUrl + '#the-numbers'); await api.reload();
   await api.waitForSelector('#panel-metrics .mx-sec', { timeout: 5000 });

@@ -1075,8 +1075,9 @@ ol.changes .crewrite .lbl{
 #card{width:100%;height:auto;border:1px solid var(--rule);border-radius:6px;display:block}
 .btn-primary.busy{opacity:.6;pointer-events:none}
 @keyframes blink{0%,100%{opacity:1}50%{opacity:.35}}
-.busy-note{font-family:var(--mono);font-size:14px;color:var(--ink-3);animation:blink 1.1s infinite}
-@media (prefers-reduced-motion: reduce){.busy-note{animation:none}}
+/* One true thing about this site at a time, while the AI works. Its own
+   row under the buttons, no blink: a sentence is read, not watched. */
+.busy-note{flex:1 0 100%;font-family:var(--mono);font-size:14px;line-height:1.5;color:var(--ink-3)}
 
 /* Indeterminate on purpose: a real call can come back from cache in under
    a second or take most of the server's 30s timeout, and there's no way
@@ -1362,7 +1363,7 @@ ul.cg-list li::before{content:"\2022";position:absolute;left:0;color:var(--ink-4
     <button class="btn-ghost" id="pastebtn" type="button" hidden>Paste</button>
     <button class="btn-ghost" id="clear">Clear</button>
     <span class="meta" id="counter">0 words</span>
-    <span class="busy-note" id="busynote" hidden>Still going. The AI takes a few seconds longer than the checklist does.</span>
+    <span class="busy-note" id="busynote" hidden></span>
   </div>
   <div class="progress-track" id="progress" hidden role="progressbar" aria-label="Analyzing"><div class="progress-thumb"></div></div>
   <div id="notices"></div>
@@ -1398,6 +1399,16 @@ ul.cg-list li::before{content:"\2022";position:absolute;left:0;color:var(--ink-4
       Be meaner about it.
     </label>
     <p class="media-note">Same score, no mercy. At your own risk.</p>
+  </div>
+  <!-- Conscientious objector mode: the checklist alone, here in the browser,
+       and nothing sent anywhere. The score is the same one the server would
+       give, because the server runs this same engine. -->
+  <div class="media-row noai-row">
+    <label class="media-toggle" for="noai">
+      <input type="checkbox" id="noai">
+      No AI. Score it with the checklist alone.
+    </label>
+    <p class="media-note">Conscientious objector mode. Nothing is sent anywhere: the 47 checks run here, in your browser. No AI write-up, no read, no rewrite.</p>
   </div>
   </details>
   <!-- Gone once a report is on the page, back on Clear. Each one roasts on
@@ -1487,7 +1498,7 @@ ul.cg-list li::before{content:"\2022";position:absolute;left:0;color:var(--ink-4
 
   <section class="explain-block">
     <h2 class="sec">What happens to what you paste</h2>
-    <p>The post and any image go to Anthropic's API for the commentary. Here, nothing about your post is stored: not the post, not the image, not the AI's notes, not a rewrite. Every paste gets its own fresh read. Your browser keeps the last report in this tab's memory until the tab closes, so a reload does not lose it; that never leaves your browser. What is kept here is counters: an hourly per-IP limit that expires on its own, and tallies of scores and which checks fired, with no text in them. No accounts, no analytics on your text.</p>
+    <p>The post and any image go to Anthropic's API for the commentary. Here, nothing about your post is stored: not the post, not the image, not the AI's notes, not a rewrite. Every paste gets its own fresh read. Your browser keeps the last report in this tab's memory until the tab closes, so a reload does not lose it; that never leaves your browser. Tick <i>No AI</i> under Options and nothing is sent at all: the checklist runs in your browser and your post goes nowhere. What is kept here is counters: an hourly per-IP limit that expires on its own, and tallies of scores and which checks fired, with no text in them. No accounts, no analytics on your text.</p>
   </section>
 
 </div>
@@ -1544,6 +1555,10 @@ ul.cg-list li::before{content:"\2022";position:absolute;left:0;color:var(--ink-4
   </div>
   <p class="wn-intro">What changed since you were last here.</p>
   <ul class="wn-list">
+    <li id="wn-noai">
+      <b>Conscientious objector mode.</b>
+      Tick <i>No AI</i> under Options and the checklist scores your post alone, in your browser. No AI write-up, no read, no rewrite, and your post goes nowhere.
+    </li>
     <li id="wn-metrics">
       <b>The numbers tab is open.</b>
       Everyone's posts, added up. Counts only, refreshed hourly.
@@ -2223,7 +2238,8 @@ ul.cg-list li::before{content:"\2022";position:absolute;left:0;color:var(--ink-4
     unscored:         'The checks are written for English, so this post was not scored and the AI was not asked.',
     timeout:          'The AI ran past 30 seconds. Your browser\'s checklist wrote this one.',
     server:           'The server had a problem. Your browser scored it instead.',
-    offline:          'No internet connection. Everything ran right here in your browser, score included.'
+    offline:          'No internet connection. Everything ran right here in your browser, score included.',
+    objector:         'AI was not asked. You switched it off, so the checklist wrote this one, here in your browser, and your post went nowhere.'
   };
   // Shown in the mode-why line whenever the commentary is not the AI's:
   // the one case where "checklist-only" next to a score on a tool with a
@@ -2449,6 +2465,7 @@ ul.cg-list li::before{content:"\2022";position:absolute;left:0;color:var(--ink-4
     // The analyze call already learned the AI is out of reach for this
     // visitor, so the reword button would be a wasted click. Say so.
     else if (reason === 'rate_limited' || reason === 'budget') rewordBody = '<div class="reword-note">' + YPS.esc(REWORD_UNAVAILABLE_NOTES[reason]) + '</div>';
+    else if (reason === 'objector') rewordBody = '<div class="reword-note">No AI, by your choice, so no rewrite. Untick <i>No AI</i> under Options to get one.</div>';
     else {
       rewordSub = '<b>one click; AI writes it, the checklist re-scores it</b>';
       rewordBody = '<div class="reword-actions">' +
@@ -3045,19 +3062,23 @@ ul.cg-list li::before{content:"\2022";position:absolute;left:0;color:var(--ink-4
     var meaner = $('#meaner').checked;
     if (textSource !== 'permalink') dropPermalink();
 
+    // Conscientious objector mode: the checklist alone, here, and nothing
+    // sent. The same engine the server runs, so the same score.
+    if ($('#noai').checked){
+      render(YPS.analyze(text, flags), 'rules', 'objector', text);
+      return;
+    }
+
     inFlight = true;
     setBusy(true);
-    var note = $('#busynote');
-    // The text note stays on its own 3.5s delay: that one is explaining a
-    // wait that's actually gone long, not confirming the click landed.
-    var noteTimer = setTimeout(function(){ note.hidden = false; }, 3500);
+    busyLines.start($('#busynote'));
     var ctrl = (typeof AbortController === 'function') ? new AbortController() : null;
     var fell_back = false;
     var killer = null;
 
     var settle = function(){
       inFlight = false; activeRun = null;
-      clearTimeout(noteTimer); clearTimeout(killer);
+      busyLines.stop(); clearTimeout(killer);
       setBusy(false);
     };
 
@@ -3335,6 +3356,43 @@ ul.cg-list li::before{content:"\2022";position:absolute;left:0;color:var(--ink-4
      remembered across visits in this browser. Storage can be unavailable or
      blocked; then it simply starts off, which is the right default. */
   var MEANER_KEY = 'yps_meaner_v1';
+  var NOAI_KEY = 'yps_noai_v1';
+  /* While the AI works: one true thing about this site at a time, from the
+     record of building it. Shuffled, no repeats until the pool is spent,
+     one every few seconds. Every line is a fact from the code or its
+     history; nothing here is invented for the wait. */
+  var BUSY_LINES = [
+    'The score is decided by 47 checks. The AI is only allowed to write the insults.',
+    'The AI never sees the score. It gets the list of what fired and writes around it.',
+    'Nothing written by a person scores 0.0. The floor is 0.2 and the ceiling is 9.9.',
+    'A double space once knocked a post from 8.3 to 3.6. The space is still judged, correctly now.',
+    'The rewrite has to beat your post on the same 47 checks, or you never see it.',
+    'Invented numbers in a rewrite are thrown out before you see them. Tripled counts as a number.',
+    'The engine runs in your browser too. If the AI falls over, the score does not.',
+    'There is a pirate flag in the masthead. It does something.',
+    'Ten robots audited this site last week and filed 86 findings. Most are fixed. Some were about the robots.',
+    '"Delve" fires a check. So does "Read that again."',
+    '"Humbled" fires a check. "Grateful" does too, unless you say for what.',
+    'An acronym in a citation used to count as shouting. SANER 2025 is not yelling.',
+    'The em dash check has never once been switched off.',
+    'The share card is 1080 by 1350 because LinkedIn shows anything else as a strip.',
+    'A reader once pasted a post that said nothing at all, and it scored 1.6. That is why What it adds exists.',
+    'Four thousand dots used to take the tokenizer 14 milliseconds. Now under 3.',
+    'This site answered 2,700 requests for a favicon it did not have before anyone drew one.',
+    'The reading bar was blue for a day. The owner wanted grey. It is grey.',
+    'Every AI report costs the owner a penny or two. He keeps paying.'
+  ];
+  var busyLines = (function(){
+    var timer = null, el = null, order = [];
+    function next(){
+      if (!order.length) order = BUSY_LINES.slice().sort(function(){ return Math.random() - 0.5; });
+      el.textContent = order.pop();
+    }
+    return {
+      start: function(node){ el = node; next(); el.hidden = false; clearInterval(timer); timer = setInterval(next, 3200); },
+      stop: function(){ clearInterval(timer); timer = null; if (el) el.hidden = true; }
+    };
+  })();
   /* Both pieces are always there; the register picks their colour.
      Changing colour collapses them without a transition and wipes them
      back on, because that is the only way a gradient can be seen to
@@ -3374,6 +3432,10 @@ ul.cg-list li::before{content:"\2022";position:absolute;left:0;color:var(--ink-4
   if (window.ResizeObserver) new ResizeObserver(queueRead).observe(document.body);
 
   try { if (localStorage.getItem(MEANER_KEY) === '1') $('#meaner').checked = true; } catch (e) {}
+  try { if (localStorage.getItem(NOAI_KEY) === '1') $('#noai').checked = true; } catch (e) {}
+  $('#noai').addEventListener('change', function(){
+    try { localStorage.setItem(NOAI_KEY, this.checked ? '1' : '0'); } catch (e) {}
+  });
   paintMeaner();
   paintRead();
   /* The options fold: open where there is room for it and whenever either
@@ -3386,10 +3448,11 @@ ul.cg-list li::before{content:"\2022";position:absolute;left:0;color:var(--ink-4
       var bits = [];
       if ($('#hasmedia').checked) bits.push(attachedImage ? 'image attached' : 'attachment');
       if ($('#meaner').checked) bits.push('meaner');
+      if ($('#noai').checked) bits.push('no AI');
       $('#opt-state').textContent = bits.length ? ' · ' + bits.join(' · ') : '';
       if (bits.length) d.open = true;
     };
-    ['#hasmedia', '#meaner'].forEach(function(sel){ $(sel).addEventListener('change', optionsState); });
+    ['#hasmedia', '#meaner', '#noai'].forEach(function(sel){ $(sel).addEventListener('change', optionsState); });
     d.open = window.innerWidth >= 600;
     optionsState();
   })();
@@ -3420,7 +3483,7 @@ ul.cg-list li::before{content:"\2022";position:absolute;left:0;color:var(--ink-4
      register), so it works for people who visited long before this
      existed. The seen marker is the version: bump WHATSNEW_VERSION when
      the list above changes and it shows once more, to everyone. */
-  var WHATSNEW_VERSION = '2026-09-28.2';
+  var WHATSNEW_VERSION = '2026-09-29.1';
   var WHATSNEW_KEY = 'yps_whatsnew_seen';
   var VISITED_KEYS = ['yps_theme', 'yps_receipts_open', 'yps_tipask_v1', 'yps_meaner_v1', 'yps_outrun_best_v1'];
   var wn = $('#whatsnew');
