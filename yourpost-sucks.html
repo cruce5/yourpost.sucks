@@ -18,7 +18,7 @@
 <script>
   try {
     var t = localStorage.getItem('theme');
-    if (t === 'light' || t === 'dark') document.documentElement.setAttribute('data-theme', t);
+    if (t === 'light' || t === 'dark' || t === 'rainbow') document.documentElement.setAttribute('data-theme', t);
   } catch (e) {}
   var fontLink = document.querySelector('link[href*="fonts.googleapis.com"][media="print"]');
   if (fontLink) fontLink.addEventListener('load', function(){ fontLink.media = 'all'; }, { once: true });
@@ -64,7 +64,7 @@
   --display: "JetBrains Mono", ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
 }
 @media (prefers-color-scheme: light){
-  :root:not([data-theme="dark"]){
+  :root:not([data-theme="dark"]):not([data-theme="rainbow"]){
     color-scheme: light;
     --plane:#eeece7;
     --plane-bg: radial-gradient(ellipse 1200px 800px at 50% -10%, #f8f5ee 0%, #eeece7 55%);
@@ -122,6 +122,37 @@
   --badge-llm-border:#2f5f96;
   --badge-llm-text:#7fb0e8;
 }
+
+:root[data-theme="rainbow"]{
+  color-scheme: light;
+  --plane:#ff5fd2;
+  --plane-bg:linear-gradient(115deg,#ff2d95,#ff8a00,#ffe600,#35e06f,#19d3ff,#4a6bff,#b14aff,#ff2d95);
+  --surface:#fff3fd;
+  --surface-2:#fdf6ff;
+  --ink:#2a0a4a;
+  --ink-2:#3d1a63;
+  --ink-3:#5b3a80;
+  --ink-4:#66478a;
+  --hair:#f3b6ea;
+  --rule:#e58fe0;
+  --rule-2:#b96be0;
+  --neutral:#e58fe0;
+  --cool-text:#2b48d6;
+  --caution:#a86a1a;
+  --badge-llm-border:#b96be0;
+  --badge-llm-text:#4a2bff;
+  --display:"Comic Sans MS","Chalkboard SE","Comic Neue",cursive;
+}
+@keyframes vomit{to{background-position:400% 0}}
+[data-theme="rainbow"] body::before{background-size:400% 100%;animation:vomit 14s linear infinite}
+[data-theme="rainbow"] body{cursor:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='36' height='36'%3E%3Ctext y='28' font-size='28'%3E%F0%9F%A6%84%3C/text%3E%3C/svg%3E") 4 4,auto}
+[data-theme="rainbow"] .brand::after{content:" \1F984";font-size:.8em}
+[data-theme="rainbow"] .panel,[data-theme="rainbow"] .hero,[data-theme="rainbow"] ul.roasts li,[data-theme="rainbow"] .adds,[data-theme="rainbow"] ol.changes li{border-color:var(--rule)}
+[data-theme="rainbow"] .themes button[aria-pressed="true"] .swatch{box-shadow:0 0 0 2px #fff,0 0 0 4px var(--ink)}
+
+[data-theme="rainbow"] .wrap{margin:14px auto;background:rgba(255,250,255,.92);border-radius:24px;box-shadow:0 0 0 4px #fff,0 18px 60px rgba(90,0,120,.35)}
+@media (max-width:599px){[data-theme="rainbow"] .wrap{margin:8px;border-radius:18px}}
+@media (prefers-reduced-motion: reduce){[data-theme="rainbow"] body::before{animation:none}}
 *{box-sizing:border-box}
 
 :focus-visible{outline:2px solid var(--cool);outline-offset:2px}
@@ -187,6 +218,7 @@ body.meaner .brand-flag .flag-red{opacity:1}
 .swatch{display:block;width:22px;height:22px;border-radius:50%;border:1px solid var(--ink-3)}
 .sw-dark{background:#0d0d0d}
 .sw-light{background:#f8f5ee}
+.sw-rainbow{background:conic-gradient(#ff2d95,#ff8a00,#ffe600,#35e06f,#19d3ff,#4a6bff,#b14aff,#ff2d95)}
 .themes button:hover .swatch{border-color:var(--ink)}
 .themes button[aria-pressed="true"] .swatch{box-shadow:0 0 0 2px var(--plane),0 0 0 4px var(--ink)}
 .head-actions{display:flex;align-items:center;gap:8px;flex-shrink:0}
@@ -207,6 +239,7 @@ body.meaner .brand-flag .flag-red{opacity:1}
   transform:scaleX(0);transform-origin:left center;
   transition:transform .45s cubic-bezier(.2,.7,.2,1), opacity .2s;
 }
+[data-theme="rainbow"] .read-rule,[data-theme="rainbow"] .read-bar{--grad:linear-gradient(90deg,#ff2d95,#ff8a00,#ffe600,#35e06f,#19d3ff,#4a6bff,#b14aff)}
 .read-rule.mean,.read-bar.mean{--grad:linear-gradient(90deg,#4a0d12 0%,#8e1d24 22%,#c62f2a 48%,#f2543c 74%,#ff8a5c 100%)}
 .read-rule{height:6px;border-radius:999px;margin:14px 0 2px;background:var(--grad)}
 .read-bar{
@@ -1113,6 +1146,7 @@ ul.cg-list li::before{content:"\2022";position:absolute;left:0;color:var(--ink-4
       <div class="themes" id="themetoggle" role="group" aria-label="Theme">
         <button type="button" data-theme-choice="dark" aria-label="Dark mode" aria-pressed="false" title="Dark"><span class="swatch sw-dark"></span></button>
         <button type="button" data-theme-choice="light" aria-label="Light mode" aria-pressed="false" title="Light"><span class="swatch sw-light"></span></button>
+        <button type="button" data-theme-choice="rainbow" aria-label="Rainbow mode" aria-pressed="false" title="Rainbow"><span class="swatch sw-rainbow"></span></button>
       </div>
     </div>
   </div>
@@ -1310,6 +1344,10 @@ ul.cg-list li::before{content:"\2022";position:absolute;left:0;color:var(--ink-4
   </div>
   <p class="wn-intro">What changed since you were last here.</p>
   <ul class="wn-list">
+    <li id="wn-rainbow">
+      <b>Rainbow mode.</b>
+      The third circle, top right. The score does not change. Everything else does.
+    </li>
     <li id="wn-noai">
       <b>Conscientious objector mode.</b>
       Tick <i>No AI</i> under Options and the checklist scores your post alone. No AI write-up, no read, no rewrite.
@@ -3833,7 +3871,7 @@ ul.cg-list li::before{content:"\2022";position:absolute;left:0;color:var(--ink-4
 
   function currentTheme(){
     var explicit = document.documentElement.getAttribute('data-theme');
-    if (explicit === 'light' || explicit === 'dark') return explicit;
+    if (explicit === 'light' || explicit === 'dark' || explicit === 'rainbow') return explicit;
     return (window.matchMedia && window.matchMedia('(prefers-color-scheme: light)').matches) ? 'light' : 'dark';
   }
   function savedTheme(){
@@ -3842,7 +3880,7 @@ ul.cg-list li::before{content:"\2022";position:absolute;left:0;color:var(--ink-4
   function syncThemeUI(){
     var cur = currentTheme();
     var meta = document.querySelector('meta[name="theme-color"]');
-    if (meta) meta.setAttribute('content', cur === 'dark' ? '#0d0d0d' : '#eeece7');
+    if (meta) meta.setAttribute('content', cur === 'dark' ? '#0d0d0d' : cur === 'rainbow' ? '#ff5fd2' : '#eeece7');
     Array.prototype.forEach.call(document.querySelectorAll('[data-theme-choice]'), function(b){
       b.setAttribute('aria-pressed', b.getAttribute('data-theme-choice') === cur ? 'true' : 'false');
     });
@@ -5188,7 +5226,7 @@ ul.cg-list li::before{content:"\2022";position:absolute;left:0;color:var(--ink-4
     queueRead();
   });
 
-  var WHATSNEW_VERSION = '2026-09-29.1';
+  var WHATSNEW_VERSION = '2026-09-29.2';
   var WHATSNEW_KEY = 'yps_whatsnew_seen';
   var VISITED_KEYS = ['yps_theme', 'yps_receipts_open', 'yps_tipask_v1', 'yps_meaner_v1', 'yps_outrun_best_v1'];
   var wn = $('#whatsnew');

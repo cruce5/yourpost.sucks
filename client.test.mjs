@@ -78,9 +78,21 @@ check('an error toast has its own alert region, since a live region never change
 check('Analyze sits under the box, above the options fold', await p.evaluate(() => document.getElementById('run').getBoundingClientRect().top < document.getElementById('options').getBoundingClientRect().top));
 check('the options fold is open where there is room for it', await p.evaluate(() => document.getElementById('options').open));
 check('report container is focusable (tabindex=-1)', await p.getAttribute('#report', 'tabindex') === '-1');
-check('the theme picker is two swatches in a named group, one of them pressed, and a click swaps the ring and the theme', await p.evaluate(() => {
+check('rainbow mode: the third swatch turns the page, the display face and the rule, and leaves the score colours alone', await p.evaluate(() => {
+  document.querySelector('[data-theme-choice="rainbow"]').click();
+  const on = document.documentElement.getAttribute('data-theme') === 'rainbow';
+  const plane = getComputedStyle(document.body, '::before').backgroundImage;
+  const num = getComputedStyle(document.querySelector('.hero .num') || document.body).fontFamily;
+  const rule = getComputedStyle(document.getElementById('readrule')).backgroundImage;
+  const meta = document.querySelector('meta[name="theme-color"]').getAttribute('content');
+  const ring = document.querySelector('[data-theme-choice="rainbow"]').getAttribute('aria-pressed') === 'true';
+  const cool = getComputedStyle(document.documentElement).getPropertyValue('--dim-auth').trim();
+  document.querySelector('[data-theme-choice="dark"]').click();
+  return on && /gradient/.test(plane) && /gradient/.test(rule) && meta === '#ff5fd2' && ring && cool === '#3987e5' && (!document.querySelector('.hero .num') || /Comic|Chalkboard|cursive/.test(num)) && document.documentElement.getAttribute('data-theme') === 'dark';
+}));
+check('the theme picker is three swatches in a named group, one of them pressed, and a click swaps the ring and the theme', await p.evaluate(() => {
   const g = document.getElementById('themetoggle'), b = [...g.querySelectorAll('[data-theme-choice]')];
-  if (g.getAttribute('role') !== 'group' || b.length !== 2 || b.filter(x => x.getAttribute('aria-pressed') === 'true').length !== 1) return false;
+  if (g.getAttribute('role') !== 'group' || b.length !== 3 || b.filter(x => x.getAttribute('aria-pressed') === 'true').length !== 1) return false;
   const light = b.find(x => x.getAttribute('data-theme-choice') === 'light'); light.click();
   const ok = document.documentElement.getAttribute('data-theme') === 'light' && light.getAttribute('aria-pressed') === 'true' && b.every(x => x.getBoundingClientRect().width >= 44 && x.getBoundingClientRect().height >= 44);
   b.find(x => x.getAttribute('data-theme-choice') === 'dark').click();
@@ -120,7 +132,7 @@ check('the built headers name every inline script by hash and allow no other', a
 
 // --- built CSS: tokens, focus ring, layout rules
 const css = await p.evaluate(() => Array.from(document.querySelectorAll('style')).map(s => s.textContent).join('\n'));
-check('--cool-text token exists in all four theme blocks', (css.match(/--cool-text:\s*#[0-9a-f]{6}/gi) || []).length === 4, (css.match(/--cool-text:/g) || []).length + ' found');
+check('--cool-text token exists in all five theme blocks', (css.match(/--cool-text:\s*#[0-9a-f]{6}/gi) || []).length === 5, (css.match(/--cool-text:/g) || []).length + ' found');
 check('light-theme --ink-4 darkened in both light blocks', (css.match(/--ink-4:\s*#66625a/gi) || []).length === 2);
 check('global :focus-visible ring rule exists', /:focus-visible\{outline:2px solid var\(--cool\);outline-offset:2px\}/.test(css));
 check('no outline:none anywhere in the CSS', !/\boutline:\s*none/.test(css));
@@ -621,7 +633,7 @@ await api.unroute('**/api/analyze');
   await api.click('[data-spec="0"]');
   await api.waitForSelector('#report:not([hidden])', { timeout: 20000 });
   check('  ...and a level the page does not know is no card either', await api.evaluate(() => !document.querySelector('#report .adds')));
-  check('what it adds: the what\'s-new line says so, near the top of the list', await api.evaluate(() => { const li = document.getElementById('wn-adds'); return !!li && [...li.parentElement.children].indexOf(li) <= 3 && /never part of the score/i.test(li.textContent); }));
+  check('what it adds: the what\'s-new line says so, near the top of the list', await api.evaluate(() => { const li = document.getElementById('wn-adds'); return !!li && [...li.parentElement.children].indexOf(li) <= 4 && /never part of the score/i.test(li.textContent); }));
   await api.unroute('**/api/analyze');
 }
 
@@ -782,6 +794,7 @@ check('error is above the kept rewrite, not replacing it', await api.evaluate(()
   await api.waitForSelector('#report:not([hidden])', { timeout: 20000 });
   check('with No AI ticked, the post goes to the server flagged noAI, with no image, and comes back as the checklist\'s report', calls === 1 && sentBody && sentBody.noAI === true && sentBody.image === undefined && (await api.textContent('.mode')).trim() === 'checklist-only commentary' && /You switched it off/.test(await api.textContent('.mode-why')) && /Same score either way/.test(await api.textContent('.mode-why')), calls + ' calls ' + JSON.stringify(sentBody && Object.keys(sentBody)));
   check('  ...the rewrite section says why there is none, and the options summary says no AI', /No AI, by your choice/.test(await api.textContent('#sec-reword')) && /no AI/.test(await api.textContent('#opt-state')));
+  await api.waitForTimeout(1200); // the count-up lands
   check('  ...and the score is the engine\'s own', await api.evaluate(() => document.querySelector('.hero .num').textContent === window.YourPostSucks.analyze(document.getElementById('post').value).overall.toFixed(1)));
   await api.goto(httpUrl);
   check('  ...and the choice is remembered', await api.evaluate(() => document.getElementById('noai').checked));
@@ -872,7 +885,7 @@ check('error is above the kept rewrite, not replacing it', await api.evaluate(()
   check("what's new: the header link opens it as a modal", await api.evaluate(() => document.getElementById('whatsnew').open));
   check('  ...and it says what changed in plain words', await api.evaluate(() => {
     const t = document.getElementById('whatsnew').textContent;
-    return /objector/i.test(t) && /numbers tab is open/i.test(t) && /report is shorter/i.test(t) && /What it adds/.test(t) && /reload keeps your report/i.test(t) && /Fixes\./.test(t) && t.length < 1600;
+    return /rainbow/i.test(t) && /objector/i.test(t) && /numbers tab is open/i.test(t) && /report is shorter/i.test(t) && /What it adds/.test(t) && /reload keeps your report/i.test(t) && /Fixes\./.test(t) && t.length < 1800;
   }));
   check('  ...and it asks for a coffee, labelled as its own place', await api.evaluate(() => {
     const a = document.querySelector('#whatsnew a[data-tip="whatsnew"]');
@@ -1098,7 +1111,7 @@ check('Right from the last tab wraps to the first, and only one tab is in the Ta
     wait: { lt5s: 30, '5to10s': 50, '10to20s': 15, gt20s: 5 } });
   let body = figures(500), hits = 0;
   await api.goto(httpUrl);
-  check('the numbers: the what\'s-new line about it leads the list, and the tab is in the nav for everyone', await api.evaluate(() => { const li = document.getElementById('wn-metrics'); return !li.hidden && [...li.parentElement.children].indexOf(li) <= 1 && !document.getElementById('tab-metrics').hidden && [...document.querySelectorAll('.tab-btn')].filter(x => getComputedStyle(x).display !== 'none').length === 4 && !document.getElementById('mx-lock') && !document.querySelector('#panel-metrics input'); }));
+  check('the numbers: the what\'s-new line about it leads the list, and the tab is in the nav for everyone', await api.evaluate(() => { const li = document.getElementById('wn-metrics'); return !li.hidden && [...li.parentElement.children].indexOf(li) <= 2 && !document.getElementById('tab-metrics').hidden && [...document.querySelectorAll('.tab-btn')].filter(x => getComputedStyle(x).display !== 'none').length === 4 && !document.getElementById('mx-lock') && !document.querySelector('#panel-metrics input'); }));
   await api.route('**/api/metrics', route => { hits++; return route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(body) }); });
   await api.goto(httpUrl + '#the-numbers'); await api.reload();
   await api.waitForSelector('#panel-metrics .mx-sec', { timeout: 5000 });
