@@ -109,8 +109,9 @@ const IMAGE_COST_MICROS_PER_CALL = 4000; // $0.004
  *   system   ~6,300 chars / 4 = ~1,575 tokens x 1         =  1,575  (not cached: it is under the cache minimum)
  *   tools    ~1,100 chars / 4 = ~275 tokens x 1           =    275
  *   user     ~5,200 chars / 4 = ~1,300 tokens x 1         =  1,300  (a post escaping to the ceiling, plus the retry note)
- * about 4,650, and 5,974 at 1.6 times; set to 6,400. A typical read costs a
- * little over a quarter of a cent. */
+ * about 4,650, and 6,064 at 1.6 times as worker.test.mjs measures it (the
+ * room's own tie-out, on a shorter retry note, lands at 5,974); set to 6,400.
+ * A typical read costs a little over a quarter of a cent. */
 const MAX_TOKENS_ADDS = 300;
 const ADDS_COST_MICROS = 6400;
 
@@ -639,12 +640,14 @@ export function publicFigures(all, at) {
     flags: { media: flag.media || 0, satire: flag.satire || 0, narrative: flag.narrative || 0 },
     // Checks that fired on the same post, the ten most common pairs. Newer
     // than the rest, so its own denominator and its own start date.
-    pairs: { of: s['post:c:all'] || 0, since: s['post:c:since'] ? new Date(s['post:c:since']).toISOString().slice(0, 10) : null,
+    // The full stamp, not the date: two series switched on hours apart used
+    // to print the same day over different denominators (episode 5, again in 6).
+    pairs: { of: s['post:c:all'] || 0, since: s['post:c:since'] ? new Date(s['post:c:since']).toISOString() : null,
       // Written as a+b, stored as a_b (the counter allows no "+"); read either.
       // Published only at three or more: one wild post used to fill the top ten.
       top: Object.entries(under('post:pair:')).map(([k, n]) => { const [a, b] = k.split(/[+_]/); return { a, b, n }; }).filter(x => RULE_IDS.has(x.a) && RULE_IDS.has(x.b) && x.n >= PAIR_MIN).sort((x, y) => y.n - x.n).slice(0, 10) },
     // Newer than the rest: its own denominator and its own start date.
-    meaner: { n: s['post:flag:meaner'] || 0, of: s['post:m:all'] || 0, since: s['post:m:since'] ? new Date(s['post:m:since']).toISOString().slice(0, 10) : null },
+    meaner: { n: s['post:flag:meaner'] || 0, of: s['post:m:all'] || 0, since: s['post:m:since'] ? new Date(s['post:m:since']).toISOString() : null },
     reword: { tried, notAttempted: Math.max(0, outcomes - tried.better - tried.couldNotBeat - tried.unusable), gain: under('reword:gain:') },
     // Every report that reached the AI, since the counting began.
     wait: Object.fromEntries(['lt5s', '5to10s', '10to20s', 'gt20s'].map(b => [b, s['analyze:wait:' + b] || 0]))
@@ -1763,7 +1766,10 @@ const NUMBER_WORDS = {
   // fortnight later" each assert a quantity the post may never have had.
   // "half" is deliberately left out; it is far too common as a hedge
   // ("half the time", "half-decent") to be treated as a numeric claim.
-  twice: 2, trio: 3, fortnight: 14
+  twice: 2, trio: 3, fortnight: 14,
+  // A multiplication is a number: "tripled" slipped the gate on a read whose
+  // post had no 3 in it (episode 6).
+  doubled: 2, tripled: 3, quadrupled: 4, thrice: 3
 };
 const NUMBER_WORD_RE = new RegExp('\\b(' + Object.keys(NUMBER_WORDS).join('|') + ')\\b', 'gi');
 
@@ -2252,6 +2258,18 @@ async function handleAnalyze(request, env, ctx) {
   const llm = await callClaude(env, post, report, image, reportMeter, meaner);
   const adds = await addsP;
   await settleCharge(env, precharged, [...(needsTone ? [toneMeter] : []), reportMeter, ...(addsOn ? [addsMeter] : [])]);
+  // What became of the read, beside the router's analyze:adds:read keys,
+  // which cannot tell "never tried" from "tried and dropped" (episode 6):
+  // skip when the read was not eligible, fail:<why> from its own meter when
+  // it was tried and nothing shipped, retried when the one retry ran. The
+  // rate of reads that failed is then fail over read + read_fixed_line + fail.
+  {
+    const k = [];
+    if (!addsOn) k.push('analyze:adds:skip');
+    else if (!adds) k.push('analyze:adds:fail:' + String(addsMeter.why || 'unknown').slice(0, 24));
+    if (addsMeter.retried) k.push('analyze:adds:retried');
+    if (k.length) ctx.waitUntil(bumpStats(env, k));
+  }
   {
     const keys = [];
     if (hasImage) keys.push('calls:image');
@@ -2341,6 +2359,7 @@ async function readAdds(env, post, media, m) {
       const m2 = meter(ADDS_COST_MICROS);
       const again = await addsCall(env, message + igRetryNote(input.evidence), m2);
       await settleCharge(env, ADDS_COST_MICROS, [m2]);
+      m.retried = true;
       if (again) v = validateIg(again, post, gate);
     }
     if (!v.ok) { m.why = v.reason; console.warn('adds: no read,', v.reason); return null; }
@@ -2480,7 +2499,7 @@ async function handleStatus(env) {
       // three costs at once, and answering true on the main call alone told
       // the page there was room for an analysis the breaker was about to
       // refuse.
-      budgetRemaining: spent === null ? null : spent + callCostMicros(true, true) <= capMicros
+      budgetRemaining: spent === null ? null : spent + callCostMicros(true, true, true) <= capMicros
     },
     tipClicks: tips,
     // The footer ticker. Up to a minute stale at the edge, which is fine

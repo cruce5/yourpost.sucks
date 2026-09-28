@@ -2976,7 +2976,7 @@
     'silver-lining': 'A layoff or burnout, followed at once by the lesson it taught. The spin is faster than the grief.',
     'pivot-lang': 'Pivoting into, making a pivot, the pivot. A verb that has become a career stage.',
     'broetry': 'Most lines, 55% or more, are eight words or fewer, each in its own paragraph.',
-    'orphan-line': 'A one or two word line in the middle of the post, standing alone for effect.',
+    'orphan-line': 'A one- or two-word line in the middle of the post, standing alone for effect.',
     'allcaps': 'A run of capital letters. Acronyms and citations are let through.',
     'ai-isms': 'Delve, navigate the complexities, a testament to. The phrases a model reaches for.',
     'not-just': 'It is not just X, it is Y. The construction, wherever it turns up.',

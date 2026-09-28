@@ -18,7 +18,7 @@ run_worker_first = ["/api/*"]
 [vars]
 # Hard ceiling on model spend per UTC day. When this is reached the site keeps
 # working and silently stops calling the model. This is the only number that
-# stands between you and a surprise bill — set it to an amount you would not
+# stands between you and a surprise bill: set it to an amount you would not
 # mind losing every single day.
 # Raised from 10 to 30 for the launch (2026-09-18). Bring it back down once the
 # announcement traffic has passed.
@@ -57,10 +57,10 @@ MODEL = "claude-haiku-4-5"
 # Bot check (optional). Leave blank and the site behaves exactly as it does
 # today: no widget loads, no check runs, nothing changes. To turn it on:
 #   1. Create a Turnstile widget at https://dash.cloudflare.com -> Turnstile.
-#      Widget mode doesn't matter here — the page renders it with
+#      Widget mode doesn't matter here: the page renders it with
 #      appearance:"execute", so it stays invisible unless Cloudflare
 #      decides a real challenge is needed, regardless of which mode you pick.
-#   2. Paste its SITE key below. This one is public by design — it's meant
+#   2. Paste its SITE key below. This one is public by design: it's meant
 #      to sit in the page source, safe to commit.
 #   3. Set its SECRET key the other way, since that one isn't public:
 #      npx wrangler secret put TURNSTILE_SECRET
@@ -103,6 +103,6 @@ class_name = "Counters"
 tag = "v1"
 new_sqlite_classes = ["Counters"]
 
-# Secrets — never put these in this file:
+# Secrets: never put these in this file:
 #   npx wrangler secret put ANTHROPIC_API_KEY
 #   npx wrangler secret put TURNSTILE_SECRET   (optional; skipped if unset)

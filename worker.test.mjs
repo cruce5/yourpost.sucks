@@ -1075,7 +1075,8 @@ console.log('\n=== status endpoint ===');
   await env.KV.put(todayKey(), String(5000000 - (COSTS.report.precharge + 1000)));
   const r = await (await worker.fetch(new Request('https://yourpost.sucks/api/status'), env, ctx)).json();
   check('budgetRemaining answers for the largest reservation, not the cheapest call', r.budget.budgetRemaining === false, JSON.stringify(r.budget));
-  await env.KV.put(todayKey(), String(5000000 - (COSTS.report.precharge + COSTS.tone.precharge + COSTS.image.precharge)));
+  // The read rides on the same request, so it is part of the largest one more.
+  await env.KV.put(todayKey(), String(5000000 - (COSTS.report.precharge + COSTS.tone.precharge + COSTS.image.precharge + COSTS.adds.precharge)));
   const r2 = await (await worker.fetch(new Request('https://yourpost.sucks/api/status'), env, ctx)).json();
   check('  ...and is true again with exactly that much room left', r2.budget.budgetRemaining === true, JSON.stringify(r2.budget));
 }
@@ -1753,7 +1754,7 @@ console.log('\n=== meaner mode is counted, from now, on its own denominator ==='
   await (await worker.fetch(post({ post: NEUTRAL }), env, ctx)).json();
   await new Promise(z => setTimeout(z, 40));
   const s = await readStats(env), f = publicFigures(s, 'x');
-  check('a post that asked for it meaner is counted, and so is every post since the flag existed', s['post:flag:meaner'] === 1 && s['post:m:all'] === 2 && s['analyze:meaner'] === 1 && f.meaner.n === 1 && f.meaner.of === 2 && /^\d{4}-\d{2}-\d{2}$/.test(f.meaner.since), JSON.stringify(f.meaner));
+  check('a post that asked for it meaner is counted, and so is every post since the flag existed', s['post:flag:meaner'] === 1 && s['post:m:all'] === 2 && s['analyze:meaner'] === 1 && f.meaner.n === 1 && f.meaner.of === 2 && /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}/.test(f.meaner.since), JSON.stringify(f.meaner));
   check('  ...and every check has a one-line definition', ENGINE.RULES.every(r => typeof ENGINE.RULE_WHY[r.id] === 'string' && ENGINE.RULE_WHY[r.id].length > 20));
 }
 

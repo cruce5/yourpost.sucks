@@ -28,6 +28,7 @@ export const IG_POST_MAX = 4000;          // the analyzer's own limit
 export const IG_BLOCK_MAX = 4800;
 export const IG_EVIDENCE_MAX = 200;       // told 140, refused past 200
 export const IG_LINE_MAX = 120;           // told 14 words (about 85 characters), refused past 120
+export const IG_LINE_MAX_WORDS = 16;      // told 14; two words of tolerance, then the fixed line (Reconcilers, episode 6)
 
 /* Shown to the model as the register for its sentence. A reply that copies
  * one back is not a sentence about this post (the corpus run of 2026-09-25
@@ -75,7 +76,20 @@ export const inventsName = (line, post) => {
   return false;
 };
 const namesWriter = (line, post) => { const n = signOffName(post); return !!n && new RegExp('\\b' + n + '\\b').test(line); };
-const copiesRegister = line => { const f = String(line).toLowerCase().replace(/[^a-z ]/g, '').slice(0, 40); return IG_REGISTER.some(([, x]) => x.toLowerCase().replace(/[^a-z ]/g, '').slice(0, 40) === f); };
+/* A copy of a register line, padded or not: the first forty letters used to
+ * be the test, and "Agreement about leadership values, nicely formatted. A
+ * reader finishes knowing you agree." walked through it four times of four
+ * (episode 6). Now: a phrase only the register lines use, or most of a
+ * register line's content words in one sentence. */
+const REGISTER_TELLS = ['nicely formatted', 'knowing you agree', 'doing all the work', 'the rest is setup', 'actually got made', 'forty tabs'];
+const REG_STOP = new Set(['this', 'that', 'with', 'here', 'there', 'from', 'they', 'them', 'their', 'what', 'when', 'have', 'been', 'will', 'would', 'into', 'about', 'your', 'yours', 'real']);
+const contentWords = s => new Set(String(s).toLowerCase().replace(/[^a-z' ]/g, ' ').split(/\s+/).filter(w => w.length > 3 && !REG_STOP.has(w)));
+const copiesRegister = line => {
+  const l = String(line).toLowerCase().replace(/[^a-z' ]/g, ' ').replace(/\s+/g, ' ');
+  if (REGISTER_TELLS.some(t => l.includes(t))) return true;
+  const mine = contentWords(line);
+  return IG_REGISTER.some(([, x]) => { const rw = contentWords(x); let hit = 0; rw.forEach(w => { if (mine.has(w)) hit++; }); return rw.size >= 3 && hit / rw.size >= 0.6; });
+};
 
 export const IG_SYSTEM_PROMPT = `You read one LinkedIn post and answer one question: what does the reader get from it that they did not have before they started reading?
 
@@ -88,7 +102,7 @@ WHAT COUNTS AS SOMETHING
 - an argument, distinction or counterexample the reader has to think about;
 - a question that is genuinely useful to sit with;
 - a joke or observation built on something specific. A funny post is not an empty post. A two-line deadpan post with one precise detail gives the reader that detail and the laugh, and that counts.
-- a parody. A post that exaggerates LinkedIn's own habits (the humbled announcement, the fake lesson, the non-announcement) is a joke whose subject is those habits, and the reader gets the joke. Judge whether it lands on something recognisable, not whether it contains facts. A parody is only "none" if it is sincere after all.
+- a parody. A post that exaggerates LinkedIn's own habits (the humbled announcement, the fake lesson, the non-announcement) is a joke whose subject is those habits, and the reader gets the joke. Judge whether it lands on something recognisable, not whether it contains facts. A parody is only "none" if it is sincere after all. An announcement whose details are the absence of details is a parody, not an empty announcement.
 
 WHAT DOES NOT
 Agreement, sentiment, gratitude, encouragement, congratulations, a restatement of what everyone already believes, a lesson with nothing under it, an announcement with no detail, adjectives about how important something is, a call to comment.
@@ -105,7 +119,7 @@ Judge the post, not its topic: a post about something important can still say no
 RETURN
 - level
 - kind: the main thing it gives, or "none" when the level is none
-- attachment: true only when the text is a caption for a picture, video, carousel or document posted WITH it, so what the reader gets is in that attachment ("this video", "swipe through", "[carousel]", "look at this", a one-line reaction to something shown). A link to apply, a podcast or event being announced, or a promise of something later is NOT an attachment: the text is the whole post and is judged as it stands. When unsure, false.
+- attachment: true only when the text is a caption for a picture, video, carousel, document or poll posted WITH it, so what the reader gets is in that attachment ("this video", "swipe through", "[carousel]", "look at this", a one-line reaction to something shown). A link to apply, a podcast or event being announced, or a promise of something later is NOT an attachment: the text is the whole post and is judged as it stands. When unsure, false.
 - evidence: ONE line copied exactly, character for character, from the post, under 140 characters. For some or plenty, the line that carries the most. For none, the line that best shows there is nothing under it. If the line is longer, copy one unbroken part of it. Never paraphrase.
 - line: one sentence of at most 14 words, in plain words. Name the actual thing a reader walks away with (the detail, the fact, what the joke is about), or say flatly that they walk away with nothing. Deadpan: a dry editor who has read ten thousand of these, not a reviewer. Not a summary of the post, not praise, not advice. Never use the words "specific", "offers", "provides", "valuable" or "insight". Never begin with "You get", "You learn", "This post" or "A reader gets", and never name the writer. Never mention a score, points, checks, the algorithm, reach, impressions or engagement. No dashes, no exclamation marks, no emoji, and no number that is not in the post.
 
@@ -120,9 +134,9 @@ export const IG_TOOL = {
     properties: {
       level: { type: 'string', enum: IG_LEVELS },
       kind: { type: 'string', enum: IG_KINDS },
-      attachment: { type: 'boolean', description: 'True only when the text is a caption for a picture, video, carousel or document posted with it. A link, an announced podcast or event, or a promise is false.' },
+      attachment: { type: 'boolean', description: 'True only when the text is a caption for a picture, video, carousel, document or poll posted with it. A link, an announced podcast or event, or a promise is false.' },
       evidence: { type: 'string', description: 'One line copied exactly from the post, under 140 characters.' },
-      line: { type: 'string', description: 'At most 14 words, deadpan, naming the actual thing, like "One real detail in here, and it is doing all the work." Never "specific". Never starts with "You get", "You learn" or "This post". Never names the writer.' }
+      line: { type: 'string', description: 'At most 14 words, deadpan, naming the actual thing the reader walks away with. Never "specific". Never starts with "You get", "You learn" or "This post". Never names the writer.' }
     },
     required: ['level', 'kind', 'attachment', 'evidence', 'line']
   }
@@ -138,7 +152,7 @@ export const postBlock = post => JSON.stringify(String(post)).replace(/</g, '\\u
 /* Below this many words, a post that came with a picture is mostly the
  * picture, and a read that cannot see it has no business judging it. */
 export const IG_IMAGE_MIN_WORDS = 40;
-export const IMAGE_LINE = '\nThis post came with an image or video you cannot see. The text may only be the setup for it. A short line that frames a picture is not empty: judge whether it sets the picture up, and never call it "none" just for being short.';
+export const IMAGE_LINE = '\nThis post came with an image, video, carousel, document or poll you cannot see. The text may only be the setup for it. A short line that frames a picture is not empty: judge whether it sets the picture up, and never call it "none" just for being short.';
 export const buildIgMessage = (post, media) => `<post>
 ${postBlock(post)}
 </post>
@@ -152,15 +166,11 @@ const fold = s => String(s).normalize('NFKC').replace(/[\u2018\u2019\u02bc`]/g, 
 export const quotedFromPost = (evidence, post) => {
   const e = fold(evidence).replace(/^["']|["']$/g, '').replace(/(?:\.\.\.|\u2026)$/, '').trim();
   if (e.length < 8) return false;
-  const p = fold(post);
-  if (p.includes(e)) return true;
-  // A quote with a cut in it ("one part... another part") stands only if every
-  // piece is really in the post, long enough to mean something, and in order.
-  const pieces = e.split(/\s*(?:\.\.\.|\u2026)\s*/).map(x => x.trim()).filter(Boolean);
-  if (pieces.length < 2 || pieces.some(x => x.length < 8)) return false;
-  let at = 0;
-  for (const x of pieces) { const i = p.indexOf(x, at); if (i < 0) return false; at = i + x.length; }
-  return true;
+  // One unbroken run of the post, which is what the prompt and the retry
+  // note ask for. A quote joined out of two pieces with an ellipsis used to
+  // pass here while the prompt forbade it (episode 6); now it earns the
+  // retry, which says so, and the second answer is one run or nothing.
+  return fold(post).includes(e);
 };
 
 /* When the model's own sentence fails the gate but its verdict and quote
@@ -170,6 +180,12 @@ export const IG_FALLBACK_LINES = Object.freeze({
   some: 'One real thing in it. The rest is packing.',
   plenty: 'A reader leaves with something they did not have.'
 });
+/* "The rest is packing" assumes there is a rest. On a two-line deadpan post
+ * (episode 6: eighteen words, one detail, nothing else) the fixed line said
+ * the post was padded, so under thirty words the short form is used. */
+export const IG_SHORT_WORDS = 30;
+export const IG_FALLBACK_SHORT = Object.freeze({ some: 'One real thing in it, and that is the whole post.' });
+export const igFallbackLine = (level, post) => ((String(post).match(/\S+/g) || []).length < IG_SHORT_WORDS && IG_FALLBACK_SHORT[level]) || IG_FALLBACK_LINES[level];
 
 /** { ok: true, level, kind, attachment, evidence, line, lineFallback } or
  *  { ok: false, reason }. `gate` is the report's own content gate, handed in
@@ -187,9 +203,9 @@ export function validateIg(out, post, gate) {
   const evidence = typeof out.evidence === 'string' ? out.evidence.trim() : '';
   if (!evidence || evidence.length > IG_EVIDENCE_MAX || !quotedFromPost(evidence, post)) return { ok: false, reason: 'evidence_not_in_post' };
   const raw = typeof out.line === 'string' ? out.line.trim() : '';
-  const lineOk = raw.length >= 10 && raw.length <= IG_LINE_MAX && !copiesRegister(raw) && !namesWriter(raw, post) && !inventsName(raw, post) && !repeatsPunchline(raw, post) && !BANNED_LINE.test(raw) && policed(raw, post) && sounds(raw) &&
+  const lineOk = raw.length >= 10 && raw.length <= IG_LINE_MAX && raw.split(/\s+/).length <= IG_LINE_MAX_WORDS && !copiesRegister(raw) && !namesWriter(raw, post) && !inventsName(raw, post) && !repeatsPunchline(raw, post) && !BANNED_LINE.test(raw) && policed(raw, post) && sounds(raw) &&
     !/[!]/.test(raw) && !/\p{Extended_Pictographic}/u.test(raw) && newNumbersIntroduced(raw, post).length === 0;
-  return { ok: true, level, kind, attachment: out.attachment !== false, ...(lineOk ? {} : { rawLine: raw }), evidence: evidence.replace(/^["\u201c]|["\u201d]$/g, ''), line: lineOk ? raw : IG_FALLBACK_LINES[level], lineFallback: !lineOk };
+  return { ok: true, level, kind, attachment: out.attachment !== false, ...(lineOk ? {} : { rawLine: raw }), evidence: evidence.replace(/^["\u201c]|["\u201d]$/g, ''), line: lineOk ? raw : igFallbackLine(level, post), lineFallback: !lineOk };
 }
 
 /* ------------------------------------------------------------------ *
