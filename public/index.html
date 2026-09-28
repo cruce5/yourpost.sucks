@@ -421,7 +421,15 @@ textarea::placeholder{color:var(--ink-4)}
 .options .opt-state{color:var(--ink-4);text-transform:none;letter-spacing:0}
 .options .opt-state:empty{display:none}
 .specimens[hidden]{display:none}
-.media-note{margin:-2px 0 0 26px;font-size:14px;color:var(--ink-4);line-height:1.45}
+.media-note{margin:-2px 0 6px 26px;font-size:14px;color:var(--ink-4);line-height:1.45}
+.media-note[hidden]{display:none}
+
+.opt-line{display:flex;align-items:center;gap:4px}
+.opt-line .media-toggle{flex:1 1 auto;min-width:0}
+.opt-help{flex:none;width:44px;height:44px;display:grid;place-items:center;padding:0;border:0;background:transparent;cursor:pointer}
+.opt-help span{display:grid;place-items:center;width:22px;height:22px;border-radius:50%;border:1px solid var(--rule);font-family:var(--mono);font-size:12px;color:var(--ink-3)}
+.opt-help:hover span,.opt-help[aria-expanded="true"] span{border-color:var(--ink-3);color:var(--ink)}
+.media-row{gap:4px}
 .media-upload{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
 .media-upload-btn{
   font-family:var(--mono);font-size:13px;letter-spacing:.06em;text-transform:uppercase;
@@ -1193,12 +1201,15 @@ ul.cg-list li::before{content:"\2022";position:absolute;left:0;color:var(--ink-4
   <div id="notices"></div>
     <details class="options" id="options">
   <summary><span class="opt-glyph" aria-hidden="true"></span>Options<span class="opt-state" id="opt-state"></span></summary>
-  <div class="media-row">
-    <label class="media-toggle" for="hasmedia">
-      <input type="checkbox" id="hasmedia">
-      There's an image, carousel, video, poll or document with this post. The text is the caption, not the whole thing.
-    </label>
-    <p class="media-note">Turns off the checks that assume the text is the whole post. The report says so when it did.</p>
+    <div class="media-row">
+    <div class="opt-line">
+      <label class="media-toggle" for="hasmedia">
+        <input type="checkbox" id="hasmedia">
+        An image, video, carousel, poll or document is attached.
+      </label>
+      <button type="button" class="opt-help" aria-expanded="false" aria-controls="note-media" aria-label="What this does"><span>?</span></button>
+    </div>
+    <p class="media-note" id="note-media" hidden>The text is only the caption, so the checks that assume the text is the whole post stand down. The report says so when it did.</p>
     <div class="media-upload">
             <input type="file" class="sr-only" id="mediafile" accept="image/jpeg,image/png,image/webp,image/gif,image/avif,image/bmp,image/heic,image/heif">
       <label class="media-upload-btn" id="mediabtn" for="mediafile">Attach image, or paste one</label>
@@ -1210,25 +1221,34 @@ ul.cg-list li::before{content:"\2022";position:absolute;left:0;color:var(--ink-4
     </div>
   </div>
   <div class="media-row meaner-row">
-    <label class="media-toggle" for="meaner">
-      <input type="checkbox" id="meaner">
-      Be meaner about it.
-    </label>
-    <p class="media-note">Same score, no mercy. At your own risk.</p>
+    <div class="opt-line">
+      <label class="media-toggle" for="meaner">
+        <input type="checkbox" id="meaner">
+        Be meaner about it.
+      </label>
+      <button type="button" class="opt-help" aria-expanded="false" aria-controls="note-meaner" aria-label="What this does"><span>?</span></button>
+    </div>
+    <p class="media-note" id="note-meaner" hidden>Same score, no mercy. At your own risk.</p>
   </div>
     <div class="media-row nice-row">
-    <label class="media-toggle" for="nice">
-      <input type="checkbox" id="nice">
-      Tell me I'm doing a great job.
-    </label>
-    <p class="media-note">Same score. The write-up pats your head and admires your hair. Requested by the comments.</p>
+    <div class="opt-line">
+      <label class="media-toggle" for="nice">
+        <input type="checkbox" id="nice">
+        Tell me I'm doing a great job.
+      </label>
+      <button type="button" class="opt-help" aria-expanded="false" aria-controls="note-nice" aria-label="What this does"><span>?</span></button>
+    </div>
+    <p class="media-note" id="note-nice" hidden>Same score. The write-up pats your head and admires your hair. Requested by the comments.</p>
   </div>
     <div class="media-row noai-row">
-    <label class="media-toggle" for="noai">
-      <input type="checkbox" id="noai">
-      No AI. Score it with the checklist alone.
-    </label>
-    <p class="media-note">Conscientious objector mode. The 47 checks score it and nothing else does: no AI write-up, no read, no rewrite. Counted like every post, kept like every post, which is not at all.</p>
+    <div class="opt-line">
+      <label class="media-toggle" for="noai">
+        <input type="checkbox" id="noai">
+        No AI. Checklist only.
+      </label>
+      <button type="button" class="opt-help" aria-expanded="false" aria-controls="note-noai" aria-label="What this does"><span>?</span></button>
+    </div>
+    <p class="media-note" id="note-noai" hidden>Conscientious objector mode. The 47 checks score it and nothing else does: no AI write-up, no read, no rewrite. Counted like every post, kept like every post, which is not at all.</p>
   </div>
   </details>
     <div class="specimens" id="specimens">
@@ -5228,6 +5248,13 @@ ul.cg-list li::before{content:"\2022";position:absolute;left:0;color:var(--ink-4
   });
   paintMeaner();
   paintRead();
+  document.addEventListener('click', function(e){
+    var b = e.target && e.target.closest ? e.target.closest('.opt-help') : null; if (!b) return;
+    var note = document.getElementById(b.getAttribute('aria-controls') || ''); if (!note) return;
+    var open = note.hidden;
+    note.hidden = !open;
+    b.setAttribute('aria-expanded', open ? 'true' : 'false');
+  });
   var optionsState = function(){};
   (function(){
     var d = $('#options'); if (!d) return;

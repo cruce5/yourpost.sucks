@@ -77,6 +77,16 @@ check('an error toast has its own alert region, since a live region never change
 }));
 check('Analyze sits under the box, above the options fold', await p.evaluate(() => document.getElementById('run').getBoundingClientRect().top < document.getElementById('options').getBoundingClientRect().top));
 check('the options fold is open where there is room for it', await p.evaluate(() => document.getElementById('options').open));
+check('each option is one line with a "?" that opens its note and closes it again', await p.evaluate(() => {
+  const helps = [...document.querySelectorAll('.opt-help')];
+  if (helps.length !== 4 || !helps.every(h => h.getBoundingClientRect().height >= 44 && h.getBoundingClientRect().width >= 44)) return false;
+  const notes = helps.map(h => document.getElementById(h.getAttribute('aria-controls')));
+  if (!notes.every(n => n && n.hidden)) return false;
+  helps[1].click();
+  const opened = !notes[1].hidden && helps[1].getAttribute('aria-expanded') === 'true' && /no mercy/.test(notes[1].textContent);
+  helps[1].click();
+  return opened && notes[1].hidden && helps[1].getAttribute('aria-expanded') === 'false';
+}));
 check('report container is focusable (tabindex=-1)', await p.getAttribute('#report', 'tabindex') === '-1');
 check('rainbow mode: the third swatch turns the page, the display face and the rule, and leaves the score colours alone', await p.evaluate(() => {
   document.querySelector('[data-theme-choice="rainbow"]').click();
