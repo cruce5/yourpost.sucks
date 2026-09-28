@@ -585,41 +585,6 @@ await api.unroute('**/api/analyze');
   await api.unroute('**/api/analyze');
 }
 
-// 4c. Where the reader stops: a card under What it adds, outside the score
-{
-  let reply = { quote: 'Grateful for this <b>opportunity</b>', where: 'late', why: 'The thanks began, and the reader left.' };
-  await api.route('**/api/analyze', async route => {
-    const p = route.request().postDataJSON().post;
-    const report = await api.evaluate(x => window.YourPostSucks.analyze(x), p);
-    await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ mode: 'rules', reason: 'no_key', report, adds: { level: 'none', kind: 'none', evidence: 'Grateful for this <b>opportunity</b>', line: 'Gratitude, nicely formatted.' }, ...(reply ? { stop: reply } : {}) }) });
-  });
-  await api.goto(httpUrl);
-  await api.click('[data-spec="0"]');
-  await api.waitForSelector('#report:not([hidden])', { timeout: 20000 });
-  const card = await api.evaluate(() => {
-    const c = document.querySelector('#report .stop-card'); if (!c) return null;
-    const adds = document.querySelector('#report .adds:not(.stop-card)');
-    const roasts = [...document.querySelectorAll('#report h2.sec')].find(h => /roasts/i.test(h.textContent));
-    return { k: c.querySelector('.adds-k').textContent, v: c.querySelector('.adds-v').textContent, why: c.querySelector('.adds-line').textContent, quote: c.querySelector('.adds-quote').textContent, note: c.querySelector('.adds-note').textContent,
-      afterAdds: !!(adds && (adds.compareDocumentPosition(c) & Node.DOCUMENT_POSITION_FOLLOWING)), beforeRoasts: !roasts || !!(c.compareDocumentPosition(roasts) & Node.DOCUMENT_POSITION_FOLLOWING), injected: !!c.querySelector('.adds-quote b') };
-  });
-  check('where the reader stops: a card under What it adds and before the roasts', card && card.afterAdds && card.beforeRoasts, JSON.stringify(card));
-  check('  ...naming where in words, the sentence, and the quoted line, as text', card && card.k === 'Where the reader stops' && card.v === 'near the end' && card.why === reply.why && card.quote === reply.quote && !card.injected);
-  check('  ...saying it is an AI read and not part of the score', card && /AI read/.test(card.note) && /not part of the score/.test(card.note));
-  reply = { quote: 'Grateful for this <b>opportunity</b>', where: 'never' };
-  await api.goto(httpUrl);
-  await api.click('[data-spec="0"]');
-  await api.waitForSelector('#report:not([hidden])', { timeout: 20000 });
-  check('  ...with no sentence, the card still shows where and the quote', await api.evaluate(() => { const c = document.querySelector('#report .stop-card'); return !!c && !c.querySelector('.adds-line') && /nowhere/.test(c.querySelector('.adds-v').textContent); }));
-  reply = null;
-  await api.goto(httpUrl);
-  await api.click('[data-spec="0"]');
-  await api.waitForSelector('#report:not([hidden])', { timeout: 20000 });
-  check('where the reader stops: no stop in the reply, no card', await api.evaluate(() => !document.querySelector('#report .stop-card')));
-  check('where the reader stops: the what\'s-new line says so, first in the list', await api.evaluate(() => { const li = document.getElementById('wn-stop'); return !!li && li === li.parentElement.firstElementChild && /not part of the score/.test(li.textContent); }));
-  await api.unroute('**/api/analyze');
-}
-
 // 5. malformed JSON is also 'server'
 await api.route('**/api/analyze', route => route.fulfill({ status: 200, contentType: 'application/json', body: '{not json' }));
 await api.goto(httpUrl);

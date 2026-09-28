@@ -1028,8 +1028,6 @@ ol.changes .crewrite .lbl{
 .adds-line{margin:8px 0 0;font-size:16px;line-height:1.5;color:var(--ink)}
 .adds-quote{margin:10px 0 0;padding:0 0 0 12px;border-left:2px solid var(--rule-2);font-size:14px;line-height:1.5;color:var(--ink-3);overflow-wrap:anywhere}
 .adds-note{margin:10px 0 0;font-size:13px;color:var(--ink-4)}
-.stop-card{border-left-color:var(--caution)}
-.stop-never{border-left-color:var(--cool)}
 .context-note{
   margin:10px 0 0;padding:9px 0 9px 12px;border-left:2px solid var(--cool);
   font-size:15px;color:var(--ink-2);line-height:1.55;
@@ -1453,7 +1451,7 @@ ul.cg-list li::before{content:"\2022";position:absolute;left:0;color:var(--ink-4
       <li>say "as an AI"</li>
       <li>use an em dash</li>
     </ul>
-    <p>It also writes two cards under the score: what your post gives a reader, and the line where a scrolling reader leaves. Each has to quote your post back to you word for word, or it is not shown, and neither is part of the score.</p>
+    <p>It also writes one card under the score: what your post gives a reader. It has to quote your post back to you word for word, or it is not shown, and it is not part of the score.</p>
     <p>It can still get a name or a detail wrong, so read a rewrite before you post it. Anything that fails is swapped for the checklist's version. The badge by the score says who wrote the commentary. It is not a verdict on whether your post is AI-written.</p>
   </section>
 
@@ -1519,10 +1517,6 @@ ul.cg-list li::before{content:"\2022";position:absolute;left:0;color:var(--ink-4
   </div>
   <p class="wn-intro">All of it came from things people said in the comments.</p>
   <ul class="wn-list">
-    <li id="wn-stop">
-      <b>The report now shows where a reader stops.</b>
-      A card under the score quotes the line a scrolling reader leaves on and says what happened there: the lesson began, the thanks started, the joke got explained. An AI read, not part of the score.
-    </li>
     <li id="wn-adds">
       <b>The report says what your post actually gives a reader.</b>
       A new card under the score quotes the line that carries the most, or says plainly that there is nothing there. It is an AI read, and it is not part of the score.
@@ -2234,19 +2228,6 @@ ul.cg-list li::before{content:"\2022";position:absolute;left:0;color:var(--ink-4
   var RECEIPTS_KEY = 'yps_receipts_open';
 
   var ADDS_WORDS = { none: 'Nothing', some: 'A little', plenty: 'Plenty' };
-  /* Where the reader stops: the line a scroller leaves on, quoted from the
-     post (src/stop.js), under "What it adds" and outside the score. No read,
-     no card. The quote is the evidence; the sentence is optional. */
-  var STOP_WORDS = { opening: 'in the first line', early: 'early', middle: 'about halfway', late: 'near the end', never: 'nowhere, which is rare' };
-  function stopHTML(st){
-    if (!st || typeof st !== 'object' || typeof st.quote !== 'string' || !st.quote || !STOP_WORDS[st.where]) return '';
-    return '<div class="adds stop-card stop-' + st.where + '" role="group" aria-labelledby="stop-k">' +
-      '<div class="adds-head"><h2 class="adds-k" id="stop-k">Where the reader stops</h2><span class="adds-v">' + YPS.esc(STOP_WORDS[st.where]) + '</span></div>' +
-      (typeof st.why === 'string' && st.why ? '<p class="adds-line">' + YPS.esc(st.why) + '</p>' : '') +
-      '<blockquote class="adds-quote">' + YPS.esc(st.quote) + '</blockquote>' +
-      '<p class="adds-note">The line a scrolling reader leaves on, quoted from your post. An AI read, not part of the score.</p>' +
-    '</div>';
-  }
   function addsHTML(a){
     if (!a || !ADDS_WORDS[a.level] || typeof a.line !== 'string' || !a.line) return '';
     return '<div class="adds adds-' + a.level + '" role="group" aria-labelledby="adds-k">' +
@@ -2298,7 +2279,6 @@ ul.cg-list li::before{content:"\2022";position:absolute;left:0;color:var(--ink-4
       // What it adds: the AI read of what a reader walks away with, directly
       // under the score card and outside it (src/adds.js). No read, no card.
       addsHTML(r.adds) +
-      stopHTML(r.stop) +
     '</section>';
 
     /* roasts: the hook, straight after the score. Get to the fun fast.
@@ -3032,7 +3012,6 @@ ul.cg-list li::before{content:"\2022";position:absolute;left:0;color:var(--ink-4
         // along to the renderer here, and nothing else ever reads it.
         var extra = {};
         if (payload.adds) extra.adds = payload.adds;
-        if (payload.stop) extra.stop = payload.stop;
         done(Object.keys(extra).length ? Object.assign({}, payload.report, extra) : payload.report, payload.mode || 'rules', payload.reason);
       }).catch(function(err){
         if (fell_back) return; // the killer or Cancel already spoke
