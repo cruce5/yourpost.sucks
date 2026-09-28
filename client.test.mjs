@@ -506,7 +506,7 @@ await api.waitForTimeout(150);
 check('#live announces analyzing during a run', (await api.textContent('#live')) === 'Analyzing. This can take up to 30 seconds.');
 check('while the AI works, one true thing about the site shows under the buttons, and it changes', await (async () => {
   const first = await api.evaluate(() => { const n = document.getElementById('busynote'); return n.hidden ? null : n.textContent; });
-  await api.waitForTimeout(3400);
+  await api.waitForTimeout(6300);
   const second = await api.evaluate(() => document.getElementById('busynote').textContent);
   return !!first && first.length > 20 && second !== first && !/\u2014/.test(first + second);
 })());

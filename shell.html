@@ -3391,7 +3391,7 @@ ul.cg-list li::before{content:"\2022";position:absolute;left:0;color:var(--ink-4
       el.textContent = order.pop();
     }
     return {
-      start: function(node){ el = node; next(); el.hidden = false; clearInterval(timer); timer = setInterval(next, 3200); },
+      start: function(node){ el = node; next(); el.hidden = false; clearInterval(timer); timer = setInterval(next, 6000); },
       stop: function(){ clearInterval(timer); timer = null; if (el) el.hidden = true; }
     };
   })();
