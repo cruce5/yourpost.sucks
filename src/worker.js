@@ -189,10 +189,6 @@ const json = (obj, status = 200, extra = {}) =>
     headers: { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'no-store', 'x-content-type-options': 'nosniff', 'referrer-policy': 'strict-origin-when-cross-origin', ...extra }
   });
 
-async function sha256(str) {
-  const buf = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(str));
-  return [...new Uint8Array(buf)].map(b => b.toString(16).padStart(2, '0')).join('');
-}
 
 const today = () => new Date().toISOString().slice(0, 10);
 const hourBucket = () => Math.floor(Date.now() / 3600000);
@@ -510,71 +506,15 @@ export async function readStats(env) {
  * two live reads a second apart differ by one person's post, and some checks
  * fire only on layoff or resignation language. So the public figures move at
  * most once an UTC hour, and only once at least MX_SNAP_MIN more posts have
- * been counted. Someone behind the door (the owner) always reads live.
+ * been counted. Open to everyone since 2026-09-28; the door that stood here
+ * while the owner checked the figures (a password, a cookie) is gone, and
+ * the live read is the owner's, in the room.
  * ------------------------------------------------------------------ */
 const METRICS_SINCE = '2026-09-21';
 const PAIR_MIN = 3;
 const MX_SNAP_KEY = 'mx:snap';
 const MX_SNAP_MIN = 10;
 
-/* THE DOOR ON THE NUMBERS. Until the owner has looked at real figures and is
- * happy for everyone to, the endpoint answers only to a password.
- *   METRICS_OPEN = "1" (wrangler.toml)   open to everyone, cacheable, no door
- *   METRICS_PASSWORD (a secret)          a right guess earns a cookie
- *   neither                              locked to everyone, and unlock is 404
- * The default is LOCKED: forgetting to set the secret must never publish the
- * figures. Same method as the owner's other doors: the guess and the secret
- * are compared as SHA-256 digests, a right one sets an HttpOnly cookie that
- * is an expiry and an HMAC of it keyed on the secret (so changing the secret
- * ends every session), every guess is counted before it is looked at, a wrong
- * one costs a second, and the bot check applies. The password is never in
- * this repository, a test, a command or a log. */
-const MX_COOKIE = 'mx';
-const MX_SESSION_SECONDS = 60 * 60 * 24 * 30;
-const MX_GUESSES_PER_HOUR = 10;
-async function mxSign(secret, message) {
-  const key = await crypto.subtle.importKey('raw', new TextEncoder().encode(secret), { name: 'HMAC', hash: 'SHA-256' }, false, ['sign']);
-  const sig = await crypto.subtle.sign('HMAC', key, new TextEncoder().encode(message));
-  return [...new Uint8Array(sig)].map(b => b.toString(16).padStart(2, '0')).join('');
-}
-// Equal-length hex strings, compared without stopping at the first difference.
-function sameHex(a, b) {
-  if (typeof a !== 'string' || typeof b !== 'string' || a.length !== b.length) return false;
-  let diff = 0;
-  for (let i = 0; i < a.length; i++) diff |= a.charCodeAt(i) ^ b.charCodeAt(i);
-  return diff === 0;
-}
-async function metricsAllowed(request, env) {
-  if (env.METRICS_OPEN === '1') return true;
-  const secret = env.METRICS_PASSWORD;
-  if (!secret) return false;
-  const m = new RegExp('(?:^|;\\s*)' + MX_COOKIE + '=(\\d{1,12})\\.([0-9a-f]{64})(?:;|$)').exec(request.headers.get('cookie') || '');
-  if (!m || Number(m[1]) * 1000 < Date.now()) return false;
-  return sameHex(m[2], await mxSign(secret, m[1]));
-}
-async function handleMetricsUnlock(request, env) {
-  const priv = { 'cache-control': 'no-store' };
-  if (env.METRICS_OPEN === '1' || !env.METRICS_PASSWORD) return json({ error: 'not_found' }, 404, priv);
-  if (crossOriginRequest(request)) return json({ error: 'forbidden' }, 403, priv);
-  const ip = clientIP(request), ns = counters(env);
-  // No counter means no cap on guessing, so no guessing.
-  if (!ns) return json({ error: 'unavailable' }, 503, priv);
-  try {
-    const key = `mu:${rateKey(ip)}:${hourBucket()}`;
-    const r = await counterCall(ns, key, '/hit', { key, limit: MX_GUESSES_PER_HOUR, ttlSeconds: 3900 });
-    if (r.ok !== true) return json({ error: 'too_many' }, 429, priv);
-  } catch (e) { return json({ error: 'unavailable' }, 503, priv); }
-  let body = null;
-  try { const text = await request.text(); if (text.length <= 2048) body = JSON.parse(text); } catch (e) { body = null; }
-  if (!(await turnstileOK(env, body && body.turnstileToken, ip))) return json({ error: 'bot_check' }, 403, priv);
-  const given = body && typeof body.password === 'string' && body.password.length <= 200 ? body.password : null;
-  if (given !== null && sameHex(await sha256(given), await sha256(env.METRICS_PASSWORD))) {
-    const expires = String(Math.floor(Date.now() / 1000) + MX_SESSION_SECONDS);
-    return json({ ok: true }, 200, { ...priv, 'set-cookie': `${MX_COOKIE}=${expires}.${await mxSign(env.METRICS_PASSWORD, expires)}; Max-Age=${MX_SESSION_SECONDS}; Path=/api/metrics; Secure; HttpOnly; SameSite=Strict` });
-  }
-  await new Promise(done => setTimeout(done, 1000));
-  return json({ error: 'wrong' }, 401, priv);
-}
 /** The public figures, built by name from the tallies. */
 /* EVERYTHING EVER COUNTED, ADDED UP. Three series sit in the counter, one
  * after another, and nothing was ever deleted:
@@ -655,17 +595,8 @@ export function publicFigures(all, at) {
 }
 async function handleMetrics(request, env) {
   const priv = { 'cache-control': 'private, no-store' };
-  const open = env.METRICS_OPEN === '1';
-  // Behind the door (a cookie) is always live, open or not.
-  const owner = env.METRICS_PASSWORD && await (async () => { const shut = { ...env, METRICS_OPEN: undefined }; return metricsAllowed(request, shut); })();
-  if (!open && !owner) return json({ error: 'locked' }, 401, { 'cache-control': 'no-store' });
-  if (owner) {
-    const all = await readStats(env);
-    if (!all) return json({ ok: false }, 200, priv);
-    return json({ ...publicFigures(all, new Date().toISOString()), live: true }, 200, priv);
-  }
-  // No store for the snapshot means no public figures: live reads are for
-  // the owner only, whatever else has gone wrong (Census, episode 5).
+  // No store for the snapshot means no public figures, whatever else has
+  // gone wrong (Census, episode 5): a fresh read per request is never served.
   if (!env.KV) return json({ ok: false }, 200, priv);
   // Public: the stored snapshot, replaced only in a new UTC hour and only
   // after MX_SNAP_MIN more posts. Within the hour the counter is not read.
@@ -2479,8 +2410,6 @@ async function handleStatus(env) {
     // means it never does, same as the server skipping the check entirely
     // when TURNSTILE_SECRET is unset.
     turnstileSiteKey: env.TURNSTILE_SITE_KEY || null,
-    // Whether "The numbers" tab is shown to everyone yet.
-    metricsOpen: env.METRICS_OPEN === '1',
     // Visible on purpose: this used to be the one limiting number you could
     // only confirm by reading the dashboard, which is exactly the number
     // most worth being able to double-check at a glance right before a
@@ -2553,10 +2482,6 @@ export default {
     if (url.pathname === '/api/status') {
       if (request.method !== 'GET') return json({ error: 'method' }, 405);
       return handleStatus(env);
-    }
-    if (url.pathname === '/api/metrics/unlock') {
-      if (request.method !== 'POST') return json({ error: 'method' }, 405);
-      return handleMetricsUnlock(request, env);
     }
     if (url.pathname === '/api/metrics') {
       if (request.method !== 'GET') return json({ error: 'method' }, 405);

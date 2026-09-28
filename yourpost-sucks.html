@@ -1120,7 +1120,7 @@ ul.cg-list li::before{content:"\2022";position:absolute;left:0;color:var(--ink-4
 <div class="tabs" role="tablist" aria-label="Site sections">
   <button class="tab-btn" id="tab-tool" role="tab" type="button" aria-selected="true" aria-controls="panel-tool">Roast my post</button>
   <button class="tab-btn" id="tab-explain" role="tab" type="button" aria-selected="false" tabindex="-1" aria-controls="panel-explain">How this works</button>
-  <button class="tab-btn" id="tab-metrics" role="tab" type="button" aria-selected="false" tabindex="-1" aria-controls="panel-metrics" hidden>The numbers</button>
+  <button class="tab-btn" id="tab-metrics" role="tab" type="button" aria-selected="false" tabindex="-1" aria-controls="panel-metrics">The numbers</button>
   <button class="tab-btn" id="tab-lab" role="tab" type="button" aria-selected="false" tabindex="-1" aria-controls="panel-lab"><span class="lab-ico" id="lab-ico" aria-hidden="true">&#128274;</span> Soon</button>
 </div>
 
@@ -1182,19 +1182,6 @@ ul.cg-list li::before{content:"\2022";position:absolute;left:0;color:var(--ink-4
 
 <div id="panel-metrics" role="tabpanel" aria-labelledby="tab-metrics" tabindex="-1" hidden>
   <p class="mx-intro">Everyone's posts, added up. Scores, sins, and how long the AI took. A sin here is one of the report's checks, fired. Not one word of anyone's post is in here. Just the damage.</p>
-  <div class="panel lab-lock" id="mx-lock" hidden>
-    <div class="lab-pad" aria-hidden="true">&#128274;</div>
-    <h2 class="lab-h" id="mx-lock-h" tabindex="-1">The numbers are locked while someone checks them.</h2>
-    <p class="lab-p">It's one person. They're checking every number. It's taking a while, on purpose.</p>
-    <form class="lab-form" id="mx-form" autocomplete="off">
-      <label class="lab-label" for="mx-pass">Password</label>
-      <div class="lab-row">
-        <input class="lab-input" type="password" id="mx-pass" name="password" autocomplete="off" autocapitalize="off" spellcheck="false" aria-describedby="mx-err" maxlength="200">
-        <button class="btn-primary" id="mx-go" type="submit">Unlock</button>
-      </div>
-      <p class="field-err" id="mx-err" role="alert" hidden></p>
-    </form>
-  </div>
   <div id="mx-live" aria-live="off"><p class="mx-wait">Counting.</p></div>
   <p class="mx-foot" id="mx-foot" hidden></p>
 </div>
@@ -1309,41 +1296,32 @@ ul.cg-list li::before{content:"\2022";position:absolute;left:0;color:var(--ink-4
     <h2 class="wn-title" id="wn-title">What's new</h2>
     <button class="wn-x" id="wn-close" type="button" aria-label="Close">&times;</button>
   </div>
-  <p class="wn-intro">All of it came from things people said in the comments.</p>
+  <p class="wn-intro">What changed since you were last here.</p>
   <ul class="wn-list">
+    <li id="wn-metrics">
+      <b>The numbers tab is open.</b>
+      Everyone's posts, added up: where the scores land, the most popular sins, what Reword manages and how long the AI takes. Counts only, updated about once an hour. Not one word of anyone's post is in there.
+    </li>
     <li id="wn-shorter">
-      <b>The report is shorter.</b>
-      The first two roasts sit right under the score and the rest follow; the AI's read comes after them. The share card, the receipts and the game are behind a tap, and the options are folded under the box.
+      <b>The report is about three screens shorter on a phone.</b>
+      The first two roasts sit right under the score, with a one-line strip that jumps to any section. The share card, the extra share options, the receipts and the game are each behind a tap. The two category charts are one table now.
     </li>
     <li id="wn-adds">
       <b>The report says what your post actually gives a reader.</b>
-      A card after the roasts quotes the line that carries the most, or says plainly that there is nothing there. It is an AI read, and it is not part of the score.
+      A card after the roasts, <i>What it adds</i>, quotes the line that carries the most, or says plainly that there is nothing there. An AI read, never part of the score. It is in the copied report too.
     </li>
-    <li>
-      <b>You can ask for a meaner write-up.</b>
-      Tick <i>Be meaner about it</i> under the box. Same score, blunter write-up. A red bar means it is on. At your own risk.
+    <li id="wn-stop">
+      <b>"Where the reader stops" is gone.</b>
+      It shipped for a day, read like a coin toss in practice, and was taken back.
     </li>
-    <li>
-      <b>Pasting a link no longer gets you a nonsense score.</b>
-      Paste the words of the post, not its web address. If you paste a link, the page now says so instead of scoring the link.
+    <li id="wn-memory">
+      <b>A reload no longer loses your report.</b>
+      This tab remembers the last report and the post until the tab closes; Clear forgets it. Nothing leaves your browser. Analyze sits right under the box, with the attachment and meaner options folded beneath it on a phone.
     </li>
-    <li>
-      <b>The rewrite keeps your voice.</b>
-      It used to re-say your whole post in smoother language. Now it changes only the parts a check flagged and leaves your sentences alone.
+    <li id="wn-fixes">
+      <b>Fixes.</b>
+      Copy buttons say <i>Copied</i>. A cleared post no longer comes back from the address bar on reload. The thank-you card sits after the report instead of over it. The scale strip marks where the verdicts change. The numbers tab's rarest-sin tile no longer names a rarest sin while a check has never fired, and the median tile lands in the right point on an even count. The page is a third smaller and stricter about which scripts may run. Screen readers get each section as a landmark, hear the score once it has landed, and get error toasts as alerts.
     </li>
-    <li>
-      <b>An acronym in a citation is not shouting.</b>
-      Something like <i>SANER 2025</i> was being scored as if you were yelling. It is not any more.
-    </li>
-    <li>
-      <b>Small print.</b>
-      The report explains why a clean post scores 0.2 and not 0.0, and the site finally has its own icon.
-    </li>
-        <li id="wn-metrics" hidden>
-      <b>There's a numbers tab now.</b>
-      <i>The numbers</i> adds up everyone's posts: where the scores land and which sins are the most popular. It counts them. It doesn't keep a word of them.
-    </li>
-  </ul>
   <p class="wn-tip">Every AI-written report costs me a penny or two, and the site is free with no sign-up and no ads. If it has made one of your posts less bad, <a data-tip="whatsnew" href="https://buymeacoffee.com/billyost" target="_blank" rel="noopener noreferrer">buy me a coffee</a>.</p>
   <div class="wn-actions"><button class="btn-ghost" id="wn-done" type="button">Got it</button></div>
 </dialog>
@@ -3798,7 +3776,6 @@ ul.cg-list li::before{content:"\2022";position:absolute;left:0;color:var(--ink-4
   })();
   var tsState = { widgetId: null, ready: false, pendingResolve: null };
   fetch('api/status').then(function(r){ return r.ok ? r.json() : null; }).then(function(s){
-    if (s && s.metricsOpen){ var mt = document.getElementById('tab-metrics'), mw = document.getElementById('wn-metrics'); if (mt) mt.hidden = false; if (mw) mw.hidden = false; }
     if (s && typeof s.ticker === 'number') ticker.set(s.ticker);
     var siteKey = s && s.turnstileSiteKey;
     if (!siteKey) return;
@@ -5154,7 +5131,7 @@ ul.cg-list li::before{content:"\2022";position:absolute;left:0;color:var(--ink-4
     queueRead();
   });
 
-  var WHATSNEW_VERSION = '2026-09-28.1';
+  var WHATSNEW_VERSION = '2026-09-28.2';
   var WHATSNEW_KEY = 'yps_whatsnew_seen';
   var VISITED_KEYS = ['yps_theme', 'yps_receipts_open', 'yps_tipask_v1', 'yps_meaner_v1', 'yps_outrun_best_v1'];
   var wn = $('#whatsnew');
@@ -5692,7 +5669,7 @@ ul.cg-list li::before{content:"\2022";position:absolute;left:0;color:var(--ink-4
       var foot = $('#mx-foot');
       foot.innerHTML = 'Counted since ' + E(sinceText(d.since)) + '. The same post pasted by two people counts twice, because it is two people. ' +
         'Counts only: scores, which checks fired and which fired together, the flags in section 05, rewrite gains, wait times. No words from any post. Nothing about who pasted it. ' +
-        (d.live ? 'You’re behind the door, so these are live' + (when ? ' (read ' + E(when) + ')' : '') + '. Everyone else gets them an hour at a time.' : 'As of ' + E(when || 'the last count') + '. These move once an hour at most, and only after ten more posts.') +
+        'As of ' + E(when || 'the last count') + '. These move once an hour at most, and only after ten more posts.' +
         ' Under ' + MX_MIN + ' posts you get counts, not percentages, because 2 of 3 is not 67% of anything. Raw figures: <a href="api/metrics">api/metrics</a>.';
       foot.hidden = false;
     }
@@ -5711,44 +5688,15 @@ ul.cg-list li::before{content:"\2022";position:absolute;left:0;color:var(--ink-4
     };
     function load(){
       return fetch('api/metrics', { credentials: 'same-origin', headers: { accept: 'application/json' } })
-        .then(function(r){ return r.status === 401 ? { locked: true } : r.ok ? r.json() : { ok: false }; })
+        .then(function(r){ return r.ok ? r.json() : { ok: false }; })
         .catch(function(){ return { ok: false, net: true }; })
         .then(function(j){
           state.asked = false;
-          var lock = $('#mx-lock');
-          if (j.locked){ lock.hidden = false; host.hidden = true; return false; }
-          lock.hidden = true; host.hidden = false;
           state.data = j;
           if (!$('#panel-metrics').hidden) draw();
           return !!j.ok;
         });
     }
-    $('#mx-form').addEventListener('submit', function(e){
-      e.preventDefault();
-      var input = $('#mx-pass'), err = $('#mx-err'), btn = $('#mx-go'), given = input.value;
-      if (!given){ input.focus(); return; }
-      btn.disabled = true; btn.textContent = 'Checking';
-      err.hidden = true; err.textContent = '';
-      getTurnstileToken().then(function(token){
-        return fetch('api/metrics/unlock', { method: 'POST', credentials: 'same-origin', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ password: given, turnstileToken: token }) });
-      })
-        .then(function(r){
-          input.value = '';
-          if (!r.ok) throw { status: r.status };
-          return load().then(function(){ var l = $('#live'); if (l) l.textContent = 'Unlocked.'; var h = document.querySelector('#panel-metrics .mx-h'); if (h){ h.tabIndex = -1; h.focus(); } });
-        })
-        .catch(function(x){
-          var s = x && x.status;
-          err.textContent = s === 401 ? 'That is not it.'
-            : s === 429 ? 'Too many tries from this connection. Come back in an hour.'
-            : s === 404 ? 'There is no door here to open.'
-            : s === 403 ? 'The bot check did not pass. Reload the page and try again.'
-            : 'Could not check that just now. Try again in a minute.';
-          err.hidden = false;
-          input.focus();
-        })
-        .then(function(){ btn.disabled = false; btn.textContent = 'Unlock'; });
-    });
     var tipEl = document.createElement('div'); tipEl.className = 'mx-tip'; tipEl.setAttribute('role', 'tooltip'); tipEl.id = 'mx-tip'; document.body.appendChild(tipEl);
     function showTip(el, x, y){
       var raw; try { raw = JSON.parse(el.getAttribute('data-tip')); } catch (e) { return; }

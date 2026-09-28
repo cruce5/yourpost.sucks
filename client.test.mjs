@@ -607,7 +607,7 @@ await api.unroute('**/api/analyze');
   await api.click('[data-spec="0"]');
   await api.waitForSelector('#report:not([hidden])', { timeout: 20000 });
   check('  ...and a level the page does not know is no card either', await api.evaluate(() => !document.querySelector('#report .adds')));
-  check('what it adds: the what\'s-new line says so, near the top of the list', await api.evaluate(() => { const li = document.getElementById('wn-adds'); return !!li && [...li.parentElement.children].indexOf(li) <= 1 && /not part of the score/.test(li.textContent); }));
+  check('what it adds: the what\'s-new line says so, near the top of the list', await api.evaluate(() => { const li = document.getElementById('wn-adds'); return !!li && [...li.parentElement.children].indexOf(li) <= 2 && /never part of the score/.test(li.textContent); }));
   await api.unroute('**/api/analyze');
 }
 
@@ -828,7 +828,7 @@ check('error is above the kept rewrite, not replacing it', await api.evaluate(()
   check("what's new: the header link opens it as a modal", await api.evaluate(() => document.getElementById('whatsnew').open));
   check('  ...and it says what changed in plain words', await api.evaluate(() => {
     const t = document.getElementById('whatsnew').textContent;
-    return /meaner/i.test(t) && /link/i.test(t) && /rewrite keeps your voice/i.test(t) && /shouting/i.test(t);
+    return /numbers tab is open/i.test(t) && /three screens shorter/i.test(t) && /What it adds/.test(t) && /reader stops/i.test(t) && /reload no longer loses/i.test(t) && /Fixes\./.test(t);
   }));
   check('  ...and it asks for a coffee, labelled as its own place', await api.evaluate(() => {
     const a = document.querySelector('#whatsnew a[data-tip="whatsnew"]');
@@ -1042,7 +1042,7 @@ check('Right from the last tab wraps to the first, and only one tab is in the Ta
 
 // 11a. the numbers
 {
-  const figures = (scored) => ({ ok: true, live: true, at: '2026-09-21T20:00:00.000Z', since: '2026-09-21', scored, clean: Math.round(scored * 0.1),
+  const figures = (scored) => ({ ok: true, live: false, at: '2026-09-21T20:00:00.000Z', since: '2026-09-21', scored, clean: Math.round(scored * 0.1),
     bands: { barely: Math.round(scored * 0.6), normal: Math.round(scored * 0.3), lot: Math.round(scored * 0.08), completely: Math.round(scored * 0.02) },
     scores: [2, 20, 38, 18, 8, 4, 5, 3, 1, 1].map(p => Math.round(scored * p / 100)),
     shape: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 9, 8, 7, 6, 5, 4, 3, 2, 1, 1, 1, 1, 1, 1, 1].map(p => Math.max(1, Math.round(scored * p / 106))),
@@ -1054,32 +1054,13 @@ check('Right from the last tab wraps to the first, and only one tab is in the Ta
     wait: { lt5s: 30, '5to10s': 50, '10to20s': 15, gt20s: 5 } });
   let body = figures(500), hits = 0;
   await api.goto(httpUrl);
-  check('the numbers: the what\'s-new line about it is last, and hidden while the tab is', await api.evaluate(() => { const li = document.getElementById('wn-metrics'); return li.hidden && li === li.parentElement.lastElementChild && li.parentElement.children.length >= 6; }));
-  {
-    const open = await b.newPage();
-    await open.route('**/api/status', route => route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ ok: true, metricsOpen: true, ticker: 10 }) }));
-    await open.goto(httpUrl);
-    await open.waitForFunction(() => !document.getElementById('tab-metrics').hidden, null, { timeout: 5000 });
-    check('the numbers: once the site says it is open, everyone gets the tab and the what\'s-new line', await open.evaluate(() => !document.getElementById('wn-metrics').hidden && document.querySelectorAll('.tab-btn:not([hidden])').length === 4));
-    await open.close();
-  }
-  check('the numbers: the tab is not on the page until it is open to everyone', await api.evaluate(() => document.getElementById('tab-metrics').hidden && getComputedStyle(document.getElementById('tab-metrics')).display === 'none' && getComputedStyle(document.getElementById('wn-metrics')).display === 'none' && [...document.querySelectorAll('.tab-btn')].filter(x => getComputedStyle(x).display !== 'none').length === 3));
-
-  // Behind its door: the address shows the tab, the figures are refused, the padlock answers.
-  let unlocked = false, guesses = [];
-  await api.route('**/api/metrics/unlock', async route => { const g = JSON.parse(route.request().postData()).password; guesses.push(g); if (g === 'open sesame'){ unlocked = true; return route.fulfill({ status: 200, contentType: 'application/json', body: '{"ok":true}' }); } return route.fulfill({ status: 401, contentType: 'application/json', body: '{"error":"wrong"}' }); });
-  await api.route('**/api/metrics', route => { hits++; return unlocked ? route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(body) }) : route.fulfill({ status: 401, contentType: 'application/json', body: '{"error":"locked"}' }); });
+  check('the numbers: the what\'s-new line about it leads the list, and the tab is in the nav for everyone', await api.evaluate(() => { const li = document.getElementById('wn-metrics'); return !li.hidden && li === li.parentElement.firstElementChild && !document.getElementById('tab-metrics').hidden && [...document.querySelectorAll('.tab-btn')].filter(x => getComputedStyle(x).display !== 'none').length === 4 && !document.getElementById('mx-lock') && !document.querySelector('#panel-metrics input'); }));
+  await api.route('**/api/metrics', route => { hits++; return route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(body) }); });
   await api.goto(httpUrl + '#the-numbers'); await api.reload();
-  await api.waitForSelector('#mx-lock:not([hidden])', { timeout: 5000 });
-  check('the numbers: locked, the address shows the tab and a padlock, with no email form and no figures', await api.evaluate(() => !document.getElementById('tab-metrics').hidden && document.querySelectorAll('#panel-metrics .mx-sec').length === 0 && !document.querySelector('#mx-lock input[type="email"]') && document.getElementById('mx-pass').type === 'password'));
-  await api.fill('#mx-pass', 'wrong guess'); await api.click('#mx-go');
-  await api.waitForSelector('#mx-err:not([hidden])', { timeout: 5000 });
-  check('the numbers: a wrong password says so, clears the box and keeps the door shut', await api.evaluate(() => document.getElementById('mx-err').textContent === 'That is not it.' && document.getElementById('mx-pass').value === '' && document.activeElement.id === 'mx-pass' && document.querySelectorAll('#panel-metrics .mx-sec').length === 0));
-  await api.fill('#mx-pass', 'open sesame'); await api.click('#mx-go');
   await api.waitForSelector('#panel-metrics .mx-sec', { timeout: 5000 });
-  check('the numbers: the right one draws the figures, hides the padlock and moves focus to the first finding', await api.evaluate(() => document.getElementById('mx-lock').hidden && document.activeElement.classList.contains('mx-h') && !/open sesame/.test(document.documentElement.innerHTML)), JSON.stringify(guesses));
-  check('the numbers: the footer says how fresh the figures are, and that two people are two posts', await api.evaluate(() => { const t = document.getElementById('mx-foot').textContent; return /re behind the door, so these are live/.test(t) && /counts twice, because it is two people/.test(t) && !/no post text is kept/i.test(document.getElementById('panel-metrics').textContent); }));
-  await api.unroute('**/api/metrics'); await api.unroute('**/api/metrics/unlock');
+  check('the numbers: the address draws the figures for anyone, no door in the way', hits >= 1 && await api.evaluate(() => document.querySelectorAll('#panel-metrics .mx-sec').length >= 6));
+  check('the numbers: the footer says how fresh the figures are, and that two people are two posts', await api.evaluate(() => { const t = document.getElementById('mx-foot').textContent; return /^As of /.test(t.replace(/^Counted since [^.]+\. /, '')) === false ? /As of .*once an hour at most/.test(t) && /counts twice, because it is two people/.test(t) && !/behind the door/.test(t) : false; }), await api.textContent('#mx-foot'));
+  await api.unroute('**/api/metrics');
 
   // Headline drift: every headline is a template over live figures, so the
   // risk is a template that reads wrong at an edge. Sweep the edges.
