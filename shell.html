@@ -1319,9 +1319,15 @@ ul.cg-list li::before{content:"\2022";position:absolute;left:0;color:var(--ink-4
   /* Three swatches and the header link no longer fit beside the brand on a
      phone (they did with one toggle), so under 480 the actions take a row of
      their own, right-aligned, and nothing sits on the logo. */
+  /* Three swatches and the header link beside the brand on one row at 375:
+     a smaller wordmark, narrower swatch targets (still 44 tall), a pill for
+     the link. Under 360 the buttons take their own row (below). */
   @media (max-width:479px){
-    .masthead-row{flex-wrap:wrap;row-gap:4px}
-    .head-actions{margin-left:auto}
+    .brand{font-size:17px}
+    .themes button{width:32px}
+    .themes{margin-right:-4px}
+    .head-link{min-width:0;padding:5px 7px}
+    .head-actions{gap:6px}
   }
   .brand{font-size:21px}
   .brand-flag{margin-right:2px}
