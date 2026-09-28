@@ -1198,7 +1198,7 @@ const MACHINE_TELLS = [
   /\b(?:is|was|are) earned\b|\bearns it\b/i,            // "the absurdity is earned"
   /\bsomeone who (?:learned|knows|understands)\b/i,      // psychoanalysing the author
   /\b(?:masterclass|testament to|tapestry|delve)\b/i,
-  /\bnot (?:just|only|merely|simply)\b/i                  // "not just X, it is Y": the engine roasts posts for this one
+  /\bnot (?:just|only|merely|simply)\b[^.!?]{1,60}[,;—]\s*(?:it'?s|it is|this is|that'?s|they'?re|but|rather)\b/i // "not just X, it is Y": the engine roasts posts for this one
 ];
 const sounds = v => !MACHINE_TELLS.some(re => re.test(String(v)));
 
@@ -1746,7 +1746,11 @@ const NUMBER_WORDS = {
   twice: 2, trio: 3, fortnight: 14,
   // A multiplication is a number: "tripled" slipped the gate on a read whose
   // post had no 3 in it (episode 6).
-  doubled: 2, tripled: 3, quadrupled: 4, thrice: 3
+  doubled: 2, tripled: 3, quadrupled: 4, thrice: 3,
+  // Ordinals and plural scales are counts too (Sieve m22). "First" and
+  // "second" are left out: they are sequence words far more than counts.
+  third: 3, fourth: 4, fifth: 5, sixth: 6, seventh: 7, eighth: 8, ninth: 9, tenth: 10,
+  double: 2, triple: 3, halved: 0.5, dozens: 12, hundreds: 100, thousands: 1000, millions: 1000000
 };
 const NUMBER_WORD_RE = new RegExp('\\b(' + Object.keys(NUMBER_WORDS).join('|') + ')\\b', 'gi');
 
@@ -1816,6 +1820,9 @@ function newNumbersIntroduced(rewritten, originalPost, withRaw) {
   const added = [];
   for (const [v, raw] of numsIn(rewritten)) {
     if (orig.has(v)) continue;
+    // "Steps 3,4" against a post with a 3 and a 4 is a list, not 3.4.
+    const pair = /^(\d+),(\d{1,2})$/.exec(String(raw).trim());
+    if (pair && orig.has(String(Number(pair[1]))) && orig.has(String(Number(pair[2])))) continue;
     // withRaw is for the log line only: the value AND the token as written,
     // so a variant the normaliser missed is visible next time, not a mystery.
     added.push(withRaw && raw !== v ? `${v} (written "${raw}")` : v);
@@ -1856,7 +1863,7 @@ function newNumbersIntroduced(rewritten, originalPost, withRaw) {
  * also asks separately, because one of these in a load-bearing line means
  * the whole response is suspect and none of it should ship. */
 const compromisedLow = low => /https?:\/\/|\bwww\./.test(low) ||
-  /\b(?:10\s*\/\s*10|0\s*\/\s*10|out of 10|scores? \d|perfect post|score of|i (?:will|shall) ignore|as (?:you |an )?instructed|as an a\.?i\b\.?)/.test(low);
+  /\b(?:10\s*\/\s*10|0\s*\/\s*10|\d+(?:\.\d+)?\s*out of 10\b(?!\s+[a-z])|scores? \d|perfect post|score of|i (?:will|shall) ignore|as (?:you |an )?instructed)|(?:^|[.!?]\s+)as an a\.?i\b\.?|\bas an a\.?i (?:model|assistant|language)/.test(low);
 /* The two score phrases a person can have in their OWN post: "the final score
  * of 9 to 1", "a credit score of 720", "scores 3 goals". In text that is meant
  * to BE the writer's post (a Reword rewrite, a drafted post) and nowhere else,

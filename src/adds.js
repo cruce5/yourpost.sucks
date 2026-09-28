@@ -42,7 +42,7 @@ export const IG_REGISTER = Object.freeze([
 /* The writer's name, when the post signs off with it ("-- I'm Bill and ...").
  * The sentence speaks to the writer, so their name in it reads as the site
  * talking about them behind their back. */
-export const signOffName = post => { const m = String(post).match(/(?:(?:^|\n)[ \t]*|--+[ \t]*)I[\u2019']?m[ \t]+(?:\S*[^\sA-Za-z]\S*[ \t]*)?([A-Z][a-z]{1,20})\b/u); return m ? m[1] : null; };
+export const signOffName = post => { const m = String(post).replace(/\s+$/, '').match(/(?:^|\n)[ \t]*(?:--+[ \t]*)?I[\u2019']?m[ \t]+(?:\S*[^\sA-Za-z]\S*[ \t]*)?([A-Z][a-z]{1,20})\b[^\n]*$/u); return m && !/^(?:Head|Excited|Thrilled|So|Now|Here|Not|The|A|An|Also|Still|Just|Proud|Happy|Grateful|Honou?red|Humbled)$/.test(m[1]) ? m[1] : null; };
 /* A sign-off is where the joke lives ("-- I'm Bill and 72 people have blocked
  * me"). A number that only appears there is a punchline, and a sentence that
  * repeats it has reported the joke as a fact (the corpus run of 2026-09-27). */
@@ -57,7 +57,7 @@ const repeatsPunchline = (line, post) => {
 };
 /* What the prompt forbids, held to here too: the filler words and the
  * openers that turn a verdict back into a book report. */
-const BANNED_LINE = /\b(?:specific|offers|provides|valuable|insights?)\b|^(?:you get|you learn|this post|a reader gets)\b/i;
+const BANNED_LINE = /\b(?:specific\w*|offers|provides|valuable|insights?)\b|^(?:you get|you learn|this post|a reader gets)\b/i;
 /* A name the post never mentions. The sentence is about THIS post, so every
  * person, company or product in it has to be one the post named. A capital
  * mid-sentence that is nowhere in the post is taken as a new name and the

@@ -10,7 +10,9 @@
    * helpers
    * ------------------------------------------------------------------ */
 
-  var EMOJI_RE = /(\p{Extended_Pictographic}️?(?:‍\p{Extended_Pictographic}️?)*)/gu;
+  // Keycaps ("1️⃣") and flags (a pair of regional indicators) are emoji too:
+  // they were counted as nothing, and the keycap digits as numbers (Sieve m9).
+  var EMOJI_RE = /([0-9#*]\uFE0F?\u20E3|[\u{1F1E6}-\u{1F1FF}]{2}|\p{Extended_Pictographic}️?(?:‍\p{Extended_Pictographic}️?)*)/gu;
   var EMOJI_SKIP = /^[\u00a9\u00ae\u2122\u2139\u203c\u2049\u3030\u2b1b\u2b1c]$/;
 
   // An emoji that is part of somebody ELSE'S display name, quoted
@@ -47,7 +49,7 @@
   var NAME_EMOJI_RES = [
     NAME_EMOJI_RE,
     new RegExp("(?<=(?:\\b[Ii]['\\u2019]m|\\b[Ii] am|\\b[Tt]his is|\\b[Nn]ame is|\\b[Cc]all me)[ \\t])" + EMO_SRC + '[ \\t]?(?=[A-Z][a-z]+)', 'gu'),
-    new RegExp('(?<=\\b[A-Z][a-z]+[ \\t])' + EMO_SRC + '[ \\t]?(?=[A-Z][a-z]+\\b)', 'gu'),
+    new RegExp('(?<=\\b[A-Z][a-z]+[ \\t])(?!' + REACTION_SRC + ')' + EMO_SRC + '[ \\t]?(?=[A-Z][a-z]+\\b)', 'gu'),
     new RegExp('(?<=' + SIGN_SRC + ')' + EMO_SRC + '[ \\t]?(?=[A-Z][a-z]+)', 'gmu'),
     new RegExp('(?<=' + SIGN_SRC + '[A-Z][a-z]+(?:[ \\t][A-Z][a-z]+)?[ \\t]?)' + EMO_SRC + '(?=[ \\t]*$)', 'gmu'),
     new RegExp('(?<=\\S[ \\t][A-Z][a-z]+[ \\t][A-Z][a-z]+[ \\t]?)(?!' + REACTION_SRC + ')' + EMO_SRC, 'gu')
@@ -141,8 +143,11 @@
   // folded inside a word that is otherwise ASCII letters: a real Cyrillic word
   // ("Москва") is left alone, and so is a lookalike standing on its own.
   var CYR_LOOKALIKE = { 'а': 'a', 'е': 'e', 'о': 'o', 'р': 'p', 'с': 'c', 'х': 'x', 'у': 'y',
-                        'А': 'A', 'Е': 'E', 'О': 'O', 'Р': 'P', 'С': 'C', 'Х': 'X', 'У': 'Y' };
-  var CYR_CHARS = 'аеорсхуАЕОРСХУ';
+                        'А': 'A', 'Е': 'E', 'О': 'O', 'Р': 'P', 'С': 'C', 'Х': 'X', 'У': 'Y',
+                        // and the Greek ones (Sieve m17)
+                        'ο': 'o', 'α': 'a', 'ε': 'e', 'ι': 'i', 'κ': 'k', 'ν': 'v', 'ρ': 'p', 'τ': 't', 'υ': 'u', 'χ': 'x',
+                        'Α': 'A', 'Β': 'B', 'Ε': 'E', 'Ζ': 'Z', 'Η': 'H', 'Ι': 'I', 'Κ': 'K', 'Μ': 'M', 'Ν': 'N', 'Ο': 'O', 'Ρ': 'P', 'Τ': 'T', 'Υ': 'Y', 'Χ': 'X' };
+  var CYR_CHARS = 'аеорсхуАЕОРСХУοαεικνρτυχΑΒΕΖΗΙΚΜΝΟΡΤΥΧ';
   var CYR_CHAR_RE = new RegExp('[' + CYR_CHARS + ']', 'g');
   var MIXED_WORD_RE = new RegExp('(?<!\\p{L})[A-Za-z' + CYR_CHARS + ']+(?!\\p{L})', 'gu');
 
@@ -251,7 +256,7 @@
   // LinkedIn dialect vs ordinary English: the same word is a sin in an
   // announcement and a normal word inside a story. Only count the phrase when
   // the sentence around it is actually doing announcement work.
-  var ANNOUNCE_CONTEXT = /\b(join(ing|ed)?|start(ing|ed)?|announc|excited|thrilled|proud|delighted|role|position|title|company|team|career|promot|hired|onboard|day one|first day|new job|next step|opportunity|chapter of my|officially)\b/;
+  var ANNOUNCE_CONTEXT = /\b(join(ing|ed)?|start(ing|ed)?|announc\w*|excited|thrilled|proud|delighted|new role|this role|my role|position|title|new company|career|promot\w*|hired|onboard\w*|day one|first day|new job|next step|opportunity|chapter of my|officially)\b/;
 
   function inAnnouncementSentence(ctx, phrase) {
     for (var i = 0; i < ctx.sentences.length; i++) {
@@ -299,12 +304,20 @@
     return out;
   }
 
+  function negatedAt(lower, start) {
+    var before = lower.slice(Math.max(0, start - 60), start);
+    var cut = Math.max(before.lastIndexOf('.'), before.lastIndexOf('!'), before.lastIndexOf('?'), before.lastIndexOf('\n'), before.lastIndexOf(','), before.lastIndexOf(';'));
+    if (cut >= 0) before = before.slice(cut + 1);
+    before = before.replace(/\bno one\b|\bnobody\b/g, ' ');
+    var words = before.trim().split(/\s+/).slice(-3);
+    return words.some(function (w) { return /^(not|never|no|none|nothing|without)$/.test(w) || /n't$/.test(w); }) || /\bstop being\s*$/.test(before);
+  }
   function anyPhraseNotNegated(ctx, list) {
     logList(list);
     var hits = [];
     for (var i = 0; i < list.length; i++) {
-      var ranges = phraseMatches(ctx.lower, list[i]);
-      if (ranges.length && !isNegatedInSentence(ctx, list[i])) hits.push({ phrase: list[i], ranges: ranges });
+      var ranges = phraseMatches(ctx.lower, list[i]).filter(function (r) { return !negatedAt(ctx.lower, r.start); });
+      if (ranges.length) hits.push({ phrase: list[i], ranges: ranges });
     }
     return distinctOccurrences(hits);
   }
@@ -459,17 +472,25 @@
     // a "paragraph" = a run of text separated by a blank line OR a hard newline
     var paras = raw.split(/\n\s*\n/).map(function (p) { return p.trim(); }).filter(Boolean);
 
-    var hashtags = raw.match(/(^|\s)#[A-Za-z][\w]{1,}/g) || [];
+    var hashtags = raw.match(/(^|[^\w&#])#(?=\w*[A-Za-z])\w{2,}/g) || [];
     var mentions = raw.match(/(^|\s)@[A-Za-z][\w.'-]{1,}/g) || [];
     var urls = raw.match(/https?:\/\/\S+|www\.\S+/g) || [];
     var numbers = (stripped.match(/\b\d[\d,.]*(%|k|m|x)?\b/gi) || [])
-      .concat(stripped.match(/\b(one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve|twenty|thirty|forty|fifty|hundred|thousand|million)\b/gi) || []);
+      .concat(stripped.replace(/\b(?:no|any|every|some|this|that|which|each|the|only|little|big) one\b|\b(?:someone|anyone|everyone|no-one)\b/gi, ' ').match(/\b(one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve|twenty|thirty|forty|fifty|hundred|thousand|million)\b/gi) || []);
     var emdashes = (raw.match(/—/g) || []).length;
 
+    // Sentences with every line break as a boundary too. Eight unpunctuated
+    // lines used to join into one 57-word "sentence": seven line-initial
+    // capitals became proper nouns and long-sentences fired beside broetry
+    // (Sieve m8). Used for the name scan and the average length only.
+    var lineUnits = [];
+    raw.split(/\n+/).forEach(function (line) {
+      line.split(/(?<=[.!?])\s+/).forEach(function (u) { u = u.trim(); if (u) lineUnits.push(u); });
+    });
     // proper nouns: capitalised words that aren't sentence-initial and aren't "I"
     var propers = [];
-    for (var i = 0; i < sentences.length; i++) {
-      var clean = sentences[i].replace(/[@#][A-Za-z][\w.'-]*/g, ' ');
+    for (var i = 0; i < lineUnits.length; i++) {
+      var clean = lineUnits[i].replace(/[@#][A-Za-z][\w.'-]*/g, ' ');
       var toks = clean.match(/[A-Za-z][A-Za-z'’.-]*/g) || [];
       for (var j = 1; j < toks.length; j++) {
         var tk = toks[j].replace(/[.,;:!?'’]+$/, '');
@@ -572,7 +593,7 @@
       specifics: numbers.length + propers.length + acronyms.length + reportedSpeech,
       allCaps: allCaps,
       emdashes: emdashes,
-      avgSentence: sentences.length ? wc / sentences.length : 0,
+      avgSentence: lineUnits.length ? wc / lineUnits.length : 0,
       pastVerbs: pastVerbs + reportedSpeech,
       seed: hashCode(raw.trim().toLowerCase())
     };
@@ -626,7 +647,7 @@
     label: 'Excited and also cannot wait',
     dim: 'auth',
     test: function (ctx) {
-      var hasExcite = anyPhraseNotNegated(ctx, ANNOUNCE).length > 0 || countPhrase(ctx.lower, 'excited') > 0;
+      var hasExcite = anyPhraseNotNegated(ctx, ANNOUNCE).length > 0 || anyPhraseNotNegated(ctx, ['excited']).length > 0;
       var f = anyPhrase(ctx, ["can't wait", 'cannot wait', 'can not wait', 'cant wait']);
       if (!hasExcite || !f.length) return null;
       return { n: 1, vars: {}, pen: { auth: 1.2, cring: 0.8 } };
@@ -669,6 +690,17 @@
     test: function (ctx) {
       var f = anyPhrase(ctx, ['officially', "it's official", 'it is official', 'made it official']);
       if (!f.length) return null;
+      // The author's ceremony, not the news: "The EU officially adopted the AI
+      // Act" is a report (Sieve m11). A first-person word in the sentence or
+      // one either side.
+      var OFF = /\b(?:officially|it's official|it is official|made it official)\b/, ME = /\b(?:i|i'm|i've|me|my|we|we're|our|us)\b/;
+      // A sentence that opens with it ("Officially an Acme employee.") is a
+      // fragment about the writer, and counts as theirs too.
+      var own = ctx.sentences.some(function (sn, k) {
+        var l = sn.toLowerCase();
+        return OFF.test(l) && (/^\W*(?:officially|it's official|it is official)\b/.test(l) || ME.test([ctx.sentences[k - 1] || '', sn, ctx.sentences[k + 1] || ''].join(' ').toLowerCase()));
+      });
+      if (!own) return null;
       return { n: totalOf(f), vars: {}, pen: { auth: 0.9, cring: 0.5 } };
     },
     roasts: [
@@ -683,7 +715,10 @@
     label: 'Buried lede',
     dim: 'clar',
     test: function (ctx) {
-      var f = anyPhrase(ctx, ['some news', 'big news', 'some exciting news', 'personal news',
+      // Only at the top: in the middle of a sentence it is just a noun (Sieve m3).
+      var opener = function (t) { t = String(t || '').toLowerCase().trim(); return (t.match(/\S+/g) || []).length <= 8 || /^(?:(?:i have |i've got |got |so,? |ok,? |well,? )?(?:some|big|personal|a little|life)\b|an update)/.test(t) ? t : ''; };
+      var top = opener(ctx.sentences[0]) + '\n' + opener(ctx.nonEmptyLines[0]);
+      var f = anyPhrase({ lower: top }, ['some news', 'big news', 'some exciting news', 'personal news',
         'an update', 'a little update', 'life update', 'some updates']);
       if (!f.length) return null;
       return { n: totalOf(f), vars: { p: f[0].phrase }, pen: { clar: 2.2, bait: 1.4 } };
@@ -702,7 +737,9 @@
     label: 'Gratitude spam',
     dim: 'auth',
     test: function (ctx) {
-      var f = anyPhrase(ctx, ['grateful', 'gratitude', 'thankful', 'so thankful',
+      // The band is not gratitude, and neither is "I am not grateful" (Sieve m11).
+      var lowerG = ctx.lower.replace(/\bgrateful dead\b/g, function (m) { return m.replace(/./g, ' '); });
+      var f = anyPhraseNotNegated({ lower: lowerG }, ['grateful', 'gratitude', 'thankful', 'so thankful',
         'blessed', 'humbled and grateful', 'forever grateful', 'eternally grateful']);
       if (!f.length) return null;
       var n = totalOf(f);
@@ -747,7 +784,9 @@
     label: 'Everyone who believed in me',
     dim: 'auth',
     test: function (ctx) {
-      var f = anyPhrase(ctx, ['believed in me', 'believe in me', "couldn't have done it without",
+      // "Nobody believed in me" is the rejection arc, not the thank-you (Sieve m14).
+      var lowerB = ctx.lower.replace(/\b(?:nobody|no one|no-one) (?:ever )?believed in me\b/g, function (m) { return m.replace(/./g, ' '); });
+      var f = anyPhrase({ lower: lowerB }, ['believed in me', 'believe in me', "couldn't have done it without",
         'could not have done it without', 'took a chance on me', 'saw something in me',
         'everyone who supported', 'my support system']);
       if (!f.length) return null;
@@ -833,7 +872,7 @@
       var n = 0, sample = '';
       for (var i = 0; i < ctx.nonEmptyLines.length; i++) {
         var l = ctx.nonEmptyLines[i];
-        if (/^(\p{Extended_Pictographic}️?|[✅✔️☑️➡️👉▶️🔹🔸💡⚡️🔥⭐️✨])/u.test(l)) {
+        if (/^([0-9#*]\uFE0F?\u20E3|\p{Extended_Pictographic}️?|[✅✔️☑️➡️👉▶️🔹🔸💡⚡️🔥⭐️✨])/u.test(l) && !EMOJI_SKIP.test(Array.from(l)[0] || '')) {
           n++; if (!sample) sample = l.slice(0, 40);
         }
       }
@@ -870,12 +909,21 @@
     label: 'Honored / recognized',
     dim: 'brag',
     test: function (ctx) {
-      var f = anyPhraseNotNegated(ctx, ['honored to', 'honoured to', 'privileged to', 'proud to be named',
-        'named to', 'recognized as', 'recognised as', 'top voice',
-        'made the list', 'named one of', 'featured in', 'selected as', 'selected for']);
+      // Somebody else's honour ("my sister, who was named to...") is taken out
+      // before anything is looked for, so it can neither match nor supply the
+      // first-person gate below (Sieve m4).
+      var otherHonour = /\bwho (?:was|is|has been|got|were|have been) (?:just )?(?:named|recogni[sz]ed|selected|featured|honou?red)[^.!?\n]*/gi;
+      var blank = function (m) { return m.replace(/./g, ' '); };
+      var lowerH = ctx.lower.replace(otherHonour, blank), rawH = ctx.raw.replace(otherHonour, blank);
+      var f = anyPhraseNotNegated({ lower: lowerH }, ['honored to', 'honoured to', 'privileged to', 'proud to be named',
+        'named to', 'top voice', 'made the list', 'named one of', 'featured in', 'selected as']);
+      // "Selected for" and "recognized as" only before an honour: "we selected
+      // for accounts with 3 seats" is a filter, not an award.
+      var honour = lowerH.match(/\b(?:recogni[sz]ed as|selected for) (?:a |an |the |one of (?:the )?)?(?:top|best|award|honou?r|list|finalist|winner|fellow|\d+ under \d+)/g) || [];
+      if (honour.length) f = f.concat([{ phrase: honour[0].split(' ').slice(0, 2).join(' '), n: honour.length }]);
       // only a brag if the author is the subject. "Her painting won an award"
       // is somebody else's news
-      if (!/\b(i|i'm|i am|i've|my|we|our)\b[^.!?]{0,60}\b(honou?red|privileged|named|recognis|recogniz|award|selected|featured)/i.test(ctx.raw)) return null;
+      if (!/\b(i|i'm|i am|i've|my|we|our)\b[^.!?]{0,60}\b(honou?red|privileged|named|recognis|recogniz|award|selected|featured)/i.test(rawH)) return null;
       if (!f.length) return null;
       var n = totalOf(f);
       return { n: n, vars: { p: f[0].phrase, n: n }, pen: { brag: clamp(1.8 + (n - 1) * 0.7, 0, 3.8), auth: 0.8 } };
@@ -895,7 +943,7 @@
       // "she is going to do big things" is about a child, not a brag
       if (!/\b(i|i'm|i am|we|we're|my|our)\b/i.test(ctx.raw)) return null;
       var f = anyPhrase(ctx, ['make an impact', 'making an impact', 'make a difference',
-        'move the needle', 'drive impact', 'meaningful impact', 'real impact',
+        'move the needle', 'drive impact', 'driving impact', 'drives impact', 'meaningful impact',
         'change the game', 'change lives', 'build something special',
         'do great things', 'big things', 'amazing things']);
       if (!f.length) return null;
@@ -914,7 +962,9 @@
     label: 'Dream job',
     dim: 'brag',
     test: function (ctx) {
-      var f = anyPhrase(ctx, ['dream job', 'dream company', 'dream role', 'dream team',
+      // A capitalised Dream Team is a name (the 1992 one, most often).
+      var lowerDJ = ctx.lower.replace(/dream team/g, function (m, at) { return /Dream Team/.test(ctx.raw.slice(at, at + 10)) ? '          ' : m; });
+      var f = anyPhrase({ lower: lowerDJ }, ['dream job', 'dream company', 'dream role', 'dream team',
         'always wanted to work', 'lifelong dream', 'bucket list']);
       if (!f.length) return null;
       return { n: totalOf(f), vars: { p: f[0].phrase }, pen: { brag: 1.9, auth: 1.2 } };
@@ -931,8 +981,8 @@
     label: 'Rejection-to-triumph arc',
     dim: 'brag',
     test: function (ctx) {
-      var adversity = anyPhrase(ctx, ['rejected', 'rejection', 'told me no', 'said no',
-        'laid off', 'let go', 'passed over', 'turned down',
+      var adversity = anyPhrase(ctx, ['i was rejected', 'i got rejected', 'rejected me', 'they rejected', 'rejection', 'told me no', 'said no',
+        'laid off', 'was let go', 'were let go', 'got let go', 'been let go', 'passed over', 'turned down',
         'doubters', 'nobody believed', 'no one believed',
         'hit rock bottom', 'rock bottom', 'lowest point',
         '0 offers', 'zero offers']);
@@ -986,7 +1036,7 @@
       // humble brag. Bare adverbs are ordinary English and were removed.
       var f = anyPhrase(ctx, ['not to brag', "don't mean to brag", 'no big deal',
         'humble brag', 'little did i know',
-        'i never expected', 'never expected this',
+        'never expected this',
         'i don\'t usually post', 'i rarely post', 'not something i usually share',
         'i don\'t normally share']);
       if (!f.length) return null;
@@ -1013,7 +1063,7 @@
     'thoughts?', 'agree?', 'am i wrong', 'change my mind', 'who\'s with me',
     'what do you think', 'let me know what you think'];
   var ASK_FOLLOW = ['follow me for more', 'hit follow', 'follow for more',
-    'repost this', 'share this with', 'share if you agree', 'like and share',
+    'repost this', 'share this with your network', 'share this with someone', 'share this with a friend', 'share if you agree', 'like and share',
     'save this post', 'bookmark this', 'save this for later', 'ring the bell',
     'connect with me', 'send me a dm', 'dm me', 'link in comments',
     'link in the comments', 'more in the comments',
@@ -1066,7 +1116,10 @@
     label: 'Manufactured profundity',
     dim: 'bait',
     test: function (ctx) {
-      var f = anyPhrase(ctx, ['let that sink in', 'read that again', 'read it again',
+      // "Think about that" is an instruction only as its own sentence; "I
+      // think about that day often" is a memory (Sieve m11).
+      var lowerS = ctx.lower.replace(/\bthink about that\b(?![.!?\n]|$)/g, function (m) { return m.replace(/./g, ' '); });
+      var f = anyPhrase({ lower: lowerS }, ['let that sink in', 'read that again', 'read it again',
         'sit with that', 'think about that', 'let me repeat that', 'say it louder',
         'this is not a drill', 'i\'ll say what nobody', 'nobody talks about this',
         'nobody tells you', 'no one tells you', 'here\'s the thing', 'here is the thing']);
@@ -1074,7 +1127,9 @@
       // leadership piece, and even a joke" mid-sentence is someone naming the
       // genre, not performing it. These three only count as an opener: the
       // start of the post, a line, or a sentence.
-      var openers = ctx.lower.match(/(?:^|[.!?]\s+|\n\s*)(?:unpopular opinion|hot take|controversial opinion)\b/g) || [];
+      // The emoji run stays on its own line ([ \t], never \s): letting it
+      // cross newlines made a column of emoji quadratic.
+      var openers = ctx.lower.match(/(?:^|[.!?][ \t]+|\n[ \t]*)(?:\p{Extended_Pictographic}\uFE0F?[ \t]*)*(?:unpopular opinion|hot take|controversial opinion)\b/gu) || [];
       for (var oi = 0; oi < openers.length; oi++) {
         f.push({ phrase: openers[oi].replace(/^[^a-z]*/, ''), n: 1 });
       }
@@ -1096,7 +1151,10 @@
     label: 'Numbered lessons',
     dim: 'bait',
     test: function (ctx) {
-      var m = ctx.raw.match(/\b(\d+)\s+(lessons?|things?|ways?|reasons?|mistakes?|rules?|truths?|habits?|takeaways?|steps?)\b/i);
+      // A numbered list is announced: at the start of a line or sentence, or
+      // after "here are", "these", "my", "the (same|top)". "I walk 10,000
+      // steps" and "took 3 steps back" are not lists (Sieve m6).
+      var m = ctx.raw.match(/(?:^|[\n.!?:]\s*|\b(?:here are|these|those|my|the|the same|top)\s+(?:top\s+)?)(?<![\d,.])(\d+|three|four|five|six|seven|eight|nine|ten)\s+(lessons?|things?|ways?|reasons?|mistakes?|rules?|truths?|habits?|takeaways?|steps?)\b/im);
       if (!m) return null;
       return { n: 1, vars: { k: m[1], t: m[2].toLowerCase() }, pen: { bait: 1.8, auth: 1.3, cring: 0.8 } };
     },
@@ -1113,7 +1171,7 @@
     dim: 'bait',
     test: function (ctx) {
       var last = ctx.nonEmptyLines[ctx.nonEmptyLines.length - 1] || '';
-      if (!/\?\s*$/.test(last)) return null;
+      if (!/\?[\s\p{Extended_Pictographic}\uFE0F\u200D]*$/u.test(last)) return null;
       if (last.length > 140) return null;
       return { n: 1, vars: { q: last.slice(0, 90) }, pen: { bait: 1.6 } };
     },
@@ -1156,7 +1214,7 @@
     test: function (ctx) {
       var f = anyPhrase(ctx, ['being vulnerable', 'getting vulnerable',
         'real talk', 'raw and unfiltered', 'unfiltered truth', 'being transparent',
-        'full transparency', 'transparency moment', 'i\'m going to be honest',
+        'full transparency', 'transparency moment', 'i\'m going to be honest', 'i\'ll be honest', 'to be honest',
         'let me be honest', 'honest moment', 'i\'ve never shared this',
         'i have never shared this', 'this is hard to write', 'hardest thing i\'ve',
         'not easy to share', 'deeply personal', 'i debated posting this',
@@ -1178,7 +1236,7 @@
     label: 'Rapid growth narrative',
     dim: 'auth',
     test: function (ctx) {
-      var bad = anyPhrase(ctx, ['laid off', 'let go', 'lost my job', 'restructuring',
+      var bad = anyPhrase(ctx, ['laid off', 'was let go', 'were let go', 'got let go', 'been let go', 'lost my job', 'my role was restructured', 'team was restructured', 'lost my role in',
         'role was eliminated', 'position was eliminated', 'impacted by layoffs',
         'part of the layoffs', 'burnout', 'burned out', 'burnt out']);
       var spin = anyPhrase(ctx, ['silver lining', 'blessing in disguise', 'best thing that',
@@ -1208,7 +1266,7 @@
         'pivoting to', 'pivoted into', 'levelling up', 'leveling up',
         'growth mindset', 'imposter syndrome', 'reinvention', 'reinventing myself',
         'portfolio career', 'solopreneur', 'building in public',
-        'my north star', 'intentional about', 'lean in', 'show up authentically',
+        'intentional about', 'lean in', 'show up authentically',
         'bringing my whole self', 'my why', 'find your why', 'zone of genius',
         'next season of', 'answering the call']);
       // "the pivot table" is a spreadsheet, not a career move. Drop the
@@ -1244,6 +1302,7 @@
       // Ramps in over 30..40 words. A 29-word post and a 31-word post with
       // the same layout used to sit on opposite sides of a 4-point cliff.
       var ramp = clamp((ctx.wc - 30) / 10, 0, 1);
+      if (ramp <= 0) return null;
       var avg = Math.round((ctx.wc / lines.length) * 10) / 10;
       return {
         n: lines.length,
@@ -1268,6 +1327,9 @@
       var hits = ctx.proseLines.filter(function (l, i) {
         var w = (l.match(/\S+/g) || []).length;
         // the final line is an ending, not a dramatic pause
+        if (/^[^\p{L}\p{N}]+$/u.test(l)) return false;
+        var CLOSE = /^(?:cheers|thanks|thank you|best|regards|warmly|love|xo)[,!.]?$/i;
+        if (CLOSE.test(l) || (CLOSE.test(ctx.proseLines[i - 1] || '') && /^[A-Z][a-z]+\.?$/.test(l))) return false;
         return i > 0 && i < last && w <= 2 && l.length > 1 && !/^[-•*\d]/.test(l);
       });
       if (!hits.length) return null;
@@ -1302,7 +1364,7 @@
     label: 'Machine-assisted phrasing',
     dim: 'auth',
     test: function (ctx) {
-      var f = anyPhrase(ctx, ['delve', 'delved', 'delving', 'in today\'s fast-paced',
+      var f = anyPhrase(ctx, ['delve', 'delves', 'delved', 'delving', 'in today\'s fast-paced',
         'in today\'s digital', 'in an ever-evolving', 'ever-evolving landscape',
         'navigate the complexities', 'navigating the complexities', 'a testament to',
         'underscores the importance', 'highlights the importance', 'it\'s worth noting',
@@ -1310,7 +1372,7 @@
         'harness the power', 'unlock the potential', 'unleash', 'game-changer',
         'game changer', 'seamlessly', 'robust', 'holistic', 'resonate', 'resonates',
         'curated', 'elevate', 'transformative', 'paradigm', 'synergy', 'synergies',
-        'the intersection of', 'at its core', 'more than just', 'not just a', 'not just about']);
+        'the intersection of', 'at its core', 'more than just']);
       if (!f.length) return null;
       var n = totalOf(f);
       var names = f.slice(0, 3).map(function (x) { return '"' + x.phrase + '"'; }).join(', ');
@@ -1362,13 +1424,13 @@
     label: 'Corporate filler',
     dim: 'clar',
     test: function (ctx) {
-      var f = anyPhrase(ctx, ['leverage', 'leveraging', 'stakeholder', 'stakeholders',
+      var f = anyPhrase(ctx, ['leverage', 'leveraged', 'leveraging', 'stakeholder', 'stakeholders',
         'best-in-class', 'best in class', 'value add', 'value-add', 'actionable insights',
         'data-driven', 'data driven', 'at scale', 'north star', 'double down',
         'learnings', 'ideate', 'bandwidth', 'low-hanging fruit', 'circle back',
-        'touch base', 'align on', 'alignment', 'moving forward', 'going forward',
+        'touch base', 'align on', 'strategic alignment', 'cross-functional alignment', 'alignment on', 'moving forward', 'going forward',
         'at the end of the day', 'operationalize', 'operationalise', 'ecosystem',
-        'the space', 'thought leadership', 'thought leader', 'best practices',
+        'in the space', 'thought leadership', 'thought leader', 'best practices',
         'end-to-end', 'cross-functional', 'strategic priorities', 'force multiplier']);
       if (!f.length) return null;
       var n = totalOf(f);
@@ -1693,8 +1755,7 @@
       var lines = ctx.nonEmptyLines;
       if (lines.length < 1) return null;
       var tail = lines.slice(-2).join(' ');
-      if (!/^\s*(--|—|–|ps[.:]|p\.s\.)/i.test(lines[lines.length - 1]) &&
-          !/(^|\s)(--|—)\s/.test(tail)) return null;
+      if (!/^\s*(--|—|–|ps[.:]|p\.s\.)/i.test(lines[lines.length - 1])) return null;
       if (!/\b(learn more|tune in|join us|tomorrow on|catch (?:us|the)|subscribe|available on|episode|new post|link in|more on)\b/i.test(tail)) return null;
       // The span is the last line alone. It used to be the last two lines
       // joined by a space and cut to 90 characters, which is not text the post
@@ -1713,7 +1774,8 @@
     label: 'Hedged claim',
     dim: 'auth',
     test: function (ctx) {
-      var f = anyPhrase(ctx, ['probably', 'i think maybe', 'sort of', 'kind of',
+      var hedgeLower = ctx.lower.replace(/\b(?:what|this|that|a|an|new|any|which|the|every|some|same|different|one|each|another|my|our|your) (?:kind|sort) of\b/g, function (m) { return m.replace(/./g, ' '); });
+      var f = anyPhrase({ lower: hedgeLower }, ['probably', 'i think maybe', 'sort of', 'kind of',
         'we\'d love for you', 'we would love for you', 'we might', 'i guess',
         'a bit of a', 'somewhat', 'if that makes sense', 'just my two cents',
         'not sure if', 'i could be wrong but', 'hopefully']);
@@ -1735,7 +1797,11 @@
     dim: 'bait',
     test: function (ctx) {
       var first = (ctx.sentences[0] || '').trim();
-      if (!/\?$/.test(first)) return null;
+      // "...go unused?🤔 Here is what" is one "sentence" to the splitter
+      // (no space after the "?"), so the question is read off the front.
+      var qm = first.match(/^[^?]{1,130}\?+(?=[\s\p{Extended_Pictographic}\uFE0F\u200D]|$)/u);
+      if (!qm) return null;
+      first = qm[0];
       if (first.length > 130) return null;
       // a very short post can BE the question (a caption over an image)
       if (ctx.wc <= 12) return null;
@@ -2242,7 +2308,10 @@
     // you, or grateful/thankful TO somebody.
     var ti = lower.search(/\bthank(?:s|ed| you)?\b|\b(?:grateful|thankful) to\b/);
     if (ti >= 0) {
-      var win = raw.slice(Math.max(0, ti - 70), ti + 70).replace(/^[^\s]*\s/, '');
+      var win = raw.slice(Math.max(0, ti - 70), ti + 70).replace(/^[^\s]*\s/, '')
+        // the thank-words themselves, and a capital that only opens a sentence
+        .replace(/\b(?:Thank(?:s|ed| you)?|Grateful|Thankful)\b/g, ' ')
+        .replace(/(^|[.!?]\s+)[A-Z][a-z]+/g, '$1 ');
       nearName = /(?:^|\s)[A-Z][a-z]{2,}/.test(win);
     }
     var named = vocative || nearName;
@@ -2495,7 +2564,7 @@
     // "Diagnosed the churn problem" is business; "diagnosed a year ago" is not.
     'diagnosed': /\bdiagnos(?:ed|e|ing) (?:the|our|its|it|them|what|why|which|where|how)\b(?! (?:with|cancer|year|month|week|spring|summer|fall|autumn|winter)\b)|\bdiagnos(?:ed|e|ing) (?:a|an|this|that) (?:bug|issue|problem|leak|bottleneck|churn|drop|spike|gap|failure|outage|regression|error|mismatch|flaw|slowdown|decline)\b/,
     'terminal': /\bterminal (?:window|command|session|emulator|velocity|value|output|app|tab|access|screen|node|prompt|ui|interface|commands?)\b|\b(?:airport|bus|train|ferry|payment|pos|card|bloomberg|shipping|container|cargo|the|a|my|your) terminal\b(?! (?:phase|stage|diagnosis|illness|cancer|condition)\b)|\bterminals\b/,
-    'surgery': /\b(?:open-?heart|brain|plastic) surgery on (?:the|our|a|this) (?:codebase|schema|budget|org|process|deck|pipeline|database|roadmap)\b/,
+    'surgery': /\b(?:(?:open-?heart|brain|plastic|major|minor) )?surgery on (?:the|our|a|this|my|that) (?:codebase|schema|budget|org|process|deck|pipeline|database|roadmap|data model|model|dashboard|spreadsheet|query|script|slides?|resume|website|site|funnel|workflow|backlog|org chart)\b/,
     // "lost my job" and "we lost the deal" are not bereavement. These two
     // only count when the thing lost is a person (or a pet).
     // An allow-list of the things, not a deny-list of the people: "lost my
