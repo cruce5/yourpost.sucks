@@ -1,0 +1,412 @@
+<!DOCTYPE html>
+<html lang="en" class="h-full">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Unicode Screen Reader Presentation</title>
+    <!-- Tailwind CSS CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+            theme: {
+                extend: {
+                    colors: {
+                        primary: { 50: '#f0fdf4', 100: '#dcfce7', 500: '#22c55e', 600: '#16a34a', 700: '#15803d' },
+                        nightmare: { 50: '#fef2f2', 100: '#fee2e2', 500: '#ef4444', 600: '#dc2626' }
+                    }
+                }
+            }
+        }
+    </script>
+    <!-- FontAwesome Icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <!-- Google Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+
+    <style>
+        body { font-family: 'Inter', sans-serif; }
+        .font-mono-code { font-family: 'JetBrains Mono', monospace; }
+    </style>
+</head>
+<body class="bg-slate-900 text-slate-100 min-h-full flex flex-col antialiased selection:bg-emerald-500 selection:text-white">
+
+    <!-- Minimal Header -->
+    <header class="border-b border-slate-800 bg-slate-900/80 backdrop-blur sticky top-0 z-40">
+        <div class="max-w-5xl mx-auto px-6 h-16 flex items-center justify-between">
+            <div class="flex items-center gap-3">
+                <div id="header-icon" class="w-9 h-9 rounded-xl bg-nightmare-600 flex items-center justify-center text-white shadow-lg transition-colors duration-300">
+                    <i class="fa-solid fa-triangle-exclamation text-base" aria-hidden="true"></i>
+                </div>
+                <div>
+                    <h1 class="font-bold text-base tracking-tight text-white flex items-center gap-2">
+                        Unicode Screen Reader Demo
+                        <span id="mode-pill" class="text-[10px] uppercase tracking-wider bg-nightmare-500/20 text-nightmare-400 border border-nightmare-500/30 px-2 py-0.5 rounded-full font-semibold">Literal Nightmare</span>
+                    </h1>
+                </div>
+            </div>
+
+            <!-- Mode Switcher & Presets -->
+            <div class="flex items-center gap-3">
+                <div class="bg-slate-800 p-1 rounded-xl flex items-center border border-slate-700">
+                    <button id="btn-literal" class="px-3 py-1.5 text-xs font-bold rounded-lg bg-nightmare-600 text-white shadow transition-all flex items-center gap-1.5">
+                        <i class="fa-solid fa-bug" aria-hidden="true"></i> Literal Unicode
+                    </button>
+                    <button id="btn-clean" class="px-3 py-1.5 text-xs font-bold rounded-lg text-slate-400 hover:text-white transition-all flex items-center gap-1.5">
+                        <i class="fa-solid fa-circle-check" aria-hidden="true"></i> Smart Screen Reader
+                    </button>
+                </div>
+            </div>
+        </div>
+    </header>
+
+    <!-- Main Presentation Workspace -->
+    <main class="flex-1 max-w-5xl w-full mx-auto px-6 py-8 flex flex-col gap-6">
+
+        <!-- Preset Quick Bar -->
+        <div class="flex items-center justify-between flex-wrap gap-3">
+            <span class="text-xs font-semibold text-slate-400 uppercase tracking-wider flex items-center gap-2">
+                <i class="fa-solid fa-bolt text-amber-400" aria-hidden="true"></i> Demo Presets:
+            </span>
+            <div class="flex items-center gap-2 flex-wrap">
+                <button id="preset-bold" class="text-xs bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-300 px-3 py-1.5 rounded-lg font-medium transition-colors">
+                    Styled Bold: 𝘁𝘆𝗽𝗲𝗴𝗿𝗼𝘄.𝗰𝗼𝗺
+                </button>
+                <button id="preset-zalgo" class="text-xs bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-300 px-3 py-1.5 rounded-lg font-medium transition-colors">
+                    Zalgo / Diacritics
+                </button>
+                <button id="preset-emoji" class="text-xs bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-300 px-3 py-1.5 rounded-lg font-medium transition-colors">
+                    Emoji Sequence
+                </button>
+            </div>
+        </div>
+
+        <!-- Editor & Output Card -->
+        <div class="bg-slate-800/50 border border-slate-700/80 rounded-2xl shadow-xl flex flex-col overflow-hidden backdrop-blur">
+            <div class="px-6 py-3 bg-slate-800/90 border-b border-slate-700 flex items-center justify-between">
+                <span class="text-xs font-semibold text-slate-400 uppercase tracking-wider">Paste Text / Unicode Sample</span>
+                <button id="clear-btn" class="text-xs text-slate-400 hover:text-white transition-colors">Clear Text</button>
+            </div>
+            
+            <div class="relative min-h-[180px] p-6">
+                <textarea id="text-input" spellcheck="false" class="w-full h-36 bg-transparent text-slate-100 text-xl font-mono-code leading-relaxed border-0 focus:ring-0 outline-none resize-none placeholder-slate-500" placeholder="Type or paste styled Unicode text...">𝘁𝘆𝗽𝗲𝗴𝗿𝗼𝘄.𝗰𝗼𝗺</textarea>
+            </div>
+
+            <!-- Action Bar -->
+            <div class="px-6 py-4 bg-slate-800/90 border-t border-slate-700 flex items-center justify-between flex-wrap gap-4">
+                <div class="flex items-center gap-3">
+                    <button id="play-btn" class="px-6 py-3 bg-nightmare-600 hover:bg-nightmare-500 text-white font-bold rounded-xl shadow-lg flex items-center gap-2.5 transition-all text-sm tracking-wide">
+                        <i id="play-icon" class="fa-solid fa-play text-base" aria-hidden="true"></i>
+                        <span id="play-btn-text">Play Literal Unicode</span>
+                    </button>
+                    <button id="stop-playback-btn" class="px-4 py-3 bg-slate-700 hover:bg-slate-600 text-slate-200 font-bold rounded-xl shadow transition-all text-sm hidden">
+                        <i class="fa-solid fa-square mr-1.5"></i> Stop
+                    </button>
+                </div>
+                
+                <div class="flex items-center gap-3">
+                    <button id="export-btn" class="px-5 py-3 bg-emerald-600 hover:bg-emerald-500 text-white font-bold rounded-xl shadow-lg flex items-center gap-2 transition-all text-sm">
+                        <i class="fa-solid fa-download"></i> Export Audio
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Speech Preview & Pronunciation Box -->
+        <div class="bg-slate-800/50 border border-slate-700/80 rounded-2xl p-6 shadow-xl flex flex-col gap-3">
+            <div class="flex items-center justify-between">
+                <h3 class="text-sm font-bold text-slate-200 uppercase tracking-wider flex items-center gap-2">
+                    <i class="fa-solid fa-volume-high text-emerald-400" aria-hidden="true"></i> What the Speech Engine Receives
+                </h3>
+                <span id="preview-mode-label" class="text-xs text-nightmare-400 font-mono font-bold">Literal Mode (Spelling out symbols)</span>
+            </div>
+            <div id="speech-preview-box" class="p-4 rounded-xl bg-slate-900/80 border border-slate-700/80 font-mono text-sm text-slate-300 min-h-[60px] flex items-center">
+                Generating speech text preview...
+            </div>
+        </div>
+
+        <!-- Character Inspection Strip -->
+        <div class="bg-slate-800/50 border border-slate-700/80 rounded-2xl p-6 shadow-xl flex flex-col gap-4">
+            <div class="flex items-center justify-between">
+                <h3 class="text-sm font-bold text-slate-200 uppercase tracking-wider flex items-center gap-2">
+                    <i class="fa-solid fa-microscope text-indigo-400" aria-hidden="true"></i> Live Unicode Code Point Inspector
+                </h3>
+                <span id="char-counter" class="text-xs text-slate-400">0 chars</span>
+            </div>
+            
+            <div id="inspector-grid" class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-6 gap-2 max-h-48 overflow-y-auto pr-1">
+                <div class="text-xs text-slate-500 italic col-span-full py-4 text-center">Paste or type text above to inspect unicode structure...</div>
+            </div>
+        </div>
+
+    </main>
+
+    <!-- Toast Notification -->
+    <div id="toast" class="fixed bottom-8 right-8 bg-slate-800 border border-slate-700 text-white text-xs px-4 py-3 rounded-xl shadow-2xl flex items-center gap-3 transform translate-y-16 opacity-0 transition-all duration-300 z-50">
+        <i class="fa-solid fa-circle-info text-emerald-400"></i>
+        <span id="toast-msg">Notification</span>
+    </div>
+
+    <!-- Application Controller Script -->
+    <script>
+        class PresentationScreenReader {
+            constructor() {
+                this.synth = window.speechSynthesis;
+                this.voices = [];
+                this.selectedVoice = null;
+                this.isLiteralMode = true;
+
+                this.dom = {
+                    textInput: document.getElementById('text-input'),
+                    playBtn: document.getElementById('play-btn'),
+                    stopPlaybackBtn: document.getElementById('stop-playback-btn'),
+                    playIcon: document.getElementById('play-icon'),
+                    playBtnText: document.getElementById('play-btn-text'),
+                    exportBtn: document.getElementById('export-btn'),
+                    clearBtn: document.getElementById('clear-btn'),
+                    btnLiteral: document.getElementById('btn-literal'),
+                    btnClean: document.getElementById('btn-clean'),
+                    modePill: document.getElementById('mode-pill'),
+                    headerIcon: document.getElementById('header-icon'),
+                    charCounter: document.getElementById('char-counter'),
+                    inspectorGrid: document.getElementById('inspector-grid'),
+                    speechPreviewBox: document.getElementById('speech-preview-box'),
+                    previewModeLabel: document.getElementById('preview-mode-label'),
+                    toast: document.getElementById('toast'),
+                    toastMsg: document.getElementById('toast-msg'),
+                    presetBold: document.getElementById('preset-bold'),
+                    presetZalgo: document.getElementById('preset-zalgo'),
+                    presetEmoji: document.getElementById('preset-emoji')
+                };
+
+                this.init();
+            }
+
+            init() {
+                this.loadVoice();
+                if (this.synth.onvoiceschanged !== undefined) {
+                    this.synth.onvoiceschanged = () => this.loadVoice();
+                }
+                this.attachEvents();
+                this.updateInspector();
+            }
+
+            loadVoice() {
+                this.voices = this.synth.getVoices();
+                if (!this.voices || this.voices.length === 0) return;
+                const preferredNames = ["Google UK English Female", "Microsoft Zira", "Samantha", "Victoria", "Google US English"];
+                for (let name of preferredNames) {
+                    const match = this.voices.find(v => v.name.includes(name) && v.lang.startsWith('en'));
+                    if (match) { this.selectedVoice = match; break; }
+                }
+                if (!this.selectedVoice) this.selectedVoice = this.voices.find(v => v.lang.startsWith('en')) || this.voices[0];
+            }
+
+            attachEvents() {
+                this.dom.textInput.addEventListener('input', () => this.updateInspector());
+                this.dom.btnLiteral.addEventListener('click', () => this.setMode(true));
+                this.dom.btnClean.addEventListener('click', () => this.setMode(false));
+                this.dom.playBtn.addEventListener('click', () => this.togglePlayback());
+                this.dom.stopPlaybackBtn.addEventListener('click', () => this.stopPlayback());
+                
+                this.dom.exportBtn.addEventListener('click', (e) => {
+                    e.preventDefault();
+                    this.startExport();
+                });
+
+                this.dom.clearBtn.addEventListener('click', () => {
+                    this.dom.textInput.value = '';
+                    this.updateInspector();
+                    this.stopPlayback();
+                });
+
+                this.dom.presetBold.addEventListener('click', () => {
+                    this.dom.textInput.value = "𝘁𝘆𝗽𝗲𝗴𝗿𝗼𝘄.𝗰𝗼𝗺";
+                    this.updateInspector();
+                });
+                this.dom.presetZalgo.addEventListener('click', () => {
+                    this.dom.textInput.value = "H̷e̷l̷l̷o̷! T̈ḧïs̈ ḧäs̈ c̈öm̈b̈ïn̈ïn̈g̈ d̈ïäc̈r̈ïẗïc̈s̈.";
+                    this.updateInspector();
+                });
+                this.dom.presetEmoji.addEventListener('click', () => {
+                    this.dom.textInput.value = "Astronaut: 👩‍🚀🚀 family: 👨‍👩‍👦";
+                    this.updateInspector();
+                });
+            }
+
+            setMode(isLiteral) {
+                this.isLiteralMode = isLiteral;
+                if (isLiteral) {
+                    this.dom.btnLiteral.className = "px-3 py-1.5 text-xs font-bold rounded-lg bg-nightmare-600 text-white shadow transition-all flex items-center gap-1.5";
+                    this.dom.btnClean.className = "px-3 py-1.5 text-xs font-bold rounded-lg text-slate-400 hover:text-white transition-all flex items-center gap-1.5";
+                    this.dom.modePill.className = "text-[10px] uppercase tracking-wider bg-nightmare-500/20 text-nightmare-400 border border-nightmare-500/30 px-2 py-0.5 rounded-full font-semibold";
+                    this.dom.modePill.textContent = "Literal Nightmare";
+                    this.dom.headerIcon.className = "w-9 h-9 rounded-xl bg-nightmare-600 flex items-center justify-center text-white shadow-lg transition-colors duration-300";
+                    this.dom.playBtn.className = "px-6 py-3 bg-nightmare-600 hover:bg-nightmare-500 text-white font-bold rounded-xl shadow-lg flex items-center gap-2.5 transition-all text-sm tracking-wide";
+                    this.dom.playBtnText.textContent = "Play Literal Unicode";
+                    this.dom.previewModeLabel.className = "text-xs text-nightmare-400 font-mono font-bold";
+                    this.dom.previewModeLabel.textContent = "Literal Mode (Spelling out every symbol name)";
+                } else {
+                    this.dom.btnLiteral.className = "px-3 py-1.5 text-xs font-bold rounded-lg text-slate-400 hover:text-white transition-all flex items-center gap-1.5";
+                    this.dom.btnClean.className = "px-3 py-1.5 text-xs font-bold rounded-lg bg-emerald-600 text-white shadow transition-all flex items-center gap-1.5";
+                    this.dom.modePill.className = "text-[10px] uppercase tracking-wider bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 px-2 py-0.5 rounded-full font-semibold";
+                    this.dom.modePill.textContent = "Smart Screen Reader";
+                    this.dom.headerIcon.className = "w-9 h-9 rounded-xl bg-emerald-600 flex items-center justify-center text-white shadow-lg transition-colors duration-300";
+                    this.dom.playBtn.className = "px-6 py-3 bg-emerald-600 hover:bg-emerald-500 text-white font-bold rounded-xl shadow-lg flex items-center gap-2.5 transition-all text-sm tracking-wide";
+                    this.dom.playBtnText.textContent = "Play Smart Speech";
+                    this.dom.previewModeLabel.className = "text-xs text-emerald-400 font-mono font-bold";
+                    this.dom.previewModeLabel.textContent = "Smart Mode (Normalized to semantic words)";
+                }
+                this.updateInspector();
+            }
+
+            normalizeUnicode(text) {
+                let cleaned = text;
+                const ranges = [
+                    { start: 0x1D400, end: 0x1D419, base: 65 }, { start: 0x1D41A, end: 0x1D433, base: 97 },
+                    { start: 0x1D56C, end: 0x1D585, base: 65 }, { start: 0x1D586, end: 0x1D59F, base: 97 }
+                ];
+                let result = "";
+                for (const char of cleaned) {
+                    const code = char.codePointAt(0);
+                    let mapped = char;
+                    for (const r of ranges) {
+                        if (code >= r.start && code <= r.end) {
+                            mapped = String.fromCharCode(r.base + (code - r.start));
+                            break;
+                        }
+                    }
+                    result += mapped;
+                }
+                return result.normalize('NFC').replace(/[\u0300-\u036f]/g, '');
+            }
+
+            generateSpeechText(rawText) {
+                if (!this.isLiteralMode) return this.normalizeUnicode(rawText);
+                
+                const hasSpecialUnicode = Array.from(rawText).some(c => c.codePointAt(0) > 127);
+                if (!hasSpecialUnicode) return rawText;
+
+                let translated = "";
+                const chars = Array.from(rawText);
+                chars.forEach(char => {
+                    const code = char.codePointAt(0);
+                    const hex = code.toString(16).toUpperCase().padStart(4, '0');
+                    if (code === 32) translated += " space ";
+                    else if (code > 127) translated += ` mathematical unicode character U plus ${hex}. `;
+                    else translated += char + " ";
+                });
+                return translated;
+            }
+
+            updateInspector() {
+                const text = this.dom.textInput.value;
+                if (this.dom.charCounter) this.dom.charCounter.textContent = `${text.length} chars`;
+                if (this.dom.speechPreviewBox) this.dom.speechPreviewBox.textContent = this.generateSpeechText(text);
+
+                if (!this.dom.inspectorGrid) return;
+                if (!text) {
+                    this.dom.inspectorGrid.innerHTML = `<div class="text-xs text-slate-500 italic col-span-full py-4 text-center">Paste or type text above to inspect unicode structure...</div>`;
+                    return;
+                }
+
+                this.dom.inspectorGrid.innerHTML = '';
+                const chars = Array.from(text).slice(0, 24);
+                chars.forEach(char => {
+                    const code = char.codePointAt(0);
+                    const hex = code.toString(16).toUpperCase().padStart(4, '0');
+                    const isCombining = (code >= 0x0300 && code <= 0x036F);
+                    const isUnicode = code > 127;
+                    const card = document.createElement('div');
+                    card.className = `p-2.5 rounded-xl border flex flex-col items-center justify-center gap-1 font-mono-code ${
+                        isCombining ? 'bg-red-950/30 border-red-800/50 text-red-300' :
+                        isUnicode ? 'bg-indigo-950/30 border-indigo-800/50 text-indigo-300' :
+                        'bg-slate-900/60 border-slate-700 text-slate-300'
+                    }`;
+                    card.innerHTML = `<span class="text-lg font-bold">${char === ' ' ? '␣' : char}</span><span class="text-[10px] opacity-75">U+${hex}</span>`;
+                    this.dom.inspectorGrid.appendChild(card);
+                });
+            }
+
+            togglePlayback() {
+                if (this.synth.speaking) {
+                    this.stopPlayback();
+                    return;
+                }
+                const rawText = this.dom.textInput.value;
+                if (!rawText.trim()) return;
+
+                const utterance = new SpeechSynthesisUtterance(this.generateSpeechText(rawText));
+                if (this.selectedVoice) utterance.voice = this.selectedVoice;
+
+                utterance.onstart = () => {
+                    this.dom.playIcon.className = "fa-solid fa-volume-high text-base animate-pulse";
+                    this.dom.playBtnText.textContent = "Speaking...";
+                    this.dom.stopPlaybackBtn.classList.remove('hidden');
+                };
+
+                utterance.onend = () => {
+                    this.dom.playIcon.className = "fa-solid fa-play text-base";
+                    this.dom.playBtnText.textContent = this.isLiteralMode ? "Play Literal Unicode" : "Play Smart Speech";
+                    this.dom.stopPlaybackBtn.classList.add('hidden');
+                };
+
+                this.synth.speak(utterance);
+            }
+
+            stopPlayback() {
+                if (this.synth.speaking) this.synth.cancel();
+                this.dom.playIcon.className = "fa-solid fa-play text-base";
+                this.dom.playBtnText.textContent = this.isLiteralMode ? "Play Literal Unicode" : "Play Smart Speech";
+                this.dom.stopPlaybackBtn.classList.add('hidden');
+            }
+
+            async startExport() {
+                const rawText = this.dom.textInput.value;
+                if (!rawText.trim()) return this.showToast("Nothing to export.");
+                const text = this.generateSpeechText(rawText);
+                // Local server (node server.mjs) renders with the OS voice the browser uses.
+                const server = location.protocol.startsWith('http') && location.port === '5178' ? '' : 'http://localhost:5178';
+                this.showToast("Rendering audio...");
+                try {
+                    let voice;
+                    try {
+                        const info = await (await fetch(`${server}/voices`)).json();
+                        const want = this.selectedVoice && this.selectedVoice.localService ? this.selectedVoice.name.split(/[ -]+/).slice(0, 2).join(' ') : '';
+                        const match = want && info.voices.find(v => v.startsWith(want) || v.startsWith(want.split(' ')[0] + ' '));
+                        if (match) voice = match.split(/\s{2,}/)[0].trim();
+                    } catch (_) { /* fall back to server default voice */ }
+                    const res = await fetch(`${server}/export`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ text, voice })
+                    });
+                    if (!res.ok) throw new Error(await res.text());
+                    const blob = await res.blob();
+                    const slug = rawText.normalize('NFKD').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 40) || 'speech';
+                    const a = document.createElement('a');
+                    a.href = URL.createObjectURL(blob);
+                    a.download = `${this.isLiteralMode ? 'literal' : 'smart'}-${slug}.wav`;
+                    document.body.appendChild(a);
+                    a.click();
+                    a.remove();
+                    setTimeout(() => URL.revokeObjectURL(a.href), 10000);
+                    this.showToast(`Saved ${a.download}`);
+                } catch (err) {
+                    console.error(err);
+                    this.showToast("Export server not running. Run: node server.mjs, then open http://localhost:5178");
+                }
+            }
+
+            showToast(msg) {
+                this.dom.toastMsg.textContent = msg;
+                this.dom.toast.classList.remove('translate-y-16', 'opacity-0');
+                setTimeout(() => this.dom.toast.classList.add('translate-y-16', 'opacity-0'), 3500);
+            }
+        }
+        window.addEventListener('DOMContentLoaded', () => window.presentationApp = new PresentationScreenReader());
+    </script>
+</body>
+</html>
