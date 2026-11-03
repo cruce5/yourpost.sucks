@@ -187,8 +187,8 @@ only gates the expensive path.
 | Bail-out | engine, pre-network | Sensitive posts are declined. Zero cost. |
 | Cache | None, since 2026-09-21 | Everyone who pastes a post gets their own read of it. The daily budget bounds a post that goes round. |
 | Turnstile | edge | Kills bots. Skipped if the secret is unset. |
-| Per-IP limit | Durable Object (KV fallback), hourly | Fairness. `RATE_LIMIT_PER_HOUR`, 30 in `wrangler.toml` for the launch, 12 if unset. |
-| **Daily budget** | Durable Object (KV fallback), per UTC day | **The actual ceiling.** `DAILY_BUDGET_USD`, 30 in `wrangler.toml` for the launch, 5 if unset. |
+| Per-IP limit | Durable Object (KV fallback), hourly | Fairness. `RATE_LIMIT_PER_HOUR`, 12 in `wrangler.toml` (30 for the launch), 12 if unset. |
+| **Daily budget** | Durable Object (KV fallback), per UTC day | **The actual ceiling.** `DAILY_BUDGET_USD`, 10 in `wrangler.toml` (30 for the launch), 5 if unset. |
 
 The budget is charged *before* the call, so a crash mid-flight cannot
 double-spend. Check it any time: `GET /api/status`.

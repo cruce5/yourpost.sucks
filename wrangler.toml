@@ -20,15 +20,15 @@ run_worker_first = ["/api/*"]
 # working and silently stops calling the model. This is the only number that
 # stands between you and a surprise bill: set it to an amount you would not
 # mind losing every single day.
-# Raised from 10 to 30 for the launch (2026-09-18). Bring it back down once the
-# announcement traffic has passed.
-DAILY_BUDGET_USD = "30"
+# Raised from 10 to 30 for the launch (2026-09-18), back to 10 on 2026-11-02:
+# by late October a day spent about $3 to $4.
+DAILY_BUDGET_USD = "10"
 
 # Per-IP analyses per hour that are allowed to reach the model. Everyone gets
 # unlimited rule-based analyses regardless; this only gates the expensive path.
 # Raised from 12 to 30 for the launch (2026-09-18), so a shared office or carrier
-# address does not run dry in the first hour. Bring it back down afterwards.
-RATE_LIMIT_PER_HOUR = "30"
+# address did not run dry in the first hour; back to 12 on 2026-11-02.
+RATE_LIMIT_PER_HOUR = "12"
 
 # The footer ticker ("N posts have been made to suck less since this site
 # launched"). The live count, one for every Analyze that returns a scored
