@@ -470,6 +470,13 @@ export function statKeys(kind, status, p, ms, source, asked) {
   if (kind === 'reword' && p && p.after && p.before && typeof p.after.overall === 'number') {
     keys.push('reword:gain:' + gainBucket(p.before.overall, p.after.overall));
   }
+  // Why a Reword failed, from 2026-11-02, alongside reword:why (which keeps
+  // its meaning): the cause of the last failed attempt on a Reword that
+  // ended without a rewrite, and every failed attempt, the ones a retry
+  // saved included. Only one-word codes, checked here as well.
+  const code = x => typeof x === 'string' && /^[a-z0-9_]{1,24}$/.test(x);
+  if (kind === 'reword' && p && code(p.cause)) keys.push('reword:cause:' + p.cause);
+  if (kind === 'reword' && p && Array.isArray(p.attempts)) for (const a of p.attempts.slice(0, 2)) if (code(a)) keys.push('reword:attempt:' + a);
   return keys;
 }
 const BUMP_CHUNK = 100;
@@ -2072,6 +2079,14 @@ function keptRatio(post, rewritten) {
 const KEEP_MIN = 0.45;
 const FEW_FINDINGS = 5;
 
+/* A failed attempt as one word, in the AI report's own vocabulary where the
+ * two meet (http_429, http_5xx, timeout). */
+function failCode(v) {
+  if (v.reason === 'http') return v.detail === '429' ? 'http_429' : /^5/.test(v.detail) ? 'http_5xx' : 'http_other';
+  if (v.reason === 'call_failed') return v.detail === 'AbortError' ? 'timeout' : 'call_failed';
+  return String(v.reason || 'unknown').slice(0, 24);
+}
+
 function judgeRewrite(llm, before, safeFlags) {
   const after = ENGINE.analyze(llm.rewritten, safeFlags);
   if (after.sensitive) return { ok: false, reason: 'sensitive', detail: '' };
@@ -2398,7 +2413,7 @@ async function handleReword(request, env, ctx) {
   // the post. But a rewrite is built to keep most of the writer's own words,
   // so a stored rewrite was their post in all but name, and the page says
   // "never stored". The saving was small: few people reword one text twice.
-  const degrade = reason => json({ mode: 'unavailable', reason, before });
+  const degrade = (reason, extra) => json({ mode: 'unavailable', reason, before, ...extra });
 
   if (!env.ANTHROPIC_API_KEY) return degrade('no_key');
   // See the identical comment in handleAnalyze: this must degrade, not
@@ -2426,6 +2441,11 @@ async function handleReword(request, env, ctx) {
   let llm = await callReword(env, post, before, null, m, advice);
   await settleCharge(env, REWORD_COST_MICROS_PER_CALL, [m]);
   let verdict = llm.ok ? judgeRewrite(llm, before, safeFlags) : llm;
+  // Every attempt that failed, by cause, including one the retry then saved.
+  // "llm_unavailable" covered all of them (2026-11-02: 560 of 3,382 Rewords),
+  // and a check rejecting the rewrite wants the opposite fix to a call that
+  // never came back. One-word codes, never a detail: a detail can quote the post.
+  const fails = verdict.ok ? [] : [failCode(verdict)];
   // The best valid attempt so far, kept so a second try can only improve on
   // it. A retry asked for because the first was too far from the writer's
   // own words must never end up losing them a perfectly good rewrite.
@@ -2441,6 +2461,7 @@ async function handleReword(request, env, ctx) {
     const second = await callReword(env, post, before, rejection, m, advice);
     await settleCharge(env, REWORD_COST_MICROS_PER_CALL, [m]);
     const secondVerdict = second.ok ? judgeRewrite(second, before, safeFlags) : second;
+    if (!secondVerdict.ok) fails.push(failCode(secondVerdict));
     if (secondVerdict.ok) {
       const ratio = keptRatio(post, second.rewritten);
       if (!best || ratio > best.ratio) best = { llm: second, after: secondVerdict.after, ratio };
@@ -2448,12 +2469,12 @@ async function handleReword(request, env, ctx) {
       verdict = secondVerdict;
     }
   }
-  if (!best) return degrade(verdict.reason === 'scored_worse' ? 'no_improvement' : 'llm_unavailable');
+  if (!best) return degrade(verdict.reason === 'scored_worse' ? 'no_improvement' : 'llm_unavailable', { cause: failCode(verdict), attempts: fails });
   llm = best.llm;
   const after = best.after;
 
   tick(env, ctx, request);
-  return json({ mode: 'reworded', before, after, rewritten: llm.rewritten, summary: llm.summary });
+  return json({ mode: 'reworded', before, after, rewritten: llm.rewritten, summary: llm.summary, ...(fails.length ? { attempts: fails } : {}) });
 }
 
 async function handleStatus(env) {

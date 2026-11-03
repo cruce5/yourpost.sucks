@@ -773,6 +773,30 @@ console.log('\n=== reword ===');
   const r = await (await worker.fetch(reword({ post: BAD }), env, ctx)).json();
   check('malformed reword output is discarded', r.mode === 'unavailable' && r.reason === 'llm_unavailable');
 }
+console.log('  --- why it failed, by cause ---');
+{
+  // "llm_unavailable" stays what the page reads; the cause rides alongside.
+  const run = async (b, q) => { const env = baseEnv(); rewordBehaviour = b; rewordQueue = q || null; return (await worker.fetch(reword({ post: BAD }), env, ctx)).json(); };
+  const e = await run('error');
+  check('a model 500 is told apart: one attempt, no retry, cause http_5xx', e.reason === 'llm_unavailable' && e.cause === 'http_5xx' && JSON.stringify(e.attempts) === '["http_5xx"]', JSON.stringify([e.cause, e.attempts]));
+  const n = await run('fabricatesNumber');
+  check('an invented number is told apart, both attempts counted', n.reason === 'llm_unavailable' && n.cause === 'new_numbers' && JSON.stringify(n.attempts) === '["new_numbers","new_numbers"]', JSON.stringify([n.cause, n.attempts]));
+  const m = await run('malformed');
+  check('a reply with no rewrite in it is told apart', m.cause === 'rewritten_length', m.cause);
+  const w = await run('notreallybetter');
+  check('a rewrite that did not beat the post keeps its old reason and gains a cause', w.reason === 'no_improvement' && w.cause === 'scored_worse', JSON.stringify([w.reason, w.cause]));
+  const saved = await run('good', ['fabricatesNumber', 'good']);
+  check('a first attempt the retry saved is still on the record', saved.mode === 'reworded' && JSON.stringify(saved.attempts) === '["new_numbers"]' && saved.cause === undefined, JSON.stringify([saved.mode, saved.attempts]));
+  const clean = await run('good');
+  check('  ...and a Reword that worked first time carries nothing extra', clean.mode === 'reworded' && clean.attempts === undefined);
+  rewordQueue = null; rewordBehaviour = 'good';
+}
+{
+  const k = statKeys('reword', 200, { mode: 'unavailable', reason: 'llm_unavailable', cause: 'http_5xx', attempts: ['http_5xx'], before: {} }, 100);
+  check('the cause and each failed attempt are counted, next to the old reason', k.includes('reword:why:llm_unavailable') && k.includes('reword:cause:http_5xx') && k.includes('reword:attempt:http_5xx'), k.join(' '));
+  const junk = statKeys('reword', 200, { mode: 'unavailable', reason: 'llm_unavailable', cause: 'Quote From The Post', attempts: ['x'.repeat(40), 'ok_code', 'a', 'b'], before: {} }, 100);
+  check('  ...and nothing but a short code becomes a key, two attempts at most', !junk.some(x => x.startsWith('reword:cause:')) && junk.filter(x => x.startsWith('reword:attempt:')).join() === 'reword:attempt:ok_code', junk.join(' '));
+}
 console.log('  --- output policing ---');
 for (const behaviour of ['scores', 'predicts', 'injected', 'tooshort', 'toolong', 'fabricatesNumber', 'fabricatesNumberWord', 'emdash', 'horbar', 'doublehyphen', 'zwspPredicts']) {
   const env = baseEnv(); rewordBehaviour = behaviour;
