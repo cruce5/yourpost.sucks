@@ -1547,7 +1547,14 @@ console.log('\n=== meaner mode: the subjects it sits out ===');
     'age': 'At 58, I just finished my first data analytics certificate. They said I was too old to pivot.',
     'family': 'Thrilled to announce I am joining Meridian as VP of People! As a working mom of three, this journey has not been easy.',
     'origin': 'I came to this country on a visa with two suitcases, and English is my second language. Today I became a staff engineer.',
-    'identity': 'As a woman in data, I have been the only one in the room for ten years. This week that changed.'
+    'identity': 'As a woman in data, I have been the only one in the room for ten years. This week that changed.',
+    // The gate reads the frame, not the bare word (2026-11-02): these say it the way people do.
+    'being let go': 'I was let go on Tuesday. Here is what I learned about severance-free Fridays.',
+    'a son': 'My son started kindergarten today and I cried in the parking lot before standup.',
+    'a spouse': 'My wife reads every post before I hit publish, and this one she sent back twice.',
+    'kids, counted': 'I run a side project on top of my day job and 3 kids.',
+    'a retirement': 'After 24 years at the university, I can officially call it retirement.',
+    'a first language': 'English is not my first language, and I write every post twice.'
   };
   for (const [label, text] of Object.entries(SITS_OUT)) {
     const env = baseEnv(); llmBehaviour = 'good'; llmCalls = 0; lastSystem = null;
@@ -1562,7 +1569,14 @@ console.log('\n=== meaner mode: the subjects it sits out ===');
     const plain = await (await worker.fetch(post({ post: BAD + ' ', meaner: false }), env, ctx)).json();
     check('  ...and nothing is flagged when it was never asked for', !plain.report.meanerSkipped);
   }
-  for (const s of ['We retired the old pipeline and paid down tech debt on a foreign key nobody understood.', 'Disaster recovery drills are the only meetings that should run long.']) {
+  // Each of these used to switch the harsher register off (2026-09-28 to 2026-11-02).
+  for (const s of ['We retired the old pipeline and paid down tech debt on a foreign key nobody understood.', 'Disaster recovery drills are the only meetings that should run long.',
+    'We shipped the dashboard at 10 am and the team was fired up.', 'Our parent company announced Q3 results, and the child process exited cleanly.',
+    'Merry Christmas from the analytics team, and thanks to Christina for the review.', 'Let go of perfectionism. Death by PowerPoint is a choice.',
+    'The project died in committee, so act in good faith with your stakeholders.', 'We restructured the data model and terminated the old vendor contract.',
+    'Oh my god, this pivot table. Thank god for autosave.', 'An industry veteran on why Visa and Mastercard both use this pattern.',
+    'Baby steps, a dad joke, and good grief, another reorg deck.', 'We disabled the legacy flag; built-in redundancy saved the launch.',
+    'We grew revenue 40% at 25 accounts and hit 30 days in a row at 50 posts.']) {
     const env = baseEnv(); llmBehaviour = 'good'; lastSystem = null;
     const r = await (await worker.fetch(post({ post: s + ' It took three weeks and one very long Thursday at Vanguard.', meaner: true }), env, ctx)).json();
     check('shop talk does not trip the gate: ' + s.slice(0, 32), !r.report.meanerSkipped, String(r.report.meanerSkipped));

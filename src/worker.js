@@ -1457,26 +1457,33 @@ function withCompliment(brutal, post) {
  * register said none of that on the same posts. So a post that touches
  * losing a job, faith, age, family, origin, language, identity, health or
  * money trouble gets the ordinary report, and the response says so.
- * Deliberately broad: a false match costs a reader some sharper jokes, a
- * miss costs a person something real. */
+ * Broad about subjects, narrow about phrasing: a false match costs a reader
+ * some sharper jokes, a miss costs a person something real. But the bare
+ * words (2026-09-28) caught a quarter of the corpus and every piece of shop
+ * talk tried on them: "at 10 am", "parent company", "Merry Christmas",
+ * "death by PowerPoint", "industry veteran", "fired up", "Visa and
+ * Mastercard". So a word that is also shop talk only counts in the frame a
+ * person uses about themselves: "my son", "I was let go", "At 58,". Words
+ * that are only ever personal stay bare. */
 const MEANER_OFF = new RegExp('\\b(?:' + [
   // losing work
-  'laid[ -]?off', 'lay[ -]?offs?', 'let go', 'redundan\\w*', 'restructur\\w*', 'downsiz\\w*', 'role was (?:eliminated|cut|impacted)', 'position was (?:eliminated|cut|impacted)', 'my last day', 'open to work', 'opentowork', 'unemploy\\w*', 'job(?:less| hunt\\w*| search\\w*| loss)', 'fired', 'terminated', 'severance', 'furlough\\w*',
+  'laid[ -]?off', 'lay[ -]?offs?', '(?:was|were|been|got|get|being|am|be) (?:let go|fired(?! up)|terminated|downsized|made redundant)', 'fired me', 'made redundant', 'redundancies', 'redundancy (?:pay|package|notice)', 'downsizing', 'impacted by (?:the |a )?(?:layoffs?|restructuring|cuts|reorg)', 'role was (?:eliminated|cut|impacted)', 'position was (?:eliminated|cut|impacted)', 'my last day', 'open to work', 'opentowork', 'unemploy\\w*', 'job(?:less| hunt\\w*| search\\w*| loss)', 'severance', 'furlough\\w*',
   // faith. Not the bare word "blessed": "#blessed" is the platform's most
-  // worn cliché and exactly what this tool is for. A post that means it
-  // also says god, prayer, faith or church, and those are all here.
-  'god', 'lord', 'jesus', 'christ\\w*', 'allah', 'pray\\w*', 'faith', 'church', 'mosque', 'temple', 'synagogue', 'blessed (?:me|us|by)', 'bible', 'quran', 'torah', 'ramadan', 'eid', 'diwali', 'hanukkah', 'muslim', 'jewish', 'hindu', 'sikh', 'buddhis\\w*', 'catholic', 'atheis\\w*',
-  // age
-  'at \\d{2}\\b', '\\d{2} years old', 'too old', 'too young', 'my age', 'ageis\\w*', 'retirement', 'boomer', 'gen ?z',
-  // family
-  'mom', 'mum', 'mother\\w*', 'dad', 'father\\w*', 'parent\\w*', 'wife', 'husband', 'spouse', 'son', 'sons', 'daughters?', 'kids?', 'child(?:ren)?', 'bab(?:y|ies)', 'newborn', 'toddler', 'pregnan\\w*', 'maternity', 'paternity', 'ivf', 'miscarr\\w*', 'caregiv\\w*', 'single (?:mom|mum|dad|parent)', 'widow\\w*', 'divorc\\w*',
+  // worn cliché and exactly what this tool is for. Not the bare "god" or
+  // "faith" either: "oh my god" and "good faith" are how people talk. A
+  // post that means it says what god did, or names prayer or a church.
+  'god (?:has|is|gave|blessed|bless|willing|first|answered)', 'god[\'’]s (?:grace|plan|timing|glory|blessings?|love)', 'thank(?:s|ed|ing)? (?:god|the lord|jesus) for (?:my|this|the|his|every)', 'praise (?:god|the lord|jesus)', 'glory to god', 'the lord', 'jesus', 'christ', 'christians?', 'christianity', 'allah', 'pray\\w*', 'my faith', 'faith in (?:god|christ|jesus)', 'church', 'mosque', 'synagogue', 'blessed (?:me|us|by)', 'bible', 'quran', 'torah', 'ramadan', 'eid', 'diwali', 'hanukkah', 'muslim', 'jewish', 'hindu', 'sikh', 'buddhis\\w*', 'catholic', 'atheis\\w*',
+  // age: "At 58, I", never "at 10 am" or "at 25 accounts"
+  '(?<=(?:^|[.!?\\n])\\s*)at \\d{2}(?=,)', 'at (?:the )?age (?:of )?\\d{2}', '\\d{2} years old', 'too old', 'too young', 'my age', 'ageis\\w*', '(?:my|into|call it|officially in) retirement', '(?:i[\'’]m|i am|officially) retir(?:ed|ing)', 'retir(?:ed|ing) after \\d+', 'boomer', 'gen ?z',
+  // family: someone's own, never "parent company" or "child process"
+  '(?:my|our) (?:\\d+[- ]year[- ]old|(?:\\w+ )?(?:mom|mum|mother|dad|father|parents|wife|husband|spouse|sons?|daughters?|kids?|child(?:ren)?|bab(?:y|ies)|newborn|toddler|boys|girls|little ones?|grand\\w+))', '(?:mom|mum|mother|dad|father|parent) of (?:one|two|three|four|five|\\d)', '(?:working|single|new|stay[- ]at[- ]home) (?:mom|mum|mother|dad|father|parent)s?', 'as a (?:mom|mum|mother|dad|father|parent)', '(?:\\d+|two|three|four|five|six) (?:kids|children)(?! (?:have been|were|are) )', 'dadd(?:y|ies)', 'mommy', 'mummy','fatherhood', 'motherhood', 'parenthood', 'parenting', 'parental leave', 'newborn', 'toddler', 'pregnan\\w*', 'maternity', 'paternity', 'ivf', 'miscarr\\w*', 'caregiv\\w*', 'widow\\w*', 'divorc\\w*',
   // origin and language
-  'immigra\\w*', 'visa', 'h-?1b', 'green card', 'refugee', 'asylum', 'first[- ]generation', 'first[- ]gen', 'second language', 'my english', 'accent', 'my country', 'back home',
+  'immigra\\w*', '(?:on an?|my|work|student) visa', 'h-?1b', 'green card', 'refugee', 'asylum', 'first[- ]generation', 'first[- ]gen', 'second language', 'my english', 'my accent', 'my country', 'came to (?:this|the) country', 'non-?native', 'first language', 'native (?:language|tongue|speaker)',
   // identity
-  'as a (?:woman|man|black|latina?o?|asian|muslim|christian|jew|gay|lesbian|trans\\w*|queer|veteran|person of colou?r)', 'women in', 'woman in', 'lgbt\\w*', 'gay', 'lesbian', 'trans(?:gender)?', 'queer', 'non-?binary', 'pronouns', 'racis\\w*', 'sexis\\w*', 'discriminat\\w*', 'harass\\w*', 'veteran', 'military service',
+  'as a (?:woman|man|black|latina?o?|asian|muslim|christian|jew|gay|lesbian|trans\\w*|queer|veteran|person of colou?r)', 'women in', 'woman in', 'lgbt\\w*', 'gay', 'lesbian', 'trans(?:gender)?', 'queer', 'non-?binary', 'pronouns', 'racis\\w*', 'sexis\\w*', 'discriminat\\w*', 'harass\\w*', '(?:military|army|navy|marine|air force) veteran', 'veterans day', 'military service', 'served in the (?:army|navy|military|marines|air force)',
   // health and money
-  'depress\\w*', 'anxiety', 'mental health', 'cancer', 'grie\\w*', 'died', 'death', 'passed away', 'funeral', 'non-?native', 'first language',
-  'disab\\w*', 'neurodiver\\w*', 'adhd', 'autis\\w*', 'dyslex\\w*', 'burn(?:ed|t)? ?out', 'burnout', 'therapy', 'therapist', 'sober', 'sobriety', 'in recovery', 'rehab', '(?:in|my|student|medical|credit card) debt', 'evict\\w*', 'homeless\\w*', 'food stamps'
+  'depression', '(?:i was|i am|i[\'’]m|felt|feel|feeling) depressed', 'anxiety', 'mental health', 'cancer', '(?<!good )grie(?:f|ving|ve|ved)', 'passed away', 'funeral', '(?:my|our) (?:\\w+ ){0,2}(?:died|passed)', 'death of (?:my|our)', 'lost (?:my|our) (?:\\w+ )?(?:mom|mum|mother|dad|father|parents?|wife|husband|spouse|sons?|daughters?|child|baby|brother|sister|friend|grand\\w+)',
+  'disabilit(?:y|ies)', 'disabled (?:person|people|veteran|community|colleagues?)', 'neurodiver\\w*', 'adhd', 'autis\\w*', 'dyslex\\w*', 'burn(?:ed|t)? ?out', 'burnout', 'therapy', 'therapist', 'sober', 'sobriety', 'in recovery', 'rehab', '(?:in|my|student|medical|credit card) debt', 'evict\\w*', 'homeless\\w*', 'food stamps'
 ].join('|') + ')\\b', 'i');
 
 function meanerAllowed(post) {
