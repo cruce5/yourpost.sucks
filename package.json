@@ -9,6 +9,10 @@
     "deploy": "npm test && wrangler deploy"
   },
   "devDependencies": {
-    "playwright": "^1.48.0"
+    "playwright": "^1.48.0",
+    "wrangler": "4.125.0"
+  },
+  "allowScripts": {
+    "workerd@1.20260820.1": true
   }
 }

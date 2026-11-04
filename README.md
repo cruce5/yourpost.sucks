@@ -282,27 +282,31 @@ intervals, and exits non-zero if the signal disappears. Run it with
 `node corpus.test.mjs`. **This is the only honest measure of whether the tool
 works, and it should be re-run after any rule change.**
 
-### The current run (2026-09-18, 47 rules)
+### The current run (2026-11-03, 47 rules)
+
+Re-run after the regex audit (2026-09-28), which moved one post to declined,
+so there is one fewer row of each kind below than on 2026-09-18.
 
 | | |
 |---|---|
-| Spearman rho, midranks, suckiness rank vs engagement rank (n=98) | **0.217**, 95% CI 0.02 to 0.40 |
-| Same, with the ten highest-engagement posts removed (n=88) | 0.072 |
-| AUC: the chance a flop outscores a hit (44 hits, 22 flops) | **0.666**, permutation p = 0.013, one-sided |
-| Separation, mean flop score minus mean hit score | +0.45, permutation p = 0.052, one-sided |
-| Held out, every round after round 1: AUC (26 hits, 15 flops) | 0.619, permutation p = 0.10, one-sided |
-| Held out: rho (n=73) | 0.113, 95% CI -0.12 to 0.34 |
-| Separation, medians | +0.80 |
+| Spearman rho, midranks, suckiness rank vs engagement rank (n=97) | **0.258**, 95% CI 0.06 to 0.44 |
+| Same, with the ten highest-engagement posts removed (n=87) | 0.083 |
+| AUC: the chance a flop outscores a hit (43 hits, 22 flops) | **0.661**, permutation p = 0.014, one-sided |
+| Separation, mean flop score minus mean hit score | +0.40, permutation p = 0.078, one-sided |
+| Held out, every round after round 1: AUC (25 hits, 15 flops) | 0.585, permutation p = 0.19, one-sided |
+| Held out: rho (n=72) | 0.100, 95% CI -0.14 to 0.32 |
+| Separation, medians | +0.60 |
 
 Read it plainly: on the whole corpus the tool ranks flops above hits more
 often than chance, and weakly. Round 1 is the single author the omission
-rules were first tuned against (AUC 0.76), so it is training data. On the
-posts from everyone else it cannot be told from chance (AUC 0.62, p = 0.10,
-26 hits and 15 flops; rho 0.11 with an interval through zero). Every figure
+rules were first tuned against (AUC 0.79), so it is training data. On the
+posts from everyone else it cannot be told from chance (AUC 0.59, p = 0.19,
+25 hits and 15 flops; rho 0.10 with an interval through zero), and the audit
+made that read a little weaker, not stronger. Every figure
 here is in-sample to some degree, because each rule change in
 `VALIDATION_REPORT.md` was found against a row in this corpus. Two thirds of
-the rows behind rho were also selected for extreme engagement: rho is 0.37 on
-those 66 and -0.20 on the 32 that were not. Round 3's flop arm is four posts
+the rows behind rho were also selected for extreme engagement: rho is 0.41 on
+those 65 and -0.16 on the 32 that were not. Round 3's flop arm is four posts
 and carries no read on its own. Labels in rounds 1 and 2 are relative to the author's normal
 range; round 3 uses an absolute rule (150 or more reactions is a hit, 8 or
 fewer is a flop). Every row records its `round`, and the harness prints each
@@ -340,9 +344,9 @@ deterministic part of that: `promo-lede`, `hedging`, `question-opener`,
 
 ### Known limits: do not overstate this tool
 
-- **n=98 scored, many authors, one of them dominant.** The 95% CI on rho is
-  roughly ±0.19 and its lower bound sits at 0.02. Remove the original author's
-  ten biggest posts and rho falls to 0.07. This is still closer to a smoke test
+- **n=97 scored, many authors, one of them dominant.** The 95% CI on rho is
+  roughly ±0.19 and its lower bound sits at 0.06. Remove the original author's
+  ten biggest posts and rho falls to 0.08. This is still closer to a smoke test
   than a validation study.
 - **The corpus cannot validate the original rules at all.** This author never
   writes "humbled," never stacks hashtags, never uses emoji bullets. A predictor
